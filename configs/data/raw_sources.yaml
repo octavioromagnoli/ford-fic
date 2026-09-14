@@ -1,0 +1,63 @@
+# Fuentes crudas. PROVISORIO hasta que F1 audite los archivos reales.
+#
+# El esquema de abajo está armado con los nombres de columna que menciona el
+# enunciado; el reparto entre tablas y los dtypes son una hipótesis. El loader no
+# rompe si una columna declarada no aparece: la reporta en `describe_tables()`.
+# Primer paso de F1: correr `src.data.loader.describe_tables()` y corregir ACÁ,
+# no en el código.
+#
+# Los paths son relativos a ${DATA_DIR} (por defecto `data/`, override con la
+# variable de entorno FORD_DATA_DIR). Los datos no se versionan.
+
+tables:
+  vehicles:
+    path: ${DATA_DIR}/raw/vehicles.csv
+    description: Info del vehículo y etiqueta del evento (una fila por vehículo).
+    dtypes:
+      Vin: str
+      VehicleCode: str
+      Engine: str
+      ModelSeries: str
+      SalesCountryCd: str
+      daysUntilSale: float64
+      ProductionDay: float64          # días desde el primer vehículo de la lista
+      IdentificationDate: float64     # días desde producción (NO es fecha de calendario)
+    date_columns: []
+
+  trips:
+    path: ${DATA_DIR}/raw/trips.csv
+    description: Un registro por viaje, con agregados del viaje.
+    dtypes:
+      VehCode: str
+      Odometer: float64
+      Distance: float64
+      KilometerPerHour: float64
+      EngineTemperatureAvg: float64
+      EngineTemperatureMax: float64
+      CoolantTemperatureEnd: float64
+      AirTemperatureAvg: float64
+      AirTemperatureMin: float64
+      Elevation: float64
+      EngineOilLifePC: float64
+      TirePressure: float64
+    date_columns:
+      - TripDatetimeStart
+
+  signals:
+    path: ${DATA_DIR}/raw/signals.csv
+    description: Señales dinámicas del sistema de postratamiento.
+    dtypes:
+      VehCode: str
+      Odometer: float64
+      DieselParticulateFilterEnd: float64
+      Regenerations: float64
+      DistanceBetweenRegenerations: float64
+      Acumulation: float64
+    date_columns:
+      - EventTimestamp
+
+# Claves candidatas para el join entre tablas. F1 mide el solapamiento real:
+# si no joinean, cambia el plan de raíz (plan §10, primer riesgo).
+join_keys:
+  vehicle_id_candidates: [Vin, VehicleCode, VehCode]
+  odometer_column: Odometer

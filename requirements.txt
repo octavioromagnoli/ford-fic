@@ -1,0 +1,23 @@
+# Python 3.12. Versiones pinneadas: cualquier cambio se discute en PR.
+numpy==2.5.3
+pandas==3.0.5
+pyarrow==25.0.1
+scikit-learn==1.9.1
+PyYAML==6.0.3
+
+# Modelos (F3/F5)
+lightgbm==4.7.0
+xgboost==3.4.1
+lifelines==0.30.0
+
+# Evaluación y visualización (F4/F6)
+matplotlib==3.11.2
+seaborn==0.13.2
+shap==0.52.0
+streamlit==1.63.0
+
+# Tracking
+wandb==0.30.0
+
+# Notebooks (solo exploración)
+ipykernel==7.1.1

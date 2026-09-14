@@ -1,0 +1,24 @@
+# Datos y outputs (nunca se versionan: van como wandb Artifacts)
+/data/
+/experiments/
+/wandb/
+*.parquet
+*.ckpt
+*.pkl
+*.joblib
+
+# Entorno
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Secretos
+.env
+*.netrc
+
+# Sistema
+.DS_Store
+.idea/
+.vscode/
