@@ -1,0 +1,94 @@
+# CLAUDE.md — contrato y reglas del repo
+
+Ford Innovation Challenge III · *Data-Driven Powertrain Intelligence*: predicción
+temprana de degradación de eficiencia de combustión en vehículos conectados.
+El plan completo está en `plan-implementacion-ford.md`; este archivo es el
+resumen operativo que hay que respetar al escribir código.
+
+## Estado
+
+Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 en curso: el
+contrato de datos de abajo es **provisorio** hasta que F1 lo congele.
+
+## Contrato de datos
+
+Artefacto: `data/processed/panel.parquet` (dummy: `panel_dummy.parquet`).
+**Una fila por par `(vehículo, punto de corte)`.**
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `vehicle_id` | str | identificador unificado entre las tres tablas |
+| `cut_odo` | float | odómetro en el punto de corte [km] |
+| `cut_date` | datetime | fecha del corte (**nullable**: puede no haber anclaje) |
+| `window_km` | float | ventana W usada para agregar las features |
+| `horizon_km` | float | horizonte de anticipación H usado en esta fila |
+| `gap_km` | float | gap de blanking G usado en esta fila |
+| `label` | int | 1 si el evento cae en `[corte+G, corte+G+H]` |
+| `time_to_event_km` | float | km hasta el evento; NaN si censurado |
+| `event_observed` | int | 1 si el vehículo tiene evento registrado |
+| `feat_*` | float | todas las features de ventana |
+| `static_*` | mixto | `Engine`, `ModelSeries`, `SalesCountryCd`, `daysUntilSale`, `ProductionDay` |
+
+**Regla de prefijos:** toda columna que entra a un modelo se llama `feat_` o
+`static_`, y `src/training/cv.py` la selecciona por prefijo. Agregar una feature
+no requiere tocar el código de entrenamiento ni coordinar con nadie.
+
+## Reglas que no se negocian
+
+1. **Gap de blanking.** El modelo nunca ve los km inmediatamente previos al
+   evento. Sin G esto es detección reactiva, que es justo lo que Ford ya tiene.
+2. **Split agrupado por vehículo.** Un `vehicle_id` nunca cae en train y
+   validación a la vez. La lógica está centralizada en `src/eval/splits.py` y no
+   se reimplementa en ningún otro lado.
+3. **Features solo hacia atrás.** Ninguna feature usa información posterior al
+   punto de corte. Escalado e imputación se ajustan solo con el train de cada
+   fold (van dentro del `Pipeline`, nunca sobre el panel entero).
+4. **Eje de odómetro por defecto.** `IdentificationDate` está en días desde
+   producción y `TripDatetimeStart` es calendario: alinearlos requiere un anclaje
+   que el enunciado no garantiza. El eje de días es reporte secundario, si cierra.
+5. **Métricas.** PR-AUC out-of-fold para seleccionar modelo, curva de
+   anticipación vs. falsas alarmas para el pitch, accuracy nunca.
+6. **Un PR-AUC sospechosamente alto se audita antes de celebrarse.** Variables
+   como el nivel del DPF son casi la definición del evento: sin gap, el modelo
+   memoriza en vez de predecir.
+7. **Nada se hardcodea.** Paths, semillas e hiperparámetros salen de un YAML de
+   `configs/`. Para cambiar un hiperparámetro se escribe otro YAML, no se edita
+   el código.
+8. **Datos y outputs no se versionan.** `data/`, `experiments/` y `wandb/` están
+   en `.gitignore`; lo que se comparte va como wandb Artifact.
+
+## Mapa del código
+
+```
+src/config.py            carga de YAML, resolución de paths, semillas
+src/data/loader.py       carga de las tres tablas crudas (esquema en configs/data/raw_sources.yaml)
+src/features/            [F2] windows.py: primitiva de agregación de ventana
+src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
+src/training/cv.py       loop de CV agrupada; selección de features por prefijo
+src/eval/splits.py       splits antileakage + serialización a splits.json
+src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
+src/eval/plots.py        figuras compartidas entre dashboard e informe
+scripts/make_dummy.py    panel dummy con el esquema del contrato
+scripts/build_dataset.py [F2] panel real
+scripts/train.py         entrypoint único de entrenamiento
+scripts/dashboard.py     dashboard (streamlit)
+scripts/check_setup.py   smoke test del harness (15 chequeos)
+```
+
+## Features ya implementadas
+
+Ninguna real todavía: F2 las materializa. Los nombres que ya **están reservados**
+por el panel dummy (`scripts/make_dummy.py`, `FEATURE_SPECS`) son los de las
+cuatro familias del plan §4 — A térmica/trayectos cortos, B ciclo de
+regeneración, C uso y ambiente, D severidad. Antes de crear una feature nueva,
+revisar esa lista para no duplicar con otro nombre.
+
+## Flujo de trabajo
+
+- Una rama por feature o experimento (`feat/...`, `exp/...`), `main` siempre
+  funcional, merge solo por PR con revisión de otro.
+- Nunca dos personas editan el mismo archivo: Track A datos (`src/data`,
+  `src/features`), Track B modelos (`src/models`, `src/training`), Track C
+  evaluación (`src/eval`, dashboard).
+- Antes de cada PR, pasar el checklist de trampas técnicas del plan §9 y correr
+  `python scripts/check_setup.py`.

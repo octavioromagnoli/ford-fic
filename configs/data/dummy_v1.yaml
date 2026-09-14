@@ -1,0 +1,24 @@
+# Panel dummy de F0: mismo esquema que el panel real, valores aleatorios.
+# Sirve para que Track B y Track C trabajen antes de que exista un dato real.
+seed: 42
+
+n_vehicles: 400
+event_rate: 0.18          # ~70 vehículos etiquetados: el orden de magnitud que el plan asume
+
+# Terna del problema (plan §0.2). En el panel real estos valores los fija F1.
+window_km: 1000           # W: tamaño de la ventana móvil hacia atrás
+gap_km: 500               # G: blanking. El modelo NO ve los km inmediatamente previos al evento
+horizon_km: 3000          # H: el evento cuenta si cae en [corte+G, corte+G+H]
+cut_step_km: 500          # Δ: cada cuántos km se genera un punto de corte
+
+missing_frac: 0.05        # nulos en las features: el panel real los va a tener
+date_anchor_frac: 0.7     # fracción de vehículos con cut_date resuelto (el resto NaT)
+signal_strength: 0.0      # 0 = ruido puro. >0 inyecta señal sintética SOLO para testear métricas
+
+splits:
+  n_splits: 5
+  seed: 42
+
+output:
+  panel: ${DATA_DIR}/processed/panel_dummy.parquet
+  splits: ${DATA_DIR}/processed/splits_dummy.json

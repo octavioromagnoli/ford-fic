@@ -1,0 +1,36 @@
+# Config del panel REAL (F2). Los valores de W, G, H y Δ quedan abiertos a
+# propósito: los fija F1 con la distribución real de histórico por vehículo, y
+# recién ahí se congela el contrato.
+#
+#   python scripts/build_dataset.py --config configs/data/panel_v1.yaml
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+
+axis: odometer            # eje por defecto (plan §0.3). "date" solo si F1 resuelve el anclaje
+
+label:
+  window_km: null         # W · ventana móvil hacia atrás sobre la que se agregan las features
+  gap_km: null            # G · blanking. Sin esto el modelo detecta en vez de anticipar
+  horizon_km: null        # H · el evento cuenta si cae en [corte+G, corte+G+H]
+  cut_step_km: null       # Δ · cada cuántos km se genera un punto de corte
+
+sampling:
+  # Los cortes de vehículos sanos se muestrean con la MISMA distribución de
+  # odómetro que los de vehículos con evento, para que el modelo no aprenda
+  # "kilometraje alto ⇒ riesgo" (plan §9).
+  match_healthy_cut_distribution: true
+  min_trips_in_window: 5
+
+features:
+  # Familias del plan §4. Cada entrada se traduce a columnas feat_* con la
+  # primitiva de src/features/windows.py: (columna, agregadores).
+  enabled_families: [A_thermal, B_regeneration, C_usage, D_severity]
+
+splits:
+  n_splits: 5
+  seed: 42
+
+output:
+  panel: ${DATA_DIR}/processed/panel.parquet
+  splits: ${DATA_DIR}/processed/splits.json
