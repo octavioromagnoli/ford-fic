@@ -70,6 +70,20 @@ wandb sync wandb/offline-run-*        # subirla después, cuando haya red
 WANDB_MODE=disabled ...               # iterar sin ensuciar el proyecto
 ```
 
+## Flujos para agentes
+
+Tres tareas recurrentes están escritas paso a paso, con las reglas antileakage
+incluidas:
+
+| Tarea | Claude Code | Cualquier otro agente |
+|---|---|---|
+| Implementar un modelo nuevo | `/mlmodel` | `.claude/skills/mlmodel/SKILL.md` |
+| Lanzar un entrenamiento | `/train` | `.claude/skills/train/SKILL.md` |
+| Comparar corridas | `/compare` | `.claude/skills/compare/SKILL.md` |
+
+`AGENTS.md` apunta ahí para los agentes que no leen skills (Codex y compañía).
+Es el mismo archivo en los dos casos: si cambia el flujo, se edita una vez.
+
 ## Estructura
 
 ```

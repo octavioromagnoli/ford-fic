@@ -76,6 +76,7 @@ src/eval/plots.py        figuras compartidas entre dashboard e informe
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/build_dataset.py [F2] panel real
 scripts/train.py         entrypoint único de entrenamiento
+scripts/compare.py       tabla comparativa de corridas (markdown)
 scripts/dashboard.py     dashboard (streamlit)
 scripts/check_setup.py   smoke test del harness (15 chequeos)
 ```
