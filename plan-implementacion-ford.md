@@ -1,6 +1,7 @@
 # Plan de implementación — Predicción temprana de degradación de eficiencia de combustión en vehículos conectados
 
-Documento operativo del Ford Innovation Challenge III, desafío *Data-Driven Powertrain Intelligence*. Pensado para tres personas trabajando en paralelo, alineado con las mismas pautas de flujo del TP final (`src/`, configs YAML, `scripts/train.py`, wandb, sweeps, PRs, bitácora en Docs).
+Documento operativo del Ford Innovation Challenge III, desafío *Data-Driven Powertrain Intelligence*. Proyecto de 20 días, pensado para tres personas trabajando en paralelo, alineado con las mismas pautas de flujo del TP final (`src/`, configs YAML, `scripts/train.py`, wandb, sweeps, PRs, bitácora en Docs).
+
 
 ---
 
@@ -8,13 +9,13 @@ Documento operativo del Ford Innovation Challenge III, desafío *Data-Driven Pow
 
 Cinco decisiones que, si se hacen mal, invalidan toda comparación posterior:
 
-**1. El dataset de modelado no existe: hay que construirlo.** Esta es la diferencia estructural más grande respecto del TP final. Allá la matriz X venía dada y por eso EDA, baselines y reducción de dimensionalidad podían correr en paralelo desde el día uno. Acá tenemos tres tablas crudas (viajes, señales dinámicas, info del vehículo) y ninguna fila de entrenamiento hasta que alguien defina qué es una observación. Toda la carga conceptual del proyecto está en esa definición, no en la elección del modelo. En consecuencia, el mecanismo de paralelización cambia: lo que desbloquea a los otros dos integrantes no es que los datos existan, sino un **panel dummy con el esquema acordado**, generado en la primera hora.
+**1. El dataset de modelado no existe: hay que construirlo.** Esta es la diferencia estructural más grande respecto del TP final. Allá la matriz X venía dada y por eso EDA, baselines y reducción de dimensionalidad podían correr en paralelo desde el día uno. Acá tenemos tres tablas crudas (viajes, señales dinámicas, info del vehículo) y ninguna fila de entrenamiento hasta que alguien defina qué es una observación. Toda la carga conceptual del proyecto está en esa definición, no en la elección del modelo. En consecuencia, el mecanismo de paralelización cambia: lo que desbloquea a los otros dos integrantes no es que los datos existan, sino un **panel dummy con el esquema acordado**, generado en los primeros días.
 
 **2. Es un problema de anticipación, no de detección.** Si el modelo mira datos inmediatamente previos al evento, va a aprender a leer un filtro de partículas ya saturado, que es exactamente el análisis reactivo que Ford dice que ya tiene. La defensa es un **gap de blanking** entre el punto de corte y la ventana de evento: se predice a partir de información que termina G kilómetros antes. El gap es lo que hace que el trabajo responda al desafío; sin él los números van a salir hermosos y mentirosos, igual que un CV aleatorio sobre años mezclados.
 
 **3. El eje temporal no está resuelto y puede no resolverse.** `IdentificationDate` está en días desde producción y `ProductionDay` en días desde el primer vehículo de la lista, mientras que `TripDatetimeStart` y `EventTimestamp` son fechas de calendario. Alinear ambos ejes requiere un anclaje que el enunciado no garantiza. Por eso el plan se construye por defecto sobre el **eje de odómetro**, que es intrínseco al vehículo, no necesita anclaje y coincide con lo que el desafío pide reportar ("tiempo/kilometraje"). Si el anclaje temporal cierra, se agrega el eje de días como reporte secundario.
 
-**4. El n efectivo son los vehículos con evento, no los viajes.** Puede haber millones de filas de telemetría y aun así ochenta vehículos etiquetados. Ese número, que se conoce en la primera hora de F1, define la escalera de modelos completa. Con pocos eventos, la regularización fuerte y el split por grupo no son opcionales, y una red recurrente sobre secuencias de viajes va a sobreajustar y perder contra un gradient boosting. Vale la misma expectativa honesta que tuvimos con deep learning en genómica: el proyecto no es "la red gana", es "¿la estructura temporal aporta algo medible sobre agregados de ventana?". Que la respuesta sea que no es un resultado válido y defendible.
+**4. El n efectivo son los vehículos con evento, no los viajes.** Puede haber millones de filas de telemetría y aun así ochenta vehículos etiquetados. Ese número, que se conoce en los primeros días de F1, define la escalera de modelos completa. Con pocos eventos, la regularización fuerte y el split por grupo no son opcionales, y una red recurrente sobre secuencias de viajes va a sobreajustar y perder contra un gradient boosting. Vale la misma expectativa honesta que tuvimos con deep learning en genómica: el proyecto no es "la red gana", es "¿la estructura temporal aporta algo medible sobre agregados de ventana?". Que la respuesta sea que no es un resultado válido y defendible.
 
 **5. Antileakage en todo el armado del panel.** Ninguna feature puede usar información posterior al punto de corte. El escalado y cualquier imputación se ajustan solo con train. Un mismo vehículo nunca se parte entre train y test (split agrupado por VIN). Y hay una trampa específica de este dataset: variables como el nivel del DPF o la acumulación del filtro de aire son casi la definición del evento, así que si entran sin gap el modelo no predice, memoriza. Un PR-AUC de 0,95 en el primer intento es motivo de sospecha, no de festejo.
 
@@ -46,7 +47,7 @@ Respetando "uno arma el pipeline de datos, el otro los modelos" y "nunca editen 
 
 ## 2. Fase 0 — Infraestructura y contrato de datos
 
-**Objetivo:** que exista una corrida end-to-end verde (panel dummy → modelo dummy → métrica → wandb) antes de que nadie escriba un modelo real ni mire un dato real. Esta es la fase que estamos por hacer ahora.
+**Objetivo (días 1 y 2):** que exista una corrida end-to-end verde (panel dummy → modelo dummy → métrica → wandb) antes de que nadie escriba un modelo real ni mire un dato real. Esta es la fase que estamos por hacer ahora.
 
 ### Scaffold del repo
 
@@ -85,7 +86,7 @@ ford-hackathon/
 
 ### Track C — evaluación
 
-- `src/eval/metrics.py`: PR-AUC, ROC-AUC, Brier, y sobre todo las dos métricas propias del desafío, `lead_time_curve()` y `false_alarm_rate()` (definidas en §5). Se implementan contra predicciones aleatorias sobre el panel dummy.
+- `src/eval/metrics.py`: PR-AUC, ROC-AUC, Brier, y sobre todo las dos métricas propias del desafío, `lead_time_curve()` y `false_alarm_rate()` (definidas en la sección 5). Se implementan contra predicciones aleatorias sobre el panel dummy.
 - Esqueleto del dashboard (una app mínima que levanta un parquet de predicciones y dibuja las curvas), también contra dummy.
 - Apertura de la bitácora en Docs y del board de Issues y Projects.
 
@@ -114,7 +115,7 @@ Se congela al final de F1 y después solo se toca por acuerdo explícito de los 
 
 ## 3. Fase 1 — Auditoría, EDA y lock del protocolo
 
-Depende solo del loader de F0. Es corta y bloqueante: no se puede construir el panel sin cerrarla.
+Días 3 a 5. Depende solo del loader de F0. Es corta y bloqueante: no se puede construir el panel sin cerrarla.
 
 - Conteos básicos: vehículos únicos por tabla, **solapamiento de identificadores entre `Vin`, `VehicleCode` y `VehCode`** (si no joinean, el plan cambia de raíz), vehículos con `IdentificationDate` no nulo, rango de odómetro y de fechas, porcentaje de nulos por columna, duplicados.
 - Composición de la flota por `Engine` y `ModelSeries`. El DPF solo aplica a diésel; si la flota es mixta hay que segmentar, no promediar poblaciones distintas.
@@ -194,27 +195,27 @@ Depende del panel real. 5a y 5b se paralelizan entre Track A y Track B. Todo se 
 
 - Tabla final comparativa: regla física vs. logística vs. árboles vs. supervivencia, misma métrica, mismos folds.
 - **SHAP** global (¿qué familia de features domina?) y por caso (un vehículo concreto con su explicación de por qué se alertó). Lo segundo es lo que convence en una demo.
-- Contraste entre la importancia aprendida y la hipótesis física de §4. Si coinciden, es el argumento más fuerte del pitch: el modelo no es una caja negra, mide un mecanismo conocido.
+- Contraste entre la importancia aprendida y la hipótesis física de la sección 4. Si coinciden, es el argumento más fuerte del pitch: el modelo no es una caja negra, mide un mecanismo conocido.
 - Narrativa honesta: cuánta anticipación se logra, a qué costo de falsas alarmas, y qué haría falta para llevarlo a producción.
 - README del repo e informe con los links de wandb al lado de cada número, nada copiado a mano.
 
 ---
 
-## 8. Cronograma orientativo
+## 8. Cronograma (20 días)
 
-Dimensionado sobre unas 48 horas de trabajo efectivo. Si la ventana es más corta se recorta F5 y parte del barrido de F3; si es más larga, el excedente va a F5 y F4, nunca a F0 y F1.
+Veinte días de calendario, con las tres primeras jornadas dedicadas íntegramente a montar el flujo de trabajo. La regla de asignación de tiempo sobrante es la misma de siempre: si algo se estira, se recorta F5 y parte del barrido de F3, nunca F0 y F1.
 
-| Franja | Track A (datos) | Track B (modelos) | Track C (evaluación) | Sincronización |
+| Días | Track A (datos) | Track B (modelos) | Track C (evaluación) | Hito de cierre |
 |---|---|---|---|---|
-| 0–3 h | Scaffold + loader + panel dummy | `train.py` + wandb + splits | Métricas de anticipación | Corrida dummy verde |
-| 3–6 h | Auditoría y EDA | Baselines contra dummy | Esqueleto de dashboard | **Contrato congelado** |
-| 6–16 h | Panel real + features A y B | Regla física + logística | Dashboard contra dummy | Primer número real |
-| 16–28 h | Features C y D | GBM + sweep de (W, G, H) | Curva de anticipación | Tabla de baselines |
-| 28–36 h | 5a árboles | 5b supervivencia | SHAP + figuras | Comparación vs. baseline |
-| 36–44 h | F6 | F6 | Dashboard final | Cierre de código |
-| 44–48 h | Pitch de a tres | | | Ensayo cronometrado |
+| 1–2 | Scaffold, loader, `make_dummy.py` | `train.py`, wandb, `splits.py` | `metrics.py` contra dummy | Corrida dummy verde |
+| 3–5 | Auditoría y EDA de las tres tablas | Baselines contra panel dummy | Esqueleto de dashboard | **Contrato de datos congelado** |
+| 6–10 | Panel real + features A y B | Regla física + logística | Curva de anticipación funcionando | Primer número real comparable |
+| 11–13 | Features C y D + iteración de ventana | GBM + sweep de (W, G, H) | Dashboard contra panel real | Tabla de baselines congelada |
+| 14–16 | 5a árboles y calibración | 5b supervivencia | SHAP global y por caso | Comparación vs. baseline |
+| 17–18 | Consolidación y tabla final | Consolidación y bootstrap | Dashboard final y figuras | Congelamiento de código |
+| 19–20 | Pitch de a tres | | | Dos ensayos cronometrados |
 
-Check-in de diez minutos cada cuatro horas con tres preguntas fijas: qué cerré, qué me bloquea, qué cambia del contrato.
+Check-in diario de quince minutos con tres preguntas fijas (qué cerré, qué me bloquea, qué cambia del contrato) y una revisión larga dos veces por semana sobre el board y el dashboard de wandb, como en el TP final. Los hitos de cierre de la tabla no se negocian: si un día 5 el contrato no está congelado, se congela igual con lo que haya y se corrige después por acuerdo de los tres, porque el costo de que F3 y F4 sigan trabajando contra un esquema provisorio es mayor que el de un contrato imperfecto.
 
 ---
 
@@ -236,12 +237,12 @@ Check-in de diez minutos cada cuatro horas con tres preguntas fijas: qué cerré
 
 | Riesgo | Señal temprana | Plan B |
 |---|---|---|
-| Las tablas no joinean | F1, primera hora | Modelar sobre la tabla con etiqueta cruzable y declararlo como supuesto en el pitch |
-| Muy pocos vehículos con evento | F1 | Bajar la escalera: logística + GBM poco profundo, CV repetida, intervalos en vez de puntos |
+| Las tablas no joinean | F1, día 3 | Modelar sobre la tabla con etiqueta cruzable y declararlo como supuesto en el pitch |
+| Muy pocos vehículos con evento | F1, día 3 | Bajar la escalera: logística + GBM poco profundo, CV repetida, intervalos en vez de puntos |
 | No se puede alinear el eje temporal | F1 | Panel sobre eje de odómetro (recomendado por defecto igual) |
 | Histórico por vehículo demasiado corto | F1 | Reducir W y H; si no alcanza, pasar de panel a una sola observación por vehículo |
 | Leakage por features post-evento | Métrica anómala en F3 | Auditoría de Track C sobre cada feature nueva |
-| El dashboard queda pobre por falta de tiempo | Hora 32 sin nada visual | Track C no se distrae con modelado; un buen modelo mal mostrado pierde contra uno decente bien contado |
+| El dashboard queda pobre por falta de tiempo | Día 13 sin nada visual | Track C no se distrae con modelado; un buen modelo mal mostrado pierde contra uno decente bien contado |
 
 ---
 

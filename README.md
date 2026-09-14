@@ -50,11 +50,24 @@ mismo a wandb.
 
 ## wandb
 
-Por defecto `mode: offline` (no necesita cuenta). Para subir las corridas:
+Todas las corridas van al team **`oromagnoli-`**, proyecto **`ford-fic`**:
+<https://wandb.ai/oromagnoli-/ford-fic>. Setup por persona, una sola vez:
 
 ```bash
-wandb login
-wandb sync wandb/offline-run-*        # o poner mode: online en el config
+wandb login                           # pega tu API key de wandb.ai/authorize
+python scripts/train.py --config configs/exp_dummy.yaml
+```
+
+Hace falta estar invitado al team antes del primer `train.py`; si no, wandb
+escribe la corrida en tu cuenta personal y no la ve nadie más.
+
+El YAML manda (`wandb.entity`, `wandb.mode`), pero dos env vars lo pisan sin
+tocar el config compartido:
+
+```bash
+WANDB_MODE=offline python scripts/train.py --config configs/exp_dummy.yaml
+wandb sync wandb/offline-run-*        # subirla después, cuando haya red
+WANDB_MODE=disabled ...               # iterar sin ensuciar el proyecto
 ```
 
 ## Estructura
