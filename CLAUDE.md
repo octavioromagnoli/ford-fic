@@ -56,6 +56,11 @@ no requiere tocar el código de entrenamiento ni coordinar con nadie.
    el código.
 8. **Datos y outputs no se versionan.** `data/`, `experiments/` y `wandb/` están
    en `.gitignore`; lo que se comparte va como wandb Artifact.
+9. **Todas las corridas van al mismo lado.** Team `oromagnoli-`, proyecto
+   `ford-fic` (`wandb.entity`/`wandb.project` en el YAML del experimento). Se
+   pisan con `WANDB_ENTITY`/`WANDB_MODE` para trabajar sin red o en privado,
+   nunca editando el config compartido: si cada uno loguea a su cuenta, las
+   métricas dejan de ser comparables.
 
 ## Mapa del código
 

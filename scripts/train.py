@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -63,7 +64,12 @@ def load_or_make_splits(panel: pd.DataFrame, cfg: dict) -> dict:
 
 
 def init_wandb(cfg: dict, run_name: str):
-    """wandb opcional: `mode: disabled` para iterar rápido, `offline` sin red."""
+    """wandb opcional: `mode: disabled` para iterar rápido, `offline` sin red.
+
+    El entity y el modo salen del YAML, pero `WANDB_ENTITY` y `WANDB_MODE` los
+    pisan: así se corre sin red (o contra una cuenta propia) sin tocar el config
+    compartido, que es lo que hace comparables las corridas de los tres.
+    """
     wandb_cfg = cfg.get("wandb", {})
     if not wandb_cfg.get("enabled", True):
         return None
@@ -72,14 +78,17 @@ def init_wandb(cfg: dict, run_name: str):
     except ImportError:
         logger.warning("wandb no está instalado: la corrida no se loguea")
         return None
+    entity = os.environ.get("WANDB_ENTITY") or wandb_cfg.get("entity")
+    mode = os.environ.get("WANDB_MODE") or wandb_cfg.get("mode", "online")
+    logger.info("wandb: %s/%s | mode=%s", entity or "<default>", wandb_cfg.get("project", "ford-fic"), mode)
     return wandb.init(
         project=wandb_cfg.get("project", "ford-fic"),
-        entity=wandb_cfg.get("entity"),
+        entity=entity,
         name=run_name,
         group=wandb_cfg.get("group"),
         job_type=wandb_cfg.get("job_type", "train"),
         tags=wandb_cfg.get("tags"),
-        mode=wandb_cfg.get("mode", "offline"),
+        mode=mode,
         config=cfg,
     )
 
