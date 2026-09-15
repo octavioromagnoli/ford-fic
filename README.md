@@ -12,7 +12,7 @@ Reglas y contrato de datos: [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
 python3.12 -m venv .venv          # o: uv venv --python 3.12 .venv
-source .venv/bin/activate
+source .venv/bin/activate         # .\.venv\Scripts\Activate.ps1 en Windows
 pip install -r requirements.txt   # o: uv pip install -r requirements.txt
 ```
 
