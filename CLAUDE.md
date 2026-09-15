@@ -7,8 +7,21 @@ resumen operativo que hay que respetar al escribir código.
 
 ## Estado
 
-Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 en curso: el
-contrato de datos de abajo es **provisorio** hasta que F1 lo congele.
+Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
+lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
+archivos reales. Falta F2 (panel real).
+
+**Antes de tocar los datos, leer [`docs/memoria/`](docs/memoria/README.md).** Ahí
+están los hallazgos de F1 y las decisiones tomadas, con la evidencia y el comando
+que las reproduce. Tres que cambian cómo se escribe el código:
+
+- Los datos vienen en **dos cohortes de muestreo** (failed / not_failed) y la
+  cohorte *es* la etiqueta: `IdentificationDate` nula ⇔ sin evento. Nunca entra
+  como feature.
+- Hay **13 vehículos duplicados bajo dos códigos**: se colapsan con
+  `src/data/dedupe.py` antes de cualquier split, o la regla 2 se viola en silencio.
+- **`Engine` está excluido** del set base: `ENG_3` es el 36% de los sanos y el 0%
+  de los fallados.
 
 ## Contrato de datos
 
@@ -44,8 +57,11 @@ no requiere tocar el código de entrenamiento ni coordinar con nadie.
    punto de corte. Escalado e imputación se ajustan solo con el train de cada
    fold (van dentro del `Pipeline`, nunca sobre el panel entero).
 4. **Eje de odómetro por defecto.** `IdentificationDate` está en días desde
-   producción y `TripDatetimeStart` es calendario: alinearlos requiere un anclaje
-   que el enunciado no garantiza. El eje de días es reporte secundario, si cierra.
+   producción y `TripDatetimeStart` es calendario. F1 encontró el anclaje que
+   faltaba (`ProductionDay` está en el eje del calendario, IQR de 0 días: ver
+   `docs/memoria/f1-anclaje-temporal.md`), así que el evento **sí** se puede
+   traducir al eje de km. Eso no asciende al eje de días: sigue siendo reporte
+   secundario, y el origen se estima una vez y se congela.
 5. **Métricas.** PR-AUC out-of-fold para seleccionar modelo, curva de
    anticipación vs. falsas alarmas para el pitch, accuracy nunca.
 6. **Un PR-AUC sospechosamente alto se audita antes de celebrarse.** Variables
@@ -62,6 +78,8 @@ no requiere tocar el código de entrenamiento ni coordinar con nadie.
 ```
 src/config.py            carga de YAML, resolución de paths, semillas
 src/data/loader.py       carga de las tres tablas crudas (esquema en configs/data/raw_sources.yaml)
+                         load_table() entera, iter_table() por chunks (13M de filas)
+src/data/dedupe.py       colapso de los 13 vehículos duplicados (lista en configs/data/vehicle_dedupe.yaml)
 src/features/            [F2] windows.py: primitiva de agregación de ventana
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo
@@ -73,6 +91,8 @@ scripts/build_dataset.py [F2] panel real
 scripts/train.py         entrypoint único de entrenamiento
 scripts/dashboard.py     dashboard (streamlit)
 scripts/check_setup.py   smoke test del harness (15 chequeos)
+scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
+docs/memoria/            hallazgos y decisiones, con la evidencia para reproducirlos
 ```
 
 ## Features ya implementadas

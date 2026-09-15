@@ -6,6 +6,7 @@
 seed: 42
 
 sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml   # 13 vehículos duplicados bajo dos códigos (F1)
 
 axis: odometer            # eje por defecto (plan §0.3). "date" solo si F1 resuelve el anclaje
 
@@ -26,6 +27,15 @@ features:
   # Familias del plan §4. Cada entrada se traduce a columnas feat_* con la
   # primitiva de src/features/windows.py: (columna, agregadores).
   enabled_families: [A_thermal, B_regeneration, C_usage, D_severity]
+
+  # Estáticas que SÍ entran como `static_*`.
+  static_columns: [ModelSeries, SalesCountry_cd, daysUntilSale, ProductionDay]
+
+  # `Engine` queda afuera del set base: ENG_3 es el 36,1% de los vehículos sanos y
+  # el 0% de los que tienen evento. Eso es cómo se muestrearon los datos, no física
+  # del motor; adentro, el modelo declara sanos a 268 vehículos por su motor.
+  # Para medir cuánto aporta de verdad se corre una ablación con otro YAML.
+  static_excluded: [Engine]
 
 splits:
   n_splits: 5
