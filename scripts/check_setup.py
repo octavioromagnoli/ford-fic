@@ -23,6 +23,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# La consola de Windows arranca en cp1252 y revienta con los ≈/á de los mensajes.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from src.config import set_seed  # noqa: E402
 from src.eval.metrics import classification_metrics, lead_time_curve, operating_point  # noqa: E402
