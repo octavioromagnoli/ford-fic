@@ -1,0 +1,33 @@
+# Holdout dev/test congelado. Se corre UNA vez, antes de F2.
+#
+#   python scripts/make_test_split.py --config configs/data/test_split.yaml
+#
+# El universo son los vehículos reales (post-dedupe de los 13 clones), no las filas
+# del panel: el panel de F2 todavía no existe, y ese es justamente el punto. Si el
+# holdout se eligiera después de construir el panel y mirar las features, cada
+# decisión de diseño tomada en el medio se habría tomado con el test a la vista.
+#
+# Congelado el archivo, no se regenera: cambiar la semilla o el test_size después
+# de haber medido contra el test es elegir el test que mejor queda.
+seed: 42
+test_size: 0.2            # 1/5: un fold de StratifiedGroupKFold (ver src/eval/splits.py)
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml    # 13 vehículos duplicados bajo dos códigos (F1)
+panel: configs/data/panel_v1.yaml           # de acá salen las columnas static_*
+
+group_column: vehicle_id                    # regla 2: ningún vehículo en los dos lados
+event_column: event_observed                # estratificación: IdentificationDate no nula
+
+# Columnas cuyo balance se REPORTA entre dev y test. No se estratifica por ellas:
+# forzar el balance de una covariable con 1081 vehículos gasta grados de libertad
+# para arreglar algo que la estratificación por evento ya deja razonable.
+balance_columns: [static_Engine, static_ModelSeries, static_SalesCountry_cd]
+
+scan:
+  chunksize: 500000       # signals son 10,6M de filas: se leen por chunks
+
+output:
+  test_split: ${DATA_DIR}/processed/test_split.json
+  vehicle_table: ${DATA_DIR}/processed/vehicles.parquet   # unión a nivel vehículo (insumo de F2)
+  quality: ${DATA_DIR}/processed/raw_quality.csv          # nulos y tipos por columna

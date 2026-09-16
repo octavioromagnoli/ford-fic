@@ -11,7 +11,9 @@ los defectos del panel.
 - Todos los vehículos arrancan en ~0 km (`odo_min` mediana 0, máximo 7).
 - Hay recorrido de sobra: mediana 21.328 km en fallados y 16.914 en sanos, con
   spans de ~470 y ~411 días.
-- `trips` tiene el odómetro **completo**: ningún nulo en `OdometerTripStart/End`.
+- `trips` tiene el odómetro prácticamente **completo**: 8 filas nulas en
+  `OdometerTripStart/End` (4 vehículos, 3 por millón; medido en F2, ver
+  [f2-union-y-holdout-dev-test.md](f2-union-y-holdout-dev-test.md)).
 
 ## Lo que hay que manejar
 

@@ -27,11 +27,13 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f1-anclaje-temporal.md](f1-anclaje-temporal.md) | El eje de días sí se puede anclar al de km |
 | [f1-senal-postratamiento.md](f1-senal-postratamiento.md) | Cuánto separan `Message`, `Acumulation` y las regeneraciones |
 | [f1-calidad-odometro.md](f1-calidad-odometro.md) | Nulos, retrocesos y desfases del eje de odómetro |
+| [f2-union-y-holdout-dev-test.md](f2-union-y-holdout-dev-test.md) | Cómo une (y cómo NO une) el join, y el test 80/20 congelado |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 
 ## Cómo se reproduce todo esto
 
 ```bash
 python scripts/eda_raw.py          # deja los CSV en experiments/eda/
+python scripts/make_test_split.py  # auditoría del join + holdout dev/test congelado
 python scripts/check_setup.py      # 15 chequeos del harness
 ```

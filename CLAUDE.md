@@ -22,6 +22,9 @@ que las reproduce. Tres que cambian cómo se escribe el código:
   `src/data/dedupe.py` antes de cualquier split, o la regla 2 se viola en silencio.
 - **`Engine` está excluido** del set base: `ENG_3` es el 36% de los sanos y el 0%
   de los fallados.
+- El **test está congelado** desde antes de F2 (217 vehículos, `test_split.json`).
+  El panel se construye con los 1081, pero se entrena y se compara **solo sobre
+  dev**: el recorte lo hace `test_split_masks()`, no un panel más chico.
 
 ## Contrato de datos
 
@@ -52,7 +55,15 @@ no requiere tocar el código de entrenamiento ni coordinar con nadie.
    evento. Sin G esto es detección reactiva, que es justo lo que Ford ya tiene.
 2. **Split agrupado por vehículo.** Un `vehicle_id` nunca cae en train y
    validación a la vez. La lógica está centralizada en `src/eval/splits.py` y no
-   se reimplementa en ningún otro lado.
+   se reimplementa en ningún otro lado. Arriba de la CV hay un **holdout dev/test
+   80/20 congelado** (`data/processed/test_split.json`, generado antes de F2). El
+   panel incluye a los 1081 vehículos, pero **todo lo que se mira es dev**: la CV,
+   la selección de modelo y cualquier figura salen de `dev_mask`. Las filas de test
+   existen y nadie las toca hasta que el modelo está elegido. El recorte lo hace
+   `scripts/train.py` (`select_dev()`) antes de armar los folds, nunca filtrando
+   `vehicle_id` a mano. Por eso **todo YAML de experimento declara
+   `splits.test_split`** —el path del holdout, o `null` explícito si el panel no
+   tiene—: si falta la clave, `train.py` no corre.
 3. **Features solo hacia atrás.** Ninguna feature usa información posterior al
    punto de corte. Escalado e imputación se ajustan solo con el train de cada
    fold (van dentro del `Pipeline`, nunca sobre el panel entero).
@@ -85,6 +96,8 @@ src/config.py            carga de YAML, resolución de paths, semillas
 src/data/loader.py       carga de las tres tablas crudas (esquema en configs/data/raw_sources.yaml)
                          load_table() entera, iter_table() por chunks (13M de filas)
 src/data/dedupe.py       colapso de los 13 vehículos duplicados (lista en configs/data/vehicle_dedupe.yaml)
+src/data/join.py         unión a nivel vehículo + enriquecimiento de trips/signals con las estáticas
+                         (trips y signals NO se mergean entre sí: no hay clave fila a fila)
 src/features/            [F2] windows.py: primitiva de agregación de ventana
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo
@@ -92,6 +105,7 @@ src/eval/splits.py       splits antileakage + serialización a splits.json
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 scripts/make_dummy.py    panel dummy con el esquema del contrato
+scripts/make_test_split.py  auditoría del join + holdout dev/test congelado (se corre una vez)
 scripts/build_dataset.py [F2] panel real
 scripts/train.py         entrypoint único de entrenamiento
 scripts/compare.py       tabla comparativa de corridas (markdown)

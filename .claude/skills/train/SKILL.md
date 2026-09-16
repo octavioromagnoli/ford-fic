@@ -33,8 +33,20 @@ basura: es el test del harness, no un resultado.
 
 ## 2. Splits
 
-Se generan **una vez** y se congelan; viven en `data/processed/splits*.json` y se
-comparten como wandb Artifact. `train.py` los regenera solo si el config dice
+Son **dos niveles**, y el de arriba es obligatorio declararlo.
+
+**Holdout dev/test** (`data/processed/test_split.json`, congelado antes de F2):
+`train.py` recorta el panel a dev antes de armar los folds, así que ninguna
+corrida ve el test. El YAML **tiene** que declarar `splits.test_split`: el path del
+holdout contra el panel real, o `null` explícito contra el dummy (que no tiene).
+Si la clave falta, `train.py` corta con `KeyError` y no entrena. Es a propósito:
+olvidarse del holdout no rompe nada, solo da un PR-AUC mejor del que corresponde.
+El test se mide **una vez**, con el modelo ya elegido, y esa corrida se acuerda
+entre los tres.
+
+**Folds de CV** (dentro de dev): se generan **una vez** y se congelan; viven en
+`data/processed/splits*.json` y se comparten como wandb Artifact. `train.py` los
+regenera solo si el config dice
 `splits.build_if_missing: true` (cierto en el dummy, **false** contra el panel
 real). `splits.strict: true` verifica que los splits sean de este panel: si
 falla, el panel cambió de vehículos y hay que regenerarlos **y avisarle a los
@@ -97,6 +109,11 @@ a mano).
 ## Si algo falla
 
 - `FileNotFoundError` del panel → paso 1.
+- `El config no declara splits.test_split` → agregale la clave al YAML: el path
+  del holdout congelado, o `null` explícito si el panel no tiene (solo el dummy).
+- `N vehículo(s) del panel no están en el holdout congelado` → el panel trae
+  vehículos que el holdout no conoce; sin esa verificación se irían a dev por
+  descarte. Regenerá el holdout **y avisá al equipo**: cambia el test de todos.
 - `No existen los splits ... y build_if_missing es false` → los splits son un
   artefacto compartido: bajalos del wandb Artifact, no los generes en silencio.
 - `Los splits no corresponden a este panel` → el panel cambió; regenerá splits y

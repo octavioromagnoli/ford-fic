@@ -12,12 +12,22 @@ Los folds se serializan a `data/processed/splits.json` como listas de
 `vehicle_id` (no de índices de fila) para que sigan siendo válidos cuando el
 panel se regenere con otro Δ de corte, y se guarda una huella del panel para
 detectar desalineaciones.
+
+Dos niveles, con la misma mecánica y propósitos distintos:
+
+- `make_test_split()` parte el universo de vehículos en **dev / test** una sola
+  vez y congela el resultado. El test no se toca hasta el final: se congela antes
+  de F2 para que ninguna decisión de diseño (features, W/G/H, umbrales) se tome
+  mirándolo.
+- `make_splits()` arma la CV de 5 folds **dentro de dev**, que es donde se
+  compara y se elige modelo.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
@@ -27,6 +37,8 @@ import pandas as pd
 from sklearn.model_selection import StratifiedGroupKFold
 
 from src.config import ensure_dir, resolve_path
+
+logger = logging.getLogger(__name__)
 
 GROUP_COLUMN = "vehicle_id"
 EVENT_COLUMN = "event_observed"
@@ -106,13 +118,173 @@ def make_splits(
     }
 
 
+def make_test_split(
+    frame: pd.DataFrame,
+    *,
+    test_size: float = 0.2,
+    seed: int = 42,
+    group_column: str = GROUP_COLUMN,
+    event_column: str = EVENT_COLUMN,
+    tolerance: float = 0.02,
+) -> dict[str, Any]:
+    """Parte el universo de vehículos en dev/test, agrupado por vehículo y estratificado.
+
+    Acepta un panel (muchas filas por vehículo) o una tabla a nivel vehículo: lo
+    primero que hace es colapsar a una fila por `group_column`, así el split es por
+    vehículo por construcción y no depende de cuántos cortes tenga cada uno.
+
+    Usa el mismo `StratifiedGroupKFold` que `make_splits` y se queda con un fold
+    como test: con `test_size=0.2` son 5 folds y el fold 0 es el test. Reusar el
+    splitter en vez de muestrear a mano mantiene una sola implementación de la
+    estratificación en el repo.
+
+    A diferencia de los folds de CV, acá se serializan **las dos listas** de
+    vehículos. En la CV el train es "el resto del panel" porque el panel ya existe;
+    el test se congela *antes* de que exista el panel de F2, así que "el resto" no
+    está definido al momento de usarlo: si F2 filtra vehículos o agrega otros, la
+    única forma de detectarlo es tener el universo completo escrito.
+    """
+    _validate_panel(frame, group_column, event_column)
+
+    if not 0.0 < test_size < 1.0:
+        raise ValueError(f"test_size={test_size} tiene que estar entre 0 y 1")
+    equivalent_folds = int(round(1.0 / test_size))
+    if equivalent_folds < 2:
+        raise ValueError(f"test_size={test_size} no deja folds: tiene que estar entre 0 y 0,5")
+    achieved = 1.0 / equivalent_folds
+    if abs(achieved - test_size) > tolerance:
+        raise ValueError(
+            f"test_size={test_size} no es representable como un fold de StratifiedGroupKFold "
+            f"(el más cercano es {achieved:.4f}, con {equivalent_folds} folds). Elegí un "
+            "valor de la forma 1/n (0,5 · 0,333 · 0,25 · 0,2 · 0,1) o subí `tolerance`."
+        )
+
+    vehicle_level = (
+        frame.groupby(group_column, observed=True)[event_column].max().astype(int).reset_index()
+    )
+    n_event_vehicles = int(vehicle_level[event_column].sum())
+    if n_event_vehicles < equivalent_folds:
+        raise ValueError(
+            f"Solo {n_event_vehicles} vehículos con evento: no alcanzan para un test del "
+            f"{test_size:.0%} estratificado."
+        )
+
+    groups = vehicle_level[group_column].astype(str).to_numpy()
+    y = vehicle_level[event_column].to_numpy()
+    splitter = StratifiedGroupKFold(n_splits=equivalent_folds, shuffle=True, random_state=seed)
+    _, test_idx = next(iter(splitter.split(np.zeros(len(vehicle_level)), y, groups)))
+
+    test_mask = np.zeros(len(vehicle_level), dtype=bool)
+    test_mask[test_idx] = True
+    test_vehicles = sorted(groups[test_mask].tolist())
+    dev_vehicles = sorted(groups[~test_mask].tolist())
+    assert_no_vehicle_leakage(np.array(dev_vehicles), np.array(test_vehicles))
+
+    return {
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "kind": "dev_test_holdout",
+        "test_size_requested": float(test_size),
+        "test_size_achieved": float(test_mask.mean()),
+        "equivalent_folds": equivalent_folds,
+        "seed": seed,
+        "group_column": group_column,
+        "event_column": event_column,
+        "panel": panel_fingerprint(frame.rename(columns={group_column: GROUP_COLUMN})),
+        "n_vehicles": int(len(vehicle_level)),
+        "n_event_vehicles": n_event_vehicles,
+        "dev": _side_summary(vehicle_level, ~test_mask, event_column),
+        "test": _side_summary(vehicle_level, test_mask, event_column),
+        "test_vehicles": test_vehicles,
+        "dev_vehicles": dev_vehicles,
+    }
+
+
+def test_split_masks(
+    panel: pd.DataFrame, test_split: dict[str, Any], *, strict: bool = True
+) -> tuple[np.ndarray, np.ndarray]:
+    """Máscaras `(dev, test)` para aplicar el holdout congelado sobre un panel.
+
+    Con `strict=True` falla si el panel trae vehículos que el holdout no conoce:
+    sin ese chequeo un vehículo nuevo caería en dev por descarte y nadie se
+    enteraría. Que falten vehículos del holdout (F2 puede filtrar los que no tienen
+    histórico suficiente) no es un error, pero se avisa por log.
+    """
+    group_column = test_split.get("group_column", GROUP_COLUMN)
+    groups = panel[group_column].astype(str).to_numpy()
+    test_vehicles = set(test_split["test_vehicles"])
+    dev_vehicles = set(test_split.get("dev_vehicles", []))
+
+    # Sin la lista de dev no se puede distinguir "vehículo nuevo" de "vehículo de dev",
+    # así que el chequeo se hace solo cuando el holdout la trae.
+    unknown = sorted(set(groups) - (test_vehicles | dev_vehicles)) if dev_vehicles else []
+    if unknown:
+        message = (
+            f"{len(unknown)} vehículo(s) del panel no están en el holdout congelado "
+            f"(ej.: {unknown[:3]}). Si el universo cambió, hay que regenerar el holdout."
+        )
+        if strict:
+            raise ValueError(message)
+        logger.warning(message)
+
+    faltan_test = sorted(test_vehicles - set(groups))
+    if faltan_test:
+        logger.warning(
+            "%d vehículo(s) de test no aparecen en el panel (ej.: %s)",
+            len(faltan_test),
+            faltan_test[:3],
+        )
+
+    test_mask = np.isin(groups, np.array(sorted(test_vehicles), dtype=object).astype(str))
+    dev_mask = ~test_mask
+    assert_no_vehicle_leakage(groups[dev_mask], groups[test_mask])
+    return dev_mask, test_mask
+
+
+def split_balance(
+    frame: pd.DataFrame,
+    test_split: dict[str, Any],
+    columns: list[str],
+    *,
+    group_column: str | None = None,
+) -> pd.DataFrame:
+    """Cómo quedó repartida cada variable entre dev y test, en proporciones.
+
+    No estratifica por estas columnas —la estratificación es solo por evento—: las
+    reporta para que un desbalance grosero se vea antes de congelar el split.
+    """
+    group_column = group_column or test_split.get("group_column", GROUP_COLUMN)
+    vehicle_level = frame.drop_duplicates(subset=[group_column]).copy()
+    is_test = vehicle_level[group_column].astype(str).isin(set(test_split["test_vehicles"]))
+
+    rows = []
+    for column in columns:
+        if column not in vehicle_level.columns:
+            logger.warning("split_balance: columna ausente, se omite: %s", column)
+            continue
+        dev_counts = vehicle_level.loc[~is_test, column].value_counts(dropna=False)
+        test_counts = vehicle_level.loc[is_test, column].value_counts(dropna=False)
+        for value in sorted(set(dev_counts.index) | set(test_counts.index), key=str):
+            n_dev = int(dev_counts.get(value, 0))
+            n_test = int(test_counts.get(value, 0))
+            rows.append(
+                {
+                    "variable": column,
+                    "value": value,
+                    "n_dev": n_dev,
+                    "n_test": n_test,
+                    "frac_dev": n_dev / max(int((~is_test).sum()), 1),
+                    "frac_test": n_test / max(int(is_test.sum()), 1),
+                }
+            )
+    out = pd.DataFrame(rows)
+    if not out.empty:
+        out["diff"] = out["frac_test"] - out["frac_dev"]
+    return out
+
+
 def save_splits(splits: dict[str, Any], path: str | Path) -> Path:
     """Serializa los folds a JSON (por defecto `data/processed/splits.json`)."""
-    target = resolve_path(path)
-    ensure_dir(target.parent)
-    with target.open("w", encoding="utf-8") as fh:
-        json.dump(splits, fh, indent=2, ensure_ascii=False)
-    return target
+    return _write_json(splits, path)
 
 
 def load_splits(path: str | Path) -> dict[str, Any]:
@@ -122,8 +294,22 @@ def load_splits(path: str | Path) -> dict[str, Any]:
             f"No existen los splits en {target}. Generalos con `scripts/make_splits.py` "
             "o dejá que `scripts/train.py` los cree si el config lo permite."
         )
-    with target.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
+    return _read_json(target)
+
+
+def save_test_split(test_split: dict[str, Any], path: str | Path) -> Path:
+    """Serializa el holdout dev/test (por defecto `data/processed/test_split.json`)."""
+    return _write_json(test_split, path)
+
+
+def load_test_split(path: str | Path) -> dict[str, Any]:
+    target = resolve_path(path)
+    if not target.exists():
+        raise FileNotFoundError(
+            f"No existe el holdout dev/test en {target}. Generalo con "
+            "`python scripts/make_test_split.py --config configs/data/test_split.yaml`."
+        )
+    return _read_json(target)
 
 
 def iter_folds(
@@ -163,6 +349,31 @@ def assert_no_vehicle_leakage(train_groups: np.ndarray, valid_groups: np.ndarray
             f"Leakage por vehículo: {len(overlap)} VIN en train y validación "
             f"(ej.: {sorted(overlap)[:3]})"
         )
+
+
+def _side_summary(
+    vehicle_level: pd.DataFrame, mask: np.ndarray, event_column: str
+) -> dict[str, Any]:
+    """Resumen de un lado del holdout: cuántos vehículos, cuántos con evento y a qué tasa."""
+    side = vehicle_level.loc[mask, event_column]
+    return {
+        "n_vehicles": int(len(side)),
+        "n_event_vehicles": int(side.sum()),
+        "event_rate": float(side.mean()) if len(side) else 0.0,
+    }
+
+
+def _write_json(payload: dict[str, Any], path: str | Path) -> Path:
+    target = resolve_path(path)
+    ensure_dir(target.parent)
+    with target.open("w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False)
+    return target
+
+
+def _read_json(path: str | Path) -> dict[str, Any]:
+    with resolve_path(path).open("r", encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def _validate_panel(panel: pd.DataFrame, group_column: str, event_column: str) -> None:

@@ -15,6 +15,11 @@ Lo que tiene que hacer, para que quien lo escriba no tenga que releer el plan:
    odómetro que los de los vehículos con evento.
 5. Emitir exactamente el esquema del contrato (ver CLAUDE.md) y registrar el
    panel y los splits como wandb Artifacts.
+6. Incluir a **los 1081 vehículos**, test incluido. El panel no se recorta: el
+   holdout congelado (`data/processed/test_split.json`) se aplica al usarlo, con
+   `src.eval.splits.test_split_masks(panel, split)`. Los folds de CV se arman
+   sobre `dev_mask`, y las filas de test quedan escritas sin que nadie las mire
+   hasta la corrida final.
 
 Hasta entonces, B y C trabajan contra `scripts/make_dummy.py`, que ya emite ese
 mismo esquema.
