@@ -80,7 +80,7 @@ tables:
       not_failed: ${DATA_DIR}/raw/DynamicInformation_NotFailed_SelectionVins.csv
     dtypes:
       VehicleCode: str
-      OdometerValue: float64          # ~5% nulo
+      OdometerValue: float64          # 11,15% nulo (medido en F2, ver f2-union-y-holdout-dev-test.md)
       Acumulation: float64            # 9 niveles enteros
       Message: str
       Regenerations: str              # marcador literal "Regeneration", NO un conteo;

@@ -4,9 +4,15 @@
     python scripts/train.py --config configs/exp_dummy.yaml
 
 Hace siempre lo mismo, en este orden: levanta el config, fija la semilla, carga
-el panel y los splits congelados, corre la CV agrupada por vehículo, calcula las
-métricas (clasificación + anticipación), loguea todo a wandb y deja los outputs
-en `experiments/<run_name>/`.
+el panel, **lo recorta a dev con el holdout congelado**, carga los splits, corre
+la CV agrupada por vehículo, calcula las métricas (clasificación + anticipación),
+loguea todo a wandb y deja los outputs en `experiments/<run_name>/`.
+
+El recorte a dev no es opcional ni implícito: el YAML tiene que declarar
+`splits.test_split` (el path del holdout, o `null` explícito para un panel que no
+tiene). Un config que se olvide de la clave falla acá y no entrena, porque el modo
+de fallar de lo contrario es un número mejor de lo que corresponde y nadie
+enterándose.
 
 Nunca se edita este archivo para cambiar un hiperparámetro: se escribe otro YAML.
 """
@@ -33,10 +39,52 @@ from src.eval.metrics import (  # noqa: E402
     operating_point,
     summarize_folds,
 )
-from src.eval.splits import load_splits, make_splits, save_splits  # noqa: E402
+from src.eval.splits import (  # noqa: E402
+    load_splits,
+    load_test_split,
+    make_splits,
+    save_splits,
+    test_split_masks,
+)
 from src.training.cv import run_cv  # noqa: E402
 
 logger = logging.getLogger("train")
+
+
+def select_dev(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Recorta el panel a dev con el holdout congelado. El test nunca llega a la CV.
+
+    `splits.test_split` es obligatoria en el YAML: con el path del holdout recorta,
+    con `null` explícito no recorta (el panel dummy no tiene holdout). Si la clave
+    falta, esto revienta antes de entrenar. Es a propósito: el olvido no se nota en
+    ninguna métrica —da PR-AUC más alto y listo—, así que el único momento en que se
+    puede detectar es antes de correr.
+    """
+    splits_cfg = cfg.get("splits", {})
+    if "test_split" not in splits_cfg:
+        raise KeyError(
+            "El config no declara `splits.test_split`. Poné el path del holdout congelado "
+            "(data/processed/test_split.json) para entrenar solo con dev, o `null` explícito "
+            "si el panel no tiene holdout (solo el dummy). Ver CLAUDE.md, regla 2."
+        )
+    if splits_cfg["test_split"] is None:
+        logger.warning("`splits.test_split: null`: se entrena con el panel entero, sin holdout")
+        return panel
+
+    split = load_test_split(splits_cfg["test_split"])
+    dev_mask, test_mask = test_split_masks(panel, split)
+    dev = panel.loc[dev_mask].reset_index(drop=True)
+    logger.info(
+        "Holdout %s | dev: %d filas / %d vehículos | test reservado: %d filas / %d vehículos",
+        Path(str(splits_cfg["test_split"])).name,
+        len(dev),
+        dev["vehicle_id"].nunique(),
+        int(test_mask.sum()),
+        panel.loc[test_mask, "vehicle_id"].nunique(),
+    )
+    if dev.empty:
+        raise ValueError("El recorte a dev dejó el panel vacío: ¿el holdout es de otro dataset?")
+    return dev
 
 
 def load_or_make_splits(panel: pd.DataFrame, cfg: dict) -> dict:
@@ -113,6 +161,8 @@ def main() -> None:
     panel = pd.read_parquet(panel_path)
     logger.info("Panel: %s | %d filas | %d vehículos", panel_path.name, len(panel), panel["vehicle_id"].nunique())
 
+    # Antes que cualquier otra cosa: lo que sigue solo ve dev.
+    panel = select_dev(panel, cfg)
     splits = load_or_make_splits(panel, cfg)
 
     model_cfg = cfg["model"]

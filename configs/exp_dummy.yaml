@@ -13,6 +13,11 @@ splits:
   seed: 42
   build_if_missing: true   # solo en dummy; contra el panel real esto va en false
   strict: true             # falla si los splits no corresponden a este panel
+  # Holdout dev/test congelado. Contra el panel real:
+  #   test_split: ${DATA_DIR}/processed/test_split.json
+  # El panel dummy no tiene holdout (sus vehículos son sintéticos), así que va
+  # `null` EXPLÍCITO: la clave es obligatoria y un config que la omita no corre.
+  test_split: null
 
 model:
   name: baserate           # ver src/models/registry.py
