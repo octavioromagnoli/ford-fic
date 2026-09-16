@@ -13,6 +13,8 @@ venv/
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
+.agents/*
+.claude/*
 
 # Secretos
 .env

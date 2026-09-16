@@ -1,0 +1,38 @@
+# Vehículos contados dos veces en los archivos crudos. Congelado por F1.
+#
+# `StaticInformation` trae 1120 filas y 1094 `VehicleCode` únicos. Los 26 códigos
+# repetidos aparecen en las DOS cohortes a la vez (con `IdentificationDate` en la
+# fila failed y nula en la not_failed) y además son 13 vehículos duplicados bajo
+# dos códigos consecutivos: los pares de abajo tienen historia de viajes idéntica
+# (Jaccard 1.000 sobre `(TripDatetimeStart, OdometerTripEnd)`).
+#
+# Sin colapsarlos, un código puede caer en train y su gemelo en validación: el
+# split agrupado se cumple en el código y se viola en los hechos (regla 2).
+#
+# La lista sale de `scripts/eda_raw.py` (experiments/eda/clones.csv). Se congela
+# acá a propósito: si el dataset cambia, se vuelve a correr el EDA y se actualiza
+# este archivo, no se recalcula en silencio en cada corrida.
+
+policy:
+  # El id que sobrevive es el primero del grupo (el menor). El descartado se
+  # remapea al canónico y sus filas repetidas se colapsan.
+  canonical: first
+  # Etiqueta ante la contradicción: si el vehículo tiene una fila `failed`, hay
+  # evento registrado. `not_failed` es ausencia de registro, no evidencia de sano.
+  cohort_conflict: prefer_failed
+
+# 13 grupos, 26 códigos, todos de la cohorte failed.
+clone_groups:
+  - [VEH_0240, VEH_0241]
+  - [VEH_0344, VEH_0345]
+  - [VEH_0392, VEH_0393]
+  - [VEH_0444, VEH_0445]
+  - [VEH_0459, VEH_0460]
+  - [VEH_0463, VEH_0464]
+  - [VEH_0488, VEH_0489]
+  - [VEH_0511, VEH_0512]
+  - [VEH_0583, VEH_0584]
+  - [VEH_0590, VEH_0591]
+  - [VEH_0609, VEH_0610]
+  - [VEH_0994, VEH_0995]
+  - [VEH_1010, VEH_1011]

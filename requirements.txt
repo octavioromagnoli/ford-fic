@@ -20,4 +20,4 @@ streamlit==1.63.0
 wandb==0.30.0
 
 # Notebooks (solo exploración)
-ipykernel==7.1.1
+ipykernel==7.1.0

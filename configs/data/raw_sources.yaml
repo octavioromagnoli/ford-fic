@@ -1,63 +1,105 @@
-# Fuentes crudas. PROVISORIO hasta que F1 audite los archivos reales.
+# Fuentes crudas. Auditado contra los archivos reales (F1, 2026-09-15).
 #
-# El esquema de abajo está armado con los nombres de columna que menciona el
-# enunciado; el reparto entre tablas y los dtypes son una hipótesis. El loader no
-# rompe si una columna declarada no aparece: la reporta en `describe_tables()`.
-# Primer paso de F1: correr `src.data.loader.describe_tables()` y corregir ACÁ,
-# no en el código.
+# Los datos vienen partidos en dos cohortes de muestreo: vehículos con evento
+# registrado (`*_Failed*`) y sin evento (`*_NotFailed*`). Cada tabla lógica se
+# declara una sola vez con sus `parts`: el loader concatena y agrega la columna
+# `cohort` con la clave de la parte. OJO: `cohort` es la etiqueta, NO es una
+# feature -- ver la nota de `vehicles.IdentificationDate` más abajo.
 #
 # Los paths son relativos a ${DATA_DIR} (por defecto `data/`, override con la
 # variable de entorno FORD_DATA_DIR). Los datos no se versionan.
 
+defaults:
+  # Los seis CSV vienen con BOM: sin esto la primera columna sale '\ufeffVehicleCode'.
+  read_kwargs:
+    encoding: utf-8-sig
+
+part_column: cohort
+
 tables:
   vehicles:
-    path: ${DATA_DIR}/raw/vehicles.csv
-    description: Info del vehículo y etiqueta del evento (una fila por vehículo).
+    description: >
+      Info estática del vehículo, una fila por vehículo (378 con evento, 742 sin).
+      `IdentificationDate` está presente en el 100% de la cohorte failed y nula en
+      el 100% de la not_failed: ES la etiqueta del evento, no una covariable.
+      Nunca entra al modelo como `static_*`.
+    parts:
+      failed: ${DATA_DIR}/raw/StaticInformation_FailedVins.csv
+      not_failed: ${DATA_DIR}/raw/StaticInformation_NotFailedVins.csv
     dtypes:
-      Vin: str
       VehicleCode: str
-      Engine: str
-      ModelSeries: str
-      SalesCountryCd: str
+      IdentificationDate: float64     # días desde producción; NaN si no hay evento
       daysUntilSale: float64
       ProductionDay: float64          # días desde el primer vehículo de la lista
-      IdentificationDate: float64     # días desde producción (NO es fecha de calendario)
+      Engine: str                     # ENG_3 no aparece en la cohorte failed (sesgo de muestreo)
+      ModelSeries: str
+      SalesCountry_cd: str
     date_columns: []
 
   trips:
-    path: ${DATA_DIR}/raw/trips.csv
-    description: Un registro por viaje, con agregados del viaje.
+    description: Un registro por viaje, con agregados del viaje (2.53M filas).
+    parts:
+      failed: ${DATA_DIR}/raw/TripSummary_Failed_SelectionVins.csv
+      not_failed: ${DATA_DIR}/raw/TripSummary_NotFailed_SelectionVins.csv
     dtypes:
-      VehCode: str
-      Odometer: float64
-      Distance: float64
-      KilometerPerHour: float64
-      EngineTemperatureAvg: float64
+      VehicleCode: str
+      OdometerTripStart: float64
+      OdometerTripEnd: float64
+      KilometerPerHour: float64       # ~31% nulo
+      FuelLvlStartPc: float64
+      FuelLvlEndPc: float64
+      EngineOilLifePCStart: float64
+      EngineOilLifePCEnd: float64
+      EngineTemperatureMin: float64
       EngineTemperatureMax: float64
+      EngineTemperatureAvg: float64
+      AirFilterStart: str             # nivel categórico del postratamiento
+      AirFilterEnd: str
+      AirRegenerationStart: float64
+      AirRegenerationEnd: float64
+      CoolantTemperatureStart: float64
       CoolantTemperatureEnd: float64
-      AirTemperatureAvg: float64
+      AirTemperatureStart: float64
+      AirTemperatureEnd: float64
       AirTemperatureMin: float64
-      Elevation: float64
-      EngineOilLifePC: float64
-      TirePressure: float64
+      AirTemperatureMax: float64
+      AirTemperatureAvg: float64
+      TripNumber: float64
     date_columns:
       - TripDatetimeStart
+      - TripDatetimeEnd
 
   signals:
-    path: ${DATA_DIR}/raw/signals.csv
-    description: Señales dinámicas del sistema de postratamiento.
+    description: >
+      Señales dinámicas del postratamiento (10.6M filas). `Message` es el nivel del
+      filtro: sus estados "malos" (Full / Overloaded / Over Limit) aparecen en las
+      dos cohortes, así que NO son el evento -- son features de severidad y los
+      candidatos número uno a memorizarse si no hay gap de blanking (regla 6).
+    parts:
+      failed: ${DATA_DIR}/raw/DynamicInformation_Failed_SelectionVins.csv
+      not_failed: ${DATA_DIR}/raw/DynamicInformation_NotFailed_SelectionVins.csv
     dtypes:
-      VehCode: str
-      Odometer: float64
-      DieselParticulateFilterEnd: float64
-      Regenerations: float64
+      VehicleCode: str
+      OdometerValue: float64          # ~5% nulo
+      Acumulation: float64            # 9 niveles enteros
+      Message: str
+      Regenerations: str              # marcador literal "Regeneration", NO un conteo;
+                                      # nulo salvo en la fila del evento de regeneración
       DistanceBetweenRegenerations: float64
-      Acumulation: float64
     date_columns:
-      - EventTimestamp
+      - eventTimestamp
 
-# Claves candidatas para el join entre tablas. F1 mide el solapamiento real:
-# si no joinean, cambia el plan de raíz (plan §10, primer riesgo).
+# Clave de join entre tablas: `VehicleCode` en las seis tablas, y los conteos de
+# vehículos cierran exacto (378 / 742 en las tres). El riesgo #1 del plan (que las
+# tablas no joineen) está descartado.
 join_keys:
-  vehicle_id_candidates: [Vin, VehicleCode, VehCode]
-  odometer_column: Odometer
+  vehicle_id_column: VehicleCode
+  odometer_column:
+    trips: OdometerTripEnd
+    signals: OdometerValue
+
+# Etiqueta: el evento no está marcado fila a fila, se deriva del vehículo.
+label:
+  event_cohort: failed
+  event_day_column: IdentificationDate   # días desde producción, eje NO alineado con
+                                         # el calendario de trips/signals (regla 4)
