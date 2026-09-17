@@ -28,6 +28,10 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f1-senal-postratamiento.md](f1-senal-postratamiento.md) | Cuánto separan `Message`, `Acumulation` y las regeneraciones |
 | [f1-calidad-odometro.md](f1-calidad-odometro.md) | Nulos, retrocesos y desfases del eje de odómetro |
 | [f2-union-y-holdout-dev-test.md](f2-union-y-holdout-dev-test.md) | Cómo une (y cómo NO une) el join, y el test 80/20 congelado |
+| [f2-diccionario-trips-incompleto.md](f2-diccionario-trips-incompleto.md) | `TripSummary` trae 25 de las 40 columnas del anexo: qué features mueren |
+| [f2-columnas-airfilter-airregeneration.md](f2-columnas-airfilter-airregeneration.md) | El DPF estaba en `trips` con otro nombre: la familia B se puede construir |
+| [f2-identificationdate-igual-a-venta.md](f2-identificationdate-igual-a-venta.md) | **Bloqueante:** el 79% de los eventos no tiene fecha utilizable |
+| [f2-calidad-columnas-dev.md](f2-calidad-columnas-dev.md) | Tres defectos de columna que la tabla de nulos no muestra |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 
 ## Cómo se reproduce todo esto
@@ -35,5 +39,12 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 ```bash
 python scripts/eda_raw.py          # deja los CSV en experiments/eda/
 python scripts/make_test_split.py  # auditoría del join + holdout dev/test congelado
+python scripts/build_eda_cache.py  # cache dev-only del EDA (experiments/eda/dev/)
 python scripts/check_setup.py      # 15 chequeos del harness
 ```
+
+Los cuatro hallazgos `f2-*` de arriba salen del EDA exhaustivo sobre dev:
+[`notebooks/eda-exhaustivo-dev.ipynb`](../../notebooks/eda-exhaustivo-dev.ipynb)
+(ejecutado, con sus figuras), y su versión navegable en
+`streamlit run scripts/dashboard_eda.py`. Los dos leen el mismo cache, así que el
+filtro a dev se decide en un solo lugar.

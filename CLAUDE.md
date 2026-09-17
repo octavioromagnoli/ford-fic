@@ -109,9 +109,12 @@ scripts/make_test_split.py  auditoría del join + holdout dev/test congelado (se
 scripts/build_dataset.py [F2] panel real
 scripts/train.py         entrypoint único de entrenamiento
 scripts/compare.py       tabla comparativa de corridas (markdown)
-scripts/dashboard.py     dashboard (streamlit)
+scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
 scripts/check_setup.py   smoke test del harness (15 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
+scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
+                         diccionario de 3 vías y factibilidad de las features del plan §4
+scripts/dashboard_eda.py dashboard del EDA de datos crudos, dev-only (streamlit)
 docs/memoria/            hallazgos y decisiones, con la evidencia para reproducirlos
 ```
 

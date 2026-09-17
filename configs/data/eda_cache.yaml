@@ -1,0 +1,66 @@
+# Cache del EDA exhaustivo **sobre dev**. Se construye una vez y lo consumen el
+# notebook (`notebooks/eda-exhaustivo-dev.ipynb`) y el dashboard
+# (`scripts/dashboard_eda.py`):
+#
+#   python scripts/build_eda_cache.py --config configs/data/eda_cache.yaml
+#
+# Por qué existe: `trips` son 2,53M de filas y `signals` 10,6M. Rescanear 1,2 GB
+# en cada sección del notebook y en cada recarga del dashboard no es viable, y
+# —peor— sería un segundo lugar donde se decide qué vehículo entra. El filtro a
+# dev se aplica UNA vez, acá, y todo lo demás lee estos parquet.
+#
+# ORDEN OBLIGATORIO del filtro (ver `scripts/build_eda_cache.py`):
+#   1. canonizar `VehicleCode` con `configs/data/vehicle_dedupe.yaml`
+#   2. recién ahí filtrar por `dev_vehicles` de `test_split.json`
+# Al revés, las filas del código clon descartado (p. ej. `VEH_0345`) no matchean
+# ninguna id de la lista —que solo tiene `VEH_0344`— y se pierden en silencio.
+#
+# Los 217 vehículos de test NO entran en ningún cómputo de este cache. El
+# script lo verifica con un assert sobre cada tabla materializada.
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml    # 13 vehículos duplicados bajo dos códigos (F1)
+panel: configs/data/panel_v1.yaml           # de acá salen las columnas static_*
+
+# Holdout congelado. `dev_vehicles` es el universo del EDA; `test_vehicles` es la
+# lista contra la que se chequea que no se coló nadie.
+test_split: ${DATA_DIR}/processed/test_split.json
+
+# Unión a nivel vehículo ya construida por `scripts/make_test_split.py`. Se reusa
+# en vez de recalcularla: son los mismos 1081 vehículos, recortados a dev.
+vehicle_table: ${DATA_DIR}/processed/vehicles.parquet
+
+scan:
+  chunksize: 500000       # signals son 10,6M de filas: se leen por chunks
+
+eda:
+  # Umbrales de las features exploratorias. No son los de F2 (W/G/H no se definen
+  # acá): son cortes de lectura para describir la flota.
+  short_trip_km: 5.0            # familia A · "trayecto corto"
+  very_short_trip_km: 2.0
+  regime_temp_c: 70.0           # EngineTemperatureMax por debajo => no llegó a régimen
+  urban_speed_kmh: 30.0         # familia C · proxy urbano
+  saturation_level: 95          # tope de la escala de Acumulation / AirRegeneration
+
+  # Preview empírica del gap de blanking: se recalculan los agregados de severidad
+  # usando solo el primer X% del odómetro de cada vehículo. Si la correlación con
+  # `event_observed` cae al truncar la cola, es la evidencia de por qué F2 necesita G.
+  truncation_fracs: [0.7, 0.8]
+
+  # Muestra de filas crudas para los gráficos de detalle (scatter, densidad). Las
+  # distribuciones y los cuantiles del cache son EXACTOS sobre dev: la muestra es
+  # solo para dibujar puntos.
+  sample_rows_trips: 250000
+  sample_rows_signals: 250000
+
+  # Vehículos con historial completo en el cache, para el análisis de alineación
+  # entre `trips.AirRegeneration*` y `signals.Acumulation`. Se eligen por semilla,
+  # mitad con evento y mitad sin.
+  probe_vehicles: 8
+
+  # Bins de los histogramas exactos por cohorte.
+  hist_bins: 60
+
+output:
+  dir: ${REPO_ROOT}/experiments/eda/dev
