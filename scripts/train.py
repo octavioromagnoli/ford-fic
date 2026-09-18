@@ -27,6 +27,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -35,15 +36,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.config import ensure_dir, load_config, repo_root, resolve_path, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
     classification_metrics,
+    dispersion,
     lead_time_curve,
     operating_point,
     summarize_folds,
 )
 from src.eval.splits import (  # noqa: E402
+    MIN_VALID_POSITIVES,
+    N_REPEATS,
+    STRATIFY_COLUMN,
+    STRATIFY_LEVEL,
     load_splits,
     load_test_split,
     make_splits,
     save_splits,
+    split_options,
+    splits_match_options,
     test_split_masks,
 )
 from src.training.cv import run_cv  # noqa: E402
@@ -91,24 +99,51 @@ def load_or_make_splits(panel: pd.DataFrame, cfg: dict) -> dict:
     """Usa los splits congelados; los genera solo si el config lo autoriza.
 
     Regenerar splits en silencio es la forma más fácil de que dos personas
-    comparen números que no son comparables.
+    comparen números que no son comparables. Por lo mismo, si el archivo congelado
+    se armó con otra estratificación o con otro número de repeticiones que las que
+    el YAML declara, esto falla en vez de entrenar: el archivo manda sobre el
+    config —los folds son los del archivo—, así que un YAML que diga otra cosa está
+    describiendo una corrida que no es la que va a pasar.
     """
     splits_cfg = cfg.get("splits", {})
+    options = split_options(cfg)
     path = resolve_path(splits_cfg["path"])
     if path.exists():
         logger.info("Splits congelados: %s", path)
-        return load_splits(path)
+        splits = load_splits(path)
+        mismatch = splits_match_options(splits, options)
+        if mismatch:
+            raise ValueError(
+                f"El splits.json de {path.name} no coincide con lo que declara el YAML: "
+                f"{mismatch}. Los folds salen del archivo, así que regeneralo con "
+                "`python scripts/make_splits.py --config configs/data/panel_v1.yaml` "
+                "(o alineá el YAML del experimento con el archivo)."
+            )
+        return splits
     if not splits_cfg.get("build_if_missing", False):
         raise FileNotFoundError(
             f"No existen los splits en {path} y `splits.build_if_missing` es false. "
             "Generalos una sola vez y compartilos como wandb Artifact."
         )
     logger.warning("Generando splits nuevos en %s (build_if_missing=true)", path)
-    splits = make_splits(
-        panel, n_splits=int(splits_cfg.get("n_splits", 5)), seed=int(splits_cfg.get("seed", 42))
-    )
+    splits = make_splits(panel, **options)
     save_splits(splits, path)
     return splits
+
+
+def repeat_metrics(predictions: pd.DataFrame, n_repeats: int) -> list[dict[str, float]]:
+    """Métricas out-of-fold de CADA repetición, por separado.
+
+    El número de selección de modelo es el promedio de estos, no el PR-AUC de los
+    scores promediados: promediar scores entre repeticiones es un ensamble, y un
+    ensamble de R pasadas da mejor que el modelo que se está evaluando.
+    """
+    if n_repeats <= 1:
+        return [classification_metrics(predictions["label"], predictions["score"])]
+    return [
+        classification_metrics(predictions["label"], predictions[f"score_r{repeat}"])
+        for repeat in range(n_repeats)
+    ]
 
 
 def init_wandb(cfg: dict, run_name: str):
@@ -169,19 +204,38 @@ def main() -> None:
     run_name = args.run_name or cfg.get("name") or f"{model_cfg['name']}-{datetime.now():%Y%m%d-%H%M%S}"
     run = init_wandb(cfg, run_name)
 
+    options = split_options(cfg)
     predictions, fold_metrics = run_cv(
         panel,
         splits,
         model_name=model_cfg["name"],
         model_params=model_cfg.get("params", {}),
         strict_splits=bool(cfg.get("splits", {}).get("strict", True)),
+        min_valid_positives=options["min_valid_positives"],
     )
 
     eval_cfg = cfg.get("eval", {})
     k_consecutive = int(eval_cfg.get("k_consecutive", 2))
 
-    oof = classification_metrics(predictions["label"], predictions["score"])
-    summary = summarize_folds([{k: v for k, v in m.items() if k != "fold"} for m in fold_metrics], seed=seed)
+    n_repeats = int(splits.get("n_repeats", 1))
+    by_repeat = repeat_metrics(predictions, n_repeats)
+    # `oof` es el promedio entre repeticiones. Con R=1 es exactamente la métrica de
+    # siempre (una sola repetición, promedio de un elemento).
+    # `n` y `n_positive` son los mismos en toda repetición (el conjunto out-of-fold es
+    # siempre el panel de dev entero): promediarlos los volvería float sin motivo.
+    oof = {
+        key: value if key in ("n", "n_positive")
+        else float(np.mean([m[key] for m in by_repeat]))
+        for key, value in by_repeat[0].items()
+    }
+    repeats_spread = {
+        key: dispersion([m[key] for m in by_repeat])
+        for key in ("pr_auc", "roc_auc", "brier", "pr_auc_lift")
+    }
+    summary = summarize_folds(
+        [{k: v for k, v in m.items() if k not in ("fold", "repeat")} for m in fold_metrics],
+        seed=seed,
+    )
     curve = lead_time_curve(
         predictions,
         n_thresholds=int(eval_cfg.get("n_thresholds", 50)),
@@ -192,15 +246,26 @@ def main() -> None:
 
     metrics = {
         "oof": oof,
+        "n_repeats": n_repeats,
+        "oof_by_repeat": by_repeat,
+        "repeats_spread": repeats_spread,
         "folds": fold_metrics,
         "folds_summary": summary,
         "operating_point": point,
         "operating_point_budget_per_1000": budget,
         "k_consecutive": k_consecutive,
+        "stratify": splits.get("stratify"),
+        "min_valid_positives": splits.get("min_valid_positives"),
     }
 
     logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
                 oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
+    if n_repeats > 1:
+        spread = repeats_spread["pr_auc"]
+        logger.info(
+            "CV repetida (%d pasadas) | PR-AUC por repetición: %.4f ± %.4f (min %.4f, max %.4f)",
+            n_repeats, spread["mean"], spread["std"], spread["min"], spread["max"],
+        )
     if point:
         logger.info(
             "Punto de operación (<= %.0f falsas alarmas/1000 sanos): detección %.1f%% | "
@@ -222,6 +287,10 @@ def main() -> None:
 
         flat = {f"oof/{k}": v for k, v in oof.items()}
         flat.update({f"cv/{k}": v for k, v in summary.items()})
+        flat["cv/n_repeats"] = n_repeats
+        flat.update({f"repeats/{k}_{stat}": v
+                     for k, stats in repeats_spread.items()
+                     for stat, v in stats.items()})
         if point:
             flat.update(
                 {

@@ -18,6 +18,14 @@ signal_strength: 0.0      # 0 = ruido puro. >0 inyecta señal sintética SOLO pa
 splits:
   n_splits: 5
   seed: 42
+  # El dummy se queda con la estratificación vieja a propósito: es la corrida de
+  # referencia para demostrar compatibilidad hacia atrás (mismos folds que antes de
+  # que esto fuera configurable), y sus vehículos son sintéticos.
+  stratify:
+    column: event_observed
+    level: row
+  min_valid_positives: 5
+  n_repeats: 1
 
 output:
   panel: ${DATA_DIR}/processed/panel_dummy.parquet

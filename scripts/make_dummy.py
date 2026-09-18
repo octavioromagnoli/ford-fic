@@ -27,7 +27,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import ensure_dir, load_config, resolve_path, set_seed  # noqa: E402
-from src.eval.splits import make_splits, save_splits  # noqa: E402
+from src.eval.splits import make_splits, save_splits, split_options  # noqa: E402
 
 logger = logging.getLogger("make_dummy")
 
@@ -292,9 +292,7 @@ def main() -> None:
     )
 
     if not args.no_splits:
-        splits = make_splits(
-            panel, n_splits=int(cfg["splits"]["n_splits"]), seed=int(cfg["splits"]["seed"])
-        )
+        splits = make_splits(panel, **split_options(cfg))
         splits_path = save_splits(splits, cfg["output"]["splits"])
         logger.info("Splits: %d folds | %s", splits["n_splits"], splits_path)
 

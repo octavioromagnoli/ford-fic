@@ -51,7 +51,13 @@ from src.data.anchor import estimate_origin_day, event_dates, project_dates_to_o
 from src.data.join import load_vehicle_static  # noqa: E402
 from src.data.panel import LabelConfig, build_panel, match_healthy_cuts  # noqa: E402
 from src.data.subset import read_table_for_vehicles  # noqa: E402
-from src.eval.splits import load_test_split, make_splits, save_splits, test_split_masks  # noqa: E402
+from src.eval.splits import (  # noqa: E402
+    load_test_split,
+    make_splits,
+    save_splits,
+    split_options,
+    test_split_masks,
+)
 from src.features.signals import derive_signal_columns  # noqa: E402
 from src.features.trips import derive_trip_columns  # noqa: E402
 from src.features.windows import load_feature_specs  # noqa: E402
@@ -146,7 +152,7 @@ def main() -> int:
     # 6 · holdout, splits de CV sobre dev, salida ----------------------------------
     dev_mask, test_mask = test_split_masks(panel, split, strict=True)
     dev_panel = panel.loc[dev_mask].reset_index(drop=True)
-    splits = make_splits(dev_panel, n_splits=int(cfg["splits"]["n_splits"]), seed=int(cfg["splits"]["seed"]))
+    splits = make_splits(dev_panel, **split_options(cfg))
 
     panel_path = resolve_path(cfg["output"]["panel"])
     ensure_dir(panel_path.parent)
@@ -181,7 +187,14 @@ def main() -> int:
         "columns": {"feat": feat_cols, "static": static_cols, "aux": aux_cols},
         "thresholds": spec_cfg.get("thresholds"),
         "clip": spec_cfg.get("clip"),
-        "splits": {"n_splits": splits["n_splits"], "seed": splits["seed"], "panel": splits["panel"]},
+        "splits": {
+            "n_splits": splits["n_splits"],
+            "seed": splits["seed"],
+            "stratify": splits["stratify"],
+            "min_valid_positives": splits["min_valid_positives"],
+            "n_repeats": splits["n_repeats"],
+            "panel": splits["panel"],
+        },
     }
     meta_path = resolve_path(cfg["output"]["meta"])
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False, default=_json_default), encoding="utf-8")

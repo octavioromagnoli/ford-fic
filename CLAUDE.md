@@ -91,7 +91,12 @@ la deja fuera del modelo).
    **todo lo que se mira es dev**: la CV, la selección de modelo y cualquier figura
    salen de `dev_mask`. Las filas de test existen y nadie las toca hasta que el
    modelo está elegido. El recorte lo hace `scripts/train.py` (`select_dev()`) antes
-   de armar los folds, nunca filtrando `vehicle_id` a mano. Por eso **todo YAML de
+   de armar los folds, nunca filtrando `vehicle_id` a mano. Dentro de dev, los folds
+   se estratifican por `label` a nivel vehículo —la variable que mide el PR-AUC, no
+   `event_observed`—, ningún fold puede quedar con menos de `min_valid_positives`
+   filas positivas en validación, y `n_repeats` habilita CV repetida; los tres salen
+   del bloque `splits:` del YAML y el archivo congelado declara con cuáles se armó
+   (si el YAML dice otra cosa, `train.py` falla). Por eso **todo YAML de
    experimento declara `splits.test_split`** —el path del holdout, o `null` explícito
    si el panel no tiene—: si falta la clave, `train.py` no corre. Si el panel trae un
    vehículo excluido, `test_split_masks()` falla: significa que se construyó con el
@@ -141,6 +146,7 @@ src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agreg
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo
 src/eval/splits.py       splits antileakage + serialización a splits.json
+                         estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 scripts/make_dummy.py    panel dummy con el esquema del contrato
@@ -151,6 +157,7 @@ scripts/eda_gaps.py      complemento del EDA sobre dev: factibilidad de W/G/H, p
                          post-evento, calendario, ICC intra-vehículo (experiments/eda/dev/gaps/)
 scripts/log_panel_artifact.py  publica panel.parquet + splits.json + panel_meta.json (`panel-v1`) y
                          test_split.json (`test-split`) como wandb Artifacts
+scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambiar folds no es reconstruir el panel)
 scripts/train.py         entrypoint único de entrenamiento
 scripts/compare.py       tabla comparativa de corridas (markdown)
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)

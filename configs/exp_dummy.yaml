@@ -13,6 +13,14 @@ splits:
   seed: 42
   build_if_missing: true   # solo en dummy; contra el panel real esto va en false
   strict: true             # falla si los splits no corresponden a este panel
+  # El dummy se queda con la estratificación vieja (event_observed, fila a fila):
+  # es la referencia de compatibilidad hacia atrás. El panel real estratifica por
+  # `label` a nivel vehículo, que es lo que mide el PR-AUC.
+  stratify:
+    column: event_observed
+    level: row
+  min_valid_positives: 5   # un fold con menos filas label=1 en validación hace fallar
+  n_repeats: 1             # 1 = CV simple. Con R>1 se promedian R pasadas
   # Holdout dev/test congelado. Contra el panel real:
   #   test_split: ${DATA_DIR}/processed/test_split.json
   # El panel dummy no tiene holdout (sus vehículos son sintéticos), así que va
