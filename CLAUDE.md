@@ -9,22 +9,48 @@ resumen operativo que hay que respetar al escribir código.
 
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
-archivos reales. Falta F2 (panel real).
+archivos reales. El bloqueante de la fecha del evento se cerró el 17-09 recortando
+el universo del estudio. **F2 cerrada el 18-09**: `scripts/build_dataset.py`
+construye `data/processed/panel.parquet` (W=1000, G=500, H=3000, Δ=500) con 53
+features declaradas en `configs/data/features_v1.yaml`; el panel, los splits y el
+holdout están publicados como wandb Artifacts (`panel-v1`, `test-split`; se suben con
+`scripts/log_panel_artifact.py`) y `configs/exp_baserate.yaml` es el piso contra el
+panel real. **Lo siguiente es F3 (baselines) y F4 (dashboard contra el panel real)**,
+en paralelo; las ideas de modelos están en `docs/f3-modelos-candidatos.md`.
 
 **Antes de tocar los datos, leer [`docs/memoria/`](docs/memoria/README.md).** Ahí
-están los hallazgos de F1 y las decisiones tomadas, con la evidencia y el comando
-que las reproduce. Tres que cambian cómo se escribe el código:
+están los hallazgos de F1/F2 y las decisiones tomadas, con la evidencia y el comando
+que las reproduce. Ocho que cambian cómo se escribe el código:
 
 - Los datos vienen en **dos cohortes de muestreo** (failed / not_failed) y la
   cohorte *es* la etiqueta: `IdentificationDate` nula ⇔ sin evento. Nunca entra
   como feature.
+- El **universo del estudio son 364 vehículos, no 1081**. `IdentificationDate`
+  mezcla dos convenciones de registro y la que no sirve es mayoría; además la
+  convención es **del mercado**, así que se descartan los positivos sin fecha
+  utilizable *y* los sanos de los mercados donde ningún evento es observable. El
+  criterio vive en `src/data/usable.py` y se declara en `universe` de
+  `configs/data/test_split.yaml`. **El panel se construye con los 364.**
 - Hay **13 vehículos duplicados bajo dos códigos**: se colapsan con
   `src/data/dedupe.py` antes de cualquier split, o la regla 2 se viola en silencio.
 - **`Engine` está excluido** del set base: `ENG_3` es el 36% de los sanos y el 0%
-  de los fallados.
-- El **test está congelado** desde antes de F2 (217 vehículos, `test_split.json`).
-  El panel se construye con los 1081, pero se entrena y se compara **solo sobre
-  dev**: el recorte lo hace `test_split_masks()`, no un panel más chico.
+  de los fallados. Ojo: en el universo recortado `ModelSeries` lleva casi la misma
+  información (el cruce es diagonal), así que excluir solo `Engine` no alcanza.
+- El **test está congelado** desde antes de F2 (74 vehículos, `test_split.json`).
+  El recorte a dev lo hace `test_split_masks()`, y `dev_mask` es pertenencia
+  explícita a `dev_vehicles`, **no** el complemento de test.
+- **El marcador `signals.Regenerations` se corta el 25-05-2026** para toda la flota.
+  Una tasa de marcadores por km mide el calendario, y el calendario mide la etiqueta
+  (los eventos caen entre sep-2025 y mar-2026; la exposición sana, en 2026). La
+  familia B se cuenta desde las caídas de `trips.AirRegeneration*`; el marcador y
+  `DistanceBetweenRegenerations` quedan como `aux_`.
+- **Los sanos se emparejan por odómetro y por mes** (`sampling` en `panel_v1.yaml`).
+  Solo por odómetro, tres columnas de calendario suben el ROC de 0,67 a 0,76; con mes,
+  de 0,57 a 0,60. Cualquier feature con deriva temporal (temperatura ambiente,
+  `ProductionDay`, `daysUntilSale`) va como `aux_`, no como `feat_`/`static_`.
+- **El 35% de las filas de `trips` son idle de 0 km** (motor encendido sin moverse) y
+  son la señal que más anticipa. Toda fracción "de viaje" se calcula entre los que se
+  mueven; `KilometerPerHour` es nulo exactamente ahí y se recalcula como km/duración.
 
 ## Contrato de datos
 
@@ -42,12 +68,15 @@ Artefacto: `data/processed/panel.parquet` (dummy: `panel_dummy.parquet`).
 | `label` | int | 1 si el evento cae en `[corte+G, corte+G+H]` |
 | `time_to_event_km` | float | km hasta el evento; NaN si censurado |
 | `event_observed` | int | 1 si el vehículo tiene evento registrado |
-| `feat_*` | float | todas las features de ventana |
-| `static_*` | mixto | `Engine`, `ModelSeries`, `SalesCountryCd`, `daysUntilSale`, `ProductionDay` |
+| `feat_*` | float | todas las features de ventana (53 en v1, declaradas en `configs/data/features_v1.yaml`) |
+| `static_*` | mixto | solo `SalesCountry_cd` en el set base v1 |
+| `aux_*` | mixto | **en el panel, fuera del modelo**: `aux_static_{Engine, ModelSeries, ProductionDay, daysUntilSale}`, `aux_air_temp_*`, `aux_regen_marker_per_1000km`, controles de ventana. Para ablaciones y auditorías sin reconstruir |
 
 **Regla de prefijos:** toda columna que entra a un modelo se llama `feat_` o
 `static_`, y `src/training/cv.py` la selecciona por prefijo. Agregar una feature
-no requiere tocar el código de entrenamiento ni coordinar con nadie.
+no requiere tocar el código de entrenamiento ni coordinar con nadie: es una línea
+en `configs/data/features_v1.yaml` (`name`, `source`, `column`, `agg`; `aux: true`
+la deja fuera del modelo).
 
 ## Reglas que no se negocian
 
@@ -56,14 +85,17 @@ no requiere tocar el código de entrenamiento ni coordinar con nadie.
 2. **Split agrupado por vehículo.** Un `vehicle_id` nunca cae en train y
    validación a la vez. La lógica está centralizada en `src/eval/splits.py` y no
    se reimplementa en ningún otro lado. Arriba de la CV hay un **holdout dev/test
-   80/20 congelado** (`data/processed/test_split.json`, generado antes de F2). El
-   panel incluye a los 1081 vehículos, pero **todo lo que se mira es dev**: la CV,
-   la selección de modelo y cualquier figura salen de `dev_mask`. Las filas de test
-   existen y nadie las toca hasta que el modelo está elegido. El recorte lo hace
-   `scripts/train.py` (`select_dev()`) antes de armar los folds, nunca filtrando
-   `vehicle_id` a mano. Por eso **todo YAML de experimento declara
-   `splits.test_split`** —el path del holdout, o `null` explícito si el panel no
-   tiene—: si falta la clave, `train.py` no corre.
+   congelado** (`data/processed/test_split.json`, sorteado antes de F2), con tres
+   listas: `dev_vehicles` (290), `test_vehicles` (74) y `excluded_vehicles` (717,
+   fuera del universo). El panel se construye con los **364** del universo, y
+   **todo lo que se mira es dev**: la CV, la selección de modelo y cualquier figura
+   salen de `dev_mask`. Las filas de test existen y nadie las toca hasta que el
+   modelo está elegido. El recorte lo hace `scripts/train.py` (`select_dev()`) antes
+   de armar los folds, nunca filtrando `vehicle_id` a mano. Por eso **todo YAML de
+   experimento declara `splits.test_split`** —el path del holdout, o `null` explícito
+   si el panel no tiene—: si falta la clave, `train.py` no corre. Si el panel trae un
+   vehículo excluido, `test_split_masks()` falla: significa que se construyó con el
+   universo viejo.
 3. **Features solo hacia atrás.** Ninguna feature usa información posterior al
    punto de corte. Escalado e imputación se ajustan solo con el train de cada
    fold (van dentro del `Pipeline`, nunca sobre el panel entero).
@@ -71,8 +103,9 @@ no requiere tocar el código de entrenamiento ni coordinar con nadie.
    producción y `TripDatetimeStart` es calendario. F1 encontró el anclaje que
    faltaba (`ProductionDay` está en el eje del calendario, IQR de 0 días: ver
    `docs/memoria/f1-anclaje-temporal.md`), así que el evento **sí** se puede
-   traducir al eje de km. Eso no asciende al eje de días: sigue siendo reporte
-   secundario, y el origen se estima una vez y se congela.
+   traducir al eje de km —para los vehículos del universo cae en una mediana de
+   7.987 km con el 39% del historial por delante—. Eso no asciende al eje de días:
+   sigue siendo reporte secundario, y el origen se estima una vez y se congela.
 5. **Métricas.** PR-AUC out-of-fold para seleccionar modelo, curva de
    anticipación vs. falsas alarmas para el pitch, accuracy nunca.
 6. **Un PR-AUC sospechosamente alto se audita antes de celebrarse.** Variables
@@ -96,32 +129,65 @@ src/config.py            carga de YAML, resolución de paths, semillas
 src/data/loader.py       carga de las tres tablas crudas (esquema en configs/data/raw_sources.yaml)
                          load_table() entera, iter_table() por chunks (13M de filas)
 src/data/dedupe.py       colapso de los 13 vehículos duplicados (lista en configs/data/vehicle_dedupe.yaml)
+src/data/usable.py       universo del estudio: qué vehículo entra y por qué los demás no
 src/data/join.py         unión a nivel vehículo + enriquecimiento de trips/signals con las estáticas
                          (trips y signals NO se mergean entre sí: no hay clave fila a fila)
-src/features/            [F2] windows.py: primitiva de agregación de ventana
+src/data/subset.py       trips/signals para un conjunto de vehículos: canoniza → filtra → deduplica la fila completa
+src/data/anchor.py       origen del calendario (estimado sobre dev, congelado en panel_meta.json) y odómetro del evento
+src/data/panel.py        cortes en grilla de Δ, etiqueta con gap y horizonte, censura, QC de ventana, emparejado de sanos
+src/features/trips.py    derivadas a nivel viaje (idle/moving, velocidad recalculada, topes físicos, regen = caída de AirRegeneration)
+src/features/signals.py  una booleana por nivel de Message; regen_marker solo como aux
+src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agregadores (per_1000km, half_*, gap_*, km_since_last…)
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo
 src/eval/splits.py       splits antileakage + serialización a splits.json
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 scripts/make_dummy.py    panel dummy con el esquema del contrato
-scripts/make_test_split.py  auditoría del join + holdout dev/test congelado (se corre una vez)
-scripts/build_dataset.py [F2] panel real
+scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
+scripts/build_dataset.py panel real: universo del holdout → crudos → evento en km → cortes/etiqueta/features →
+                         sanos emparejados → panel.parquet + splits.json (folds sobre dev) + panel_meta.json
+scripts/eda_gaps.py      complemento del EDA sobre dev: factibilidad de W/G/H, perfil alineado al evento,
+                         post-evento, calendario, ICC intra-vehículo (experiments/eda/dev/gaps/)
+scripts/log_panel_artifact.py  publica panel.parquet + splits.json + panel_meta.json (`panel-v1`) y
+                         test_split.json (`test-split`) como wandb Artifacts
 scripts/train.py         entrypoint único de entrenamiento
 scripts/compare.py       tabla comparativa de corridas (markdown)
-scripts/dashboard.py     dashboard (streamlit)
+scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
 scripts/check_setup.py   smoke test del harness (15 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
+scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
+                         diccionario de 3 vías y factibilidad de las features del plan §4
+scripts/dashboard_eda.py dashboard del EDA de datos crudos, dev-only (streamlit)
 docs/memoria/            hallazgos y decisiones, con la evidencia para reproducirlos
 ```
 
 ## Features ya implementadas
 
-Ninguna real todavía: F2 las materializa. Los nombres que ya **están reservados**
-por el panel dummy (`scripts/make_dummy.py`, `FEATURE_SPECS`) son los de las
-cuatro familias del plan §4 — A térmica/trayectos cortos, B ciclo de
-regeneración, C uso y ambiente, D severidad. Antes de crear una feature nueva,
-revisar esa lista para no duplicar con otro nombre.
+Las 53 `feat_*` del panel v1 están en `configs/data/features_v1.yaml`, por familia
+del plan §4, y `scripts/make_dummy.py::FEATURE_SPECS` replica los mismos nombres para
+que B y C trabajen contra el mismo esquema. Antes de crear una feature nueva,
+revisar el YAML para no duplicar con otro nombre. Resumen:
+
+- **A térmica / trayectos cortos (17):** `idle_frac`, `idle_per_1000km`, `idle_frac_trend`,
+  `short_trip_frac_5km` (entre viajes con desplazamiento), `trips_below_regime_temp_frac`,
+  `below_regime_moving_frac`, `below_regime_frac_trend`, temperaturas de motor y
+  refrigerante, `cold_start_frac`, `chained_trip_frac`, distancia y duración por viaje.
+- **B regeneración (15), desde `trips.AirRegeneration*`:** `regenerations_per_1000km`
+  (caídas > 5 puntos), su tendencia, distancia entre regeneraciones y su tendencia,
+  `km_since_last_regen`, nivel residual y de arranque de la regeneración, `dpf_end_*`,
+  `dpf_positive_delta_frac`, `dpf_saturated_frac`, `filter_*`, `manual_regen_ever`.
+- **C uso (6):** velocidad recalculada, fracción urbana, viajes por 1.000 km y por día,
+  km por día, reposo mediano entre viajes. Temperatura ambiente: `aux_`.
+- **D severidad (13):** tasas de `Message` por 1.000 km + indicadores `_ever` para las
+  zero-inflated, `msg_abnormal_frac`, `msgs_per_1000km`, `oil_life_mean` y su pendiente
+  (el delta intra-viaje es 0 siempre), consumo por 100 km.
+- **Control de ventana (2):** `n_trips_window`, `window_km_covered`.
+
+Lo que **no** se construye y por qué: elevación y presión de neumáticos (no hay
+columna), `accumulation_*` desde `signals` (es la misma variable que `AirRegeneration`),
+marcador `Regenerations` (cortado el 25-05-2026, queda como `aux_`), interrupciones de
+regeneración (`Stopped Cleaning Automatically` es 1 mensaje de cada 100.000).
 
 ## Flujo de trabajo
 

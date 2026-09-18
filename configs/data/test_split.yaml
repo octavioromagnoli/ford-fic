@@ -19,6 +19,30 @@ panel: configs/data/panel_v1.yaml           # de acá salen las columnas static_
 group_column: vehicle_id                    # regla 2: ningún vehículo en los dos lados
 event_column: event_observed                # estratificación: IdentificationDate no nula
 
+# Universo del estudio: qué vehículo entra, antes de repartir. Los dos criterios
+# se aplican DESPUÉS del sorteo, sobre el resultado ya congelado: cada vehículo que
+# sobrevive conserva el lado que le tocó. Re-sortear el universo recortado sería
+# un dado nuevo tirado después de haber mirado los datos que motivaron el recorte.
+# El detalle está en `src/data/usable.py` y en
+# `docs/memoria/f2-universo-fecha-usable.md`. Poner las dos claves en `false`/`null`
+# devuelve el universo completo de 1081 sin tocar una línea de código.
+universe:
+  # `IdentificationDate == daysUntilSale` exactamente en 284 de los 365 positivos:
+  # el evento queda pegado al día de la venta, con el odómetro en ~13 km. No es
+  # física (nunca hay un evento ANTERIOR a la venta: 0 de 365), es una convención
+  # de registro. Sin historial previo no hay ventana W ni gap G, así que esas filas
+  # no se pueden etiquetar.
+  require_usable_event_date: true
+
+  # La convención es del mercado, no del vehículo: en CNTRY_1 y CNTRY_5 ningún
+  # evento tiene fecha utilizable y en CNTRY_2 uno de 105. Si se tiran esos
+  # positivos y se dejan sus sanos, los tres mercados aportan 432 negativos y 1
+  # positivo: eso es selección sobre el resultado, y los negativos dejan de venir
+  # de la misma población que los positivos. Se conservan los mercados donde el
+  # evento SE PUEDE observar; un sano de CNTRY_4 es un negativo legítimo porque si
+  # hubiera fallado lo habríamos visto, uno de CNTRY_1 no.
+  keep_markets: [CNTRY_3, CNTRY_4]
+
 # Columnas cuyo balance se REPORTA entre dev y test. No se estratifica por ellas:
 # forzar el balance de una covariable con 1081 vehículos gasta grados de libertad
 # para arreglar algo que la estratificación por evento ya deja razonable.

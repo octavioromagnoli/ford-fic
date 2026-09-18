@@ -37,4 +37,8 @@ los defectos del panel.
   ventanas sobre un eje común, `trips` manda y `signals` se alinea contra él.
 - **`KilometerPerHour` con 31% de nulos** es recuperable: `trips` trae
   `OdometerTripStart/End` y `TripDatetimeStart/End`, así que la velocidad media se
-  puede recalcular en vez de imputarla.
+  puede recalcular en vez de imputarla. *Medido el 2026-09-18:* el nulo es
+  **exactamente** `trip_km == 0` (100% de esas filas, 0,05% del resto), y cuando existe
+  es `trip_km / duración` con Pearson 0,99999. No hay nada que imputar: las filas de 0
+  km son idle (motor encendido sin moverse, el 35% de `trips`) y se cuentan aparte
+  ([f2-eda-revision-y-features.md](f2-eda-revision-y-features.md) §2.3).

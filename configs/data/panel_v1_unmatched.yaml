@@ -1,0 +1,44 @@
+# Variante de `panel_v1.yaml` SIN emparejar los cortes de los sanos: todas las filas
+# verificables de todos los vehículos del universo. Sirve para dos cosas:
+#
+#   1. auditar cuánto cambia la métrica por el emparejado (ablación explícita);
+#   2. probar otras reglas de emparejado sobre un panel ya construido, sin
+#      reconstruirlo (`src/data/panel.py::match_healthy_cuts` es una función pura).
+#
+# NO es el panel de referencia: acá el kilometraje alto y el calendario de 2026 son
+# atajos que el modelo puede aprender (ver docs/memoria/f2-eda-revision-y-features.md).
+#
+#   python scripts/build_dataset.py --config configs/data/panel_v1_unmatched.yaml
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml
+test_split: ${DATA_DIR}/processed/test_split.json
+axis: odometer
+
+label:
+  window_km: 1000
+  gap_km: 500
+  horizon_km: 3000
+  cut_step_km: 500
+  censored_policy: drop
+  min_trips_in_window: 5
+  min_km_covered_frac: 0.5
+
+sampling:
+  match_healthy_cut_distribution: false
+
+features:
+  spec: configs/data/features_v1.yaml
+  enabled_families: [A_thermal, B_regeneration, C_usage, D_severity]
+  static_columns: [SalesCountry_cd]
+  static_excluded: [Engine, ModelSeries, ProductionDay, daysUntilSale]
+
+splits:
+  n_splits: 5
+  seed: 42
+
+output:
+  panel: ${DATA_DIR}/processed/panel_unmatched.parquet
+  splits: ${DATA_DIR}/processed/splits_unmatched.json
+  meta: ${DATA_DIR}/processed/panel_unmatched_meta.json

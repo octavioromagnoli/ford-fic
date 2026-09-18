@@ -1,0 +1,41 @@
+# Variante de `panel_v1.yaml` con ventana W = 2000 km (barrido de la terna, plan §5).
+# Mismo G, H, Δ y mismo emparejado de sanos que el panel de referencia.
+#
+#   python scripts/build_dataset.py --config configs/data/panel_w2000.yaml
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml
+test_split: ${DATA_DIR}/processed/test_split.json
+axis: odometer
+
+label:
+  window_km: 2000
+  gap_km: 500
+  horizon_km: 3000
+  cut_step_km: 500
+  censored_policy: drop
+  min_trips_in_window: 5
+  min_km_covered_frac: 0.5
+
+sampling:
+  match_healthy_cut_distribution: true
+  match_on: [cut_odo, cut_date]
+  odo_bin_km: 4000
+  date_freq: M
+  max_shortfall: 0.25
+
+features:
+  spec: configs/data/features_v1.yaml
+  enabled_families: [A_thermal, B_regeneration, C_usage, D_severity]
+  static_columns: [SalesCountry_cd]
+  static_excluded: [Engine, ModelSeries, ProductionDay, daysUntilSale]
+
+splits:
+  n_splits: 5
+  seed: 42
+
+output:
+  panel: ${DATA_DIR}/processed/panel_w2000.parquet
+  splits: ${DATA_DIR}/processed/splits_w2000.json
+  meta: ${DATA_DIR}/processed/panel_w2000_meta.json

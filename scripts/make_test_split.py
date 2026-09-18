@@ -13,11 +13,25 @@ vehículos en las tres tablas) y fila a fila (`trips` y `signals` enriquecidas c
 una por su lado con las estáticas, sin huérfanas y sin cambiar de tamaño).
 `trips` y `signals` no se mergean entre sí: no comparten clave fila a fila.
 
+## Dos etapas, en este orden
+
+1. **Sortear** los 1081 vehículos en dev/test (`make_test_split`, semilla 42). Es el
+   sorteo de siempre, bit a bit: la huella de su reparto queda en `parent`.
+2. **Recortar** ese resultado al universo del estudio (`select_universe` +
+   `restrict_test_split`), sacando los positivos cuyo evento no se puede ubicar en
+   el tiempo y los mercados donde ningún evento es observable. Cada vehículo que
+   sobrevive conserva el lado que le tocó en (1).
+
+El orden no es intercambiable: sortear el universo ya recortado sería un dado
+nuevo, tirado después de haber mirado los datos que motivaron el recorte. Los
+criterios salen de `universe` en el YAML; el porqué, de `src/data/usable.py`.
+
 Escribe (todo bajo `data/`, que no se versiona):
 
-- `test_split.json`  · listas de `vehicle_id` de dev y test + metadata (semilla,
-  test_size, fecha, huella del universo). Es el archivo que se congela.
-- `vehicles.parquet` · la unión a nivel vehículo, para que F2 no vuelva a leer 1,2 GB.
+- `test_split.json`  · listas de `vehicle_id` de dev y test, los excluidos, el
+  informe del universo y la metadata del sorteo padre. Es el archivo que se congela.
+- `vehicles.parquet` · la unión a nivel vehículo. Van **los 1081**, sin recortar: es
+  el artefacto de auditoría, y el universo se aplica leyendo el holdout.
 - `raw_quality.csv`  · nulos y tipo por columna de las tres tablas crudas.
 
 El detalle y los números están en `docs/memoria/f2-union-y-holdout-dev-test.md`.
@@ -47,7 +61,13 @@ from src.data.join import (  # noqa: E402
     quality_report,
     scan_raw_tables,
 )
-from src.eval.splits import make_test_split, save_test_split, split_balance  # noqa: E402
+from src.data.usable import market_usability, select_universe  # noqa: E402
+from src.eval.splits import (  # noqa: E402
+    make_test_split,
+    restrict_test_split,
+    save_test_split,
+    split_balance,
+)
 
 logger = logging.getLogger("make_test_split")
 
@@ -109,21 +129,56 @@ def main() -> int:
         group_column=cfg.get("group_column", "vehicle_id"),
         event_column=cfg.get("event_column", "event_observed"),
     )
-    print("\n== Holdout dev/test ==")
+    print("\n== Etapa 1 · sorteo sobre el universo completo ==")
     print(
         pd.DataFrame([split["dev"], split["test"]], index=["dev", "test"]).to_string(
             float_format=lambda v: f"{v:.4f}"
         )
     )
+
+    print("\n== Fecha del evento utilizable, por mercado ==")
+    print(market_usability(vehicles).to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+
+    universe_cfg = cfg.get("universe") or {}
+    keep_mask, universe = select_universe(
+        vehicles,
+        require_usable_event_date=bool(universe_cfg.get("require_usable_event_date", False)),
+        keep_markets=universe_cfg.get("keep_markets"),
+    )
+    split = restrict_test_split(
+        split,
+        vehicles.loc[keep_mask, "vehicle_id"].astype(str),
+        events=vehicles.set_index("vehicle_id")["event_observed"],
+        universe=universe,
+    )
+
+    print(
+        f"\n== Etapa 2 · universo del estudio: {universe['n_input']} -> "
+        f"{universe['n_kept']} vehículos · {universe['events_input']} -> "
+        f"{universe['events_kept']} eventos =="
+    )
+    print(f"  -{universe['n_dropped_no_usable_date']:>4d} sin fecha de evento utilizable")
+    print(f"  -{universe['n_dropped_market']:>4d} de mercados sin eventos observables")
+    print(
+        pd.DataFrame([split["dev"], split["test"]], index=["dev", "test"]).to_string(
+            float_format=lambda v: f"{v:.4f}"
+        )
+    )
+
     print("\n== Balance de las estáticas (reporte, no estratificación) ==")
-    balance = split_balance(vehicles, split, list(cfg.get("balance_columns", [])))
+    balance = split_balance(
+        vehicles.loc[keep_mask], split, list(cfg.get("balance_columns", []))
+    )
     print(balance.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
 
     ensure_dir(target.parent)
     save_test_split(split, target)
     vehicles.to_parquet(resolve_path(cfg["output"]["vehicle_table"]), index=False)
     quality.to_csv(resolve_path(cfg["output"]["quality"]), index=False)
-    print(f"\nHoldout congelado en {target} ({split['test']['n_vehicles']} vehículos de test).")
+    print(
+        f"\nHoldout congelado en {target}: {split['dev']['n_vehicles']} de dev, "
+        f"{split['test']['n_vehicles']} de test, {split['n_excluded']} fuera del universo."
+    )
     return 0
 
 

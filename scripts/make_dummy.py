@@ -31,45 +31,69 @@ from src.eval.splits import make_splits, save_splits  # noqa: E402
 
 logger = logging.getLogger("make_dummy")
 
-# Nombres de las cuatro familias de features del plan §4. Los mismos que va a
-# materializar `scripts/build_dataset.py` en F2: (media, desvío, mínimo, máximo).
+# Las features del panel REAL, tal como las materializa `scripts/build_dataset.py`
+# desde `configs/data/features_v1.yaml`: (media, desvío, mínimo, máximo) plausibles,
+# tomados de los rangos del panel v1 sobre dev. Si el YAML de features cambia, esta
+# lista se actualiza con él: es lo que permite que B y C trabajen contra el mismo esquema.
 FEATURE_SPECS: dict[str, tuple[float, float, float | None, float | None]] = {
     # A · régimen térmico y trayectos cortos
-    "feat_short_trip_frac_5km": (0.35, 0.18, 0.0, 1.0),
-    "feat_trips_below_regime_temp_frac": (0.28, 0.16, 0.0, 1.0),
-    "feat_engine_temp_avg_median": (82.0, 9.0, 20.0, 110.0),
-    "feat_engine_temp_amplitude_mean": (46.0, 12.0, 0.0, None),
-    "feat_coolant_temp_end_mean": (85.0, 8.0, 20.0, 110.0),
-    "feat_trip_distance_median_km": (12.0, 6.0, 0.3, None),
-    "feat_trip_distance_p25_km": (4.5, 2.5, 0.1, None),
-    # B · salud del ciclo de regeneración
-    "feat_dpf_end_slope_per_1000km": (1.8, 1.1, None, None),
-    "feat_dpf_end_mean": (42.0, 14.0, 0.0, 100.0),
-    "feat_dpf_end_max": (61.0, 15.0, 0.0, 100.0),
-    "feat_dpf_positive_delta_frac": (0.52, 0.17, 0.0, 1.0),
-    "feat_regenerations_per_1000km": (2.1, 0.9, 0.0, None),
-    "feat_distance_between_regen_mean_km": (430.0, 120.0, 20.0, None),
-    "feat_distance_between_regen_trend": (-0.02, 0.06, None, None),
-    "feat_manual_regen_per_1000km": (0.08, 0.12, 0.0, None),
-    "feat_accumulation_mean": (33.0, 12.0, 0.0, 100.0),
-    "feat_accumulation_slope_per_1000km": (1.2, 0.8, None, None),
-    # C · contexto de uso y ambiente
-    "feat_speed_kmh_mean": (38.0, 11.0, 3.0, 130.0),
-    "feat_trips_below_30kmh_frac": (0.41, 0.19, 0.0, 1.0),
+    "feat_idle_frac": (0.25, 0.15, 0.0, 1.0),
+    "feat_idle_per_1000km": (20.0, 25.0, 0.0, None),
+    "feat_idle_frac_trend": (0.0, 0.17, -1.0, 1.0),
+    "feat_short_trip_frac_5km": (0.38, 0.16, 0.0, 1.0),
+    "feat_trips_below_regime_temp_frac": (0.15, 0.13, 0.0, 1.0),
+    "feat_below_regime_moving_frac": (0.06, 0.08, 0.0, 1.0),
+    "feat_below_regime_frac_trend": (0.0, 0.17, -1.0, 1.0),
+    "feat_engine_temp_avg_median": (69.0, 9.5, 20.0, 110.0),
+    "feat_engine_temp_max_median": (96.0, 4.5, 20.0, 130.0),
+    "feat_engine_temp_amplitude_mean": (60.0, 8.0, 0.0, None),
+    "feat_coolant_temp_end_mean": (91.0, 4.7, 20.0, 110.0),
+    "feat_coolant_temp_start_median": (30.0, 11.0, -20.0, 110.0),
+    "feat_cold_start_frac": (0.64, 0.14, 0.0, 1.0),
+    "feat_chained_trip_frac": (0.5, 0.13, 0.0, 1.0),
+    "feat_trip_distance_median_km": (7.0, 6.0, 1.0, None),
+    "feat_trip_distance_p25_km": (3.0, 2.5, 1.0, None),
+    "feat_trip_duration_median_min": (22.0, 10.0, 1.0, None),
+    # B · salud del ciclo de regeneración (desde trips.AirRegeneration*)
+    "feat_regenerations_per_1000km": (3.1, 1.8, 0.0, None),
+    "feat_regenerations_trend_per_1000km": (0.0, 2.3, None, None),
+    "feat_distance_between_regen_mean_km": (290.0, 130.0, 10.0, None),
+    "feat_distance_between_regen_trend": (30.0, 120.0, None, None),
+    "feat_km_since_last_regen": (160.0, 150.0, 0.0, None),
+    "feat_regen_residual_mean": (10.0, 12.0, 0.0, 100.0),
+    "feat_regen_start_level_mean": (75.0, 15.0, 0.0, 100.0),
+    "feat_dpf_end_mean": (42.0, 13.5, 0.0, 100.0),
+    "feat_dpf_end_max": (90.0, 12.0, 0.0, 100.0),
+    "feat_dpf_end_slope_per_1000km": (0.0, 50.0, None, None),
+    "feat_dpf_positive_delta_frac": (0.47, 0.12, 0.0, 1.0),
+    "feat_dpf_saturated_frac": (0.03, 0.09, 0.0, 1.0),
+    "feat_filter_abnormal_end_frac": (0.02, 0.08, 0.0, 1.0),
+    "feat_filter_cleaning_auto_end_frac": (0.002, 0.007, 0.0, 1.0),
+    "feat_manual_regen_ever": (0.0, 0.05, 0.0, 1.0),
+    # C · contexto de uso
+    "feat_speed_kmh_mean": (25.0, 10.7, 3.0, 130.0),
+    "feat_trips_below_30kmh_frac": (0.70, 0.20, 0.0, 1.0),
+    "feat_moving_trips_per_1000km": (54.0, 40.0, 1.0, None),
     "feat_km_per_day": (44.0, 22.0, 0.5, None),
     "feat_trips_per_day": (3.2, 1.4, 0.1, None),
-    "feat_hours_between_trips_median": (7.5, 4.0, 0.1, None),
-    "feat_air_temp_avg": (16.0, 8.0, -25.0, 48.0),
-    "feat_air_temp_min": (7.0, 8.0, -35.0, 40.0),
-    "feat_elevation_mean_m": (520.0, 380.0, -50.0, 4200.0),
-    "feat_elevation_range_m": (180.0, 150.0, 0.0, None),
+    "feat_hours_between_trips_median": (0.6, 0.5, 0.05, None),
     # D · severidad y proxies baratos
-    "feat_oil_life_drop_per_1000km": (3.4, 1.5, 0.0, None),
-    "feat_tire_pressure_mean": (33.0, 3.0, 15.0, 55.0),
-    "feat_tire_pressure_below_thr_frac": (0.12, 0.13, 0.0, 1.0),
+    "feat_msg_full_per_1000km": (12.0, 29.0, 0.0, None),
+    "feat_msg_overloaded_per_1000km": (0.6, 4.3, 0.0, None),
+    "feat_msg_overloaded_ever": (0.14, 0.35, 0.0, 1.0),
+    "feat_msg_over_limit_per_1000km": (0.5, 18.0, 0.0, None),
+    "feat_msg_over_limit_ever": (0.01, 0.10, 0.0, 1.0),
+    "feat_msg_at_limit_ever": (0.002, 0.05, 0.0, 1.0),
+    "feat_msg_cleaning_auto_per_1000km": (1.0, 3.3, 0.0, None),
+    "feat_msg_cleaning_auto_trend_per_1000km": (0.0, 3.8, None, None),
+    "feat_msg_abnormal_frac": (0.03, 0.07, 0.0, 1.0),
+    "feat_msgs_per_1000km": (330.0, 255.0, 1.0, None),
+    "feat_oil_life_mean": (70.0, 24.0, 0.0, 100.0),
+    "feat_oil_life_slope_per_1000km": (-5.0, 19.0, None, None),
+    "feat_fuel_pct_per_100km_median": (14.7, 3.3, 0.0, None),
     # cobertura de la ventana (control de calidad, no hipótesis física)
-    "feat_n_trips_window": (85.0, 35.0, 1.0, None),
-    "feat_window_km_covered": (900.0, 220.0, 1.0, None),
+    "feat_n_trips_window": (85.0, 35.0, 5.0, None),
+    "feat_window_km_covered": (970.0, 120.0, 500.0, None),
 }
 
 # Features por las que se filtra la señal sintética cuando `signal_strength > 0`.
@@ -80,10 +104,13 @@ SIGNAL_FEATURES = (
     "feat_short_trip_frac_5km",
 )
 
+# Mismo esquema de estáticas que el panel real: `static_*` entra al modelo, `aux_static_*`
+# queda en el panel solo para auditar (Engine, ModelSeries y ProductionDay están fuera
+# del set base: ver `features.static_excluded` en configs/data/panel_v1.yaml).
 STATIC_LEVELS = {
-    "static_Engine": (["Diesel 2.0", "Diesel 3.0", "Gasoline 1.5"], [0.55, 0.3, 0.15]),
-    "static_ModelSeries": (["Ranger", "Transit", "Everest", "Maverick"], [0.4, 0.3, 0.2, 0.1]),
-    "static_SalesCountryCd": (["ARG", "BRA", "CHL", "URY"], [0.45, 0.35, 0.12, 0.08]),
+    "aux_static_Engine": (["ENG_1", "ENG_2", "ENG_3"], [0.2, 0.6, 0.2]),
+    "aux_static_ModelSeries": (["MODEL_1", "MODEL_2", "MODEL_3", "MODEL_4"], [0.35, 0.25, 0.1, 0.3]),
+    "static_SalesCountry_cd": (["CNTRY_3", "CNTRY_4"], [0.35, 0.65]),
 }
 
 
@@ -146,11 +173,11 @@ def build_dummy_panel(cfg: dict) -> pd.DataFrame:
                     "label": label,
                     "time_to_event_km": time_to_event,
                     "event_observed": int(has_event[i]),
-                    "static_Engine": statics["static_Engine"][i],
-                    "static_ModelSeries": statics["static_ModelSeries"][i],
-                    "static_SalesCountryCd": statics["static_SalesCountryCd"][i],
+                    "static_SalesCountry_cd": statics["static_SalesCountry_cd"][i],
                     "static_daysUntilSale": float(days_until_sale[i]),
-                    "static_ProductionDay": float(production_day[i]),
+                    "aux_static_Engine": statics["aux_static_Engine"][i],
+                    "aux_static_ModelSeries": statics["aux_static_ModelSeries"][i],
+                    "aux_static_ProductionDay": float(production_day[i]),
                 }
             )
 
@@ -234,7 +261,8 @@ def _contract_column_order(panel: pd.DataFrame) -> list[str]:
     ]
     feats = sorted(c for c in panel.columns if c.startswith("feat_"))
     statics = sorted(c for c in panel.columns if c.startswith("static_"))
-    return head + feats + statics
+    aux = sorted(c for c in panel.columns if c.startswith("aux_"))
+    return head + feats + statics + aux
 
 
 def main() -> None:

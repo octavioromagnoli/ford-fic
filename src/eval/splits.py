@@ -44,6 +44,11 @@ GROUP_COLUMN = "vehicle_id"
 EVENT_COLUMN = "event_observed"
 
 
+def _digest(vehicles: list[str]) -> str:
+    """sha256 corto de una lista de ids, ordenada: la misma receta que `panel_fingerprint`."""
+    return hashlib.sha256("|".join(sorted(vehicles)).encode("utf-8")).hexdigest()[:16]
+
+
 def panel_fingerprint(panel: pd.DataFrame) -> dict[str, Any]:
     """Huella del panel: sirve para detectar que los splits son de otro panel."""
     vehicles = sorted(panel[GROUP_COLUMN].astype(str).unique())
@@ -199,6 +204,113 @@ def make_test_split(
     }
 
 
+def restrict_test_split(
+    split: dict[str, Any],
+    keep_vehicles: set[str] | list[str],
+    *,
+    events: pd.Series | None = None,
+    universe: dict[str, Any] | None = None,
+    group_column: str = GROUP_COLUMN,
+) -> dict[str, Any]:
+    """Recorta un holdout ya congelado a un subconjunto de vehículos, **sin re-tirar el dado**.
+
+    Cada vehículo que sobrevive conserva el lado que le tocó en el split original:
+    esto filtra, no re-parte. Es la diferencia que importa. Volver a correr
+    `make_test_split()` sobre el universo recortado sería un sorteo nuevo, hecho
+    *después* de haber mirado los datos que motivaron el recorte —justo lo que el
+    holdout existe para impedir—. Filtrar es determinista y no depende de ninguna
+    métrica, así que la garantía de "elegido a ciegas" sigue en pie.
+
+    El costo de filtrar es que las proporciones se mueven: la tasa de eventos de
+    cada lado ya no queda pareja, porque la estratificación se hizo sobre la
+    población vieja. Se reporta en el resumen y se acepta; forzarla de vuelta es
+    elegir el test.
+
+    Los vehículos que salen se guardan en `excluded_vehicles`. No es redundante:
+    sin esa lista, `test_split_masks()` no puede distinguir un vehículo que
+    **decidimos** sacar de uno que aparece porque alguien regeneró el panel con
+    otro universo, y el segundo caso es un bug que hay que gritar.
+
+    `events` es `event_observed` indexado por `vehicle_id`. Con él se recalculan
+    los resúmenes por lado —cuántos vehículos, cuántos con evento, a qué tasa—; sin
+    él el recorte igual sale, pero los resúmenes quedan los del holdout de origen y
+    dejan de describir lo que hay.
+    """
+    keep = {str(v) for v in keep_vehicles}
+    dev_before = [str(v) for v in split.get("dev_vehicles", [])]
+    test_before = [str(v) for v in split["test_vehicles"]]
+    known = set(dev_before) | set(test_before)
+
+    forasteros = sorted(keep - known)
+    if forasteros:
+        raise ValueError(
+            f"{len(forasteros)} vehículo(s) a conservar no están en el holdout de origen "
+            f"(ej.: {forasteros[:3]}). El recorte es un subconjunto, no un universo nuevo."
+        )
+
+    dev_vehicles = sorted(v for v in dev_before if v in keep)
+    test_vehicles = sorted(v for v in test_before if v in keep)
+    if not dev_vehicles or not test_vehicles:
+        raise ValueError(
+            "El recorte deja un lado vacío "
+            f"(dev={len(dev_vehicles)}, test={len(test_vehicles)}): revisá el criterio."
+        )
+    assert_no_vehicle_leakage(np.array(dev_vehicles), np.array(test_vehicles))
+
+    excluded = sorted(known - keep)
+
+    out = dict(split)
+    out.update(
+        {
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "kind": "dev_test_holdout_restricted",
+            # La huella pasa a ser la del universo RECORTADO: es el conjunto con el
+            # que se va a construir el panel, y por lo tanto contra el que tiene que
+            # chequear `iter_folds`. La del universo completo queda en `parent`.
+            "panel": {
+                "n_rows": len(dev_vehicles) + len(test_vehicles),
+                "n_vehicles": len(dev_vehicles) + len(test_vehicles),
+                "vehicles_sha256_16": _digest(dev_vehicles + test_vehicles),
+            },
+            "dev_vehicles": dev_vehicles,
+            "test_vehicles": test_vehicles,
+            "excluded_vehicles": excluded,
+            "n_vehicles": len(dev_vehicles) + len(test_vehicles),
+            "n_excluded": len(excluded),
+            "test_size_achieved": len(test_vehicles) / (len(dev_vehicles) + len(test_vehicles)),
+            "universe": universe,
+            "parent": {
+                "kind": split.get("kind"),
+                "created_at": split.get("created_at"),
+                "seed": split.get("seed"),
+                "n_vehicles": split.get("n_vehicles"),
+                "n_event_vehicles": split.get("n_event_vehicles"),
+                "panel": split.get("panel"),
+                "dev": split.get("dev"),
+                "test": split.get("test"),
+                # Huella del REPARTO original, no del universo. Es lo que permite
+                # verificar, sin guardar las 1081 ids, que el recorte salió del
+                # sorteo de siempre y no de uno nuevo hecho a posteriori.
+                "test_vehicles_sha256_16": _digest(test_before),
+            },
+        }
+    )
+    if events is not None:
+        lookup = events.copy()
+        lookup.index = lookup.index.astype(str)
+        vehicle_level = pd.DataFrame(
+            {
+                group_column: dev_vehicles + test_vehicles,
+                EVENT_COLUMN: [int(lookup[v]) for v in dev_vehicles + test_vehicles],
+            }
+        )
+        is_test = np.array([False] * len(dev_vehicles) + [True] * len(test_vehicles))
+        out["dev"] = _side_summary(vehicle_level, ~is_test, EVENT_COLUMN)
+        out["test"] = _side_summary(vehicle_level, is_test, EVENT_COLUMN)
+        out["n_event_vehicles"] = int(vehicle_level[EVENT_COLUMN].sum())
+    return out
+
+
 def test_split_masks(
     panel: pd.DataFrame, test_split: dict[str, Any], *, strict: bool = True
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -213,10 +325,31 @@ def test_split_masks(
     groups = panel[group_column].astype(str).to_numpy()
     test_vehicles = set(test_split["test_vehicles"])
     dev_vehicles = set(test_split.get("dev_vehicles", []))
+    excluded = set(test_split.get("excluded_vehicles", []))
+
+    # Un vehículo que el holdout no conoce puede ser dos cosas muy distintas, y la
+    # lista de excluidos es lo único que las separa. Si está excluido, el panel se
+    # construyó con el universo viejo: es un error de pipeline con arreglo conocido.
+    # Si no figura en ninguna lista, el universo cambió abajo del holdout y lo que
+    # hay que regenerar es el holdout. Sin distinguirlas, las dos terminan en dev
+    # por descarte y ninguna métrica lo delata.
+    presentes = set(groups)
+    intrusos = sorted(presentes & excluded)
+    if intrusos:
+        message = (
+            f"{len(intrusos)} vehículo(s) del panel están EXCLUIDOS del universo del "
+            f"estudio (ej.: {intrusos[:3]}). El panel se construye con el universo del "
+            "holdout: ver `universe` en test_split.json y `src/data/usable.py`."
+        )
+        if strict:
+            raise ValueError(message)
+        logger.warning(message)
 
     # Sin la lista de dev no se puede distinguir "vehículo nuevo" de "vehículo de dev",
     # así que el chequeo se hace solo cuando el holdout la trae.
-    unknown = sorted(set(groups) - (test_vehicles | dev_vehicles)) if dev_vehicles else []
+    unknown = (
+        sorted(presentes - (test_vehicles | dev_vehicles | excluded)) if dev_vehicles else []
+    )
     if unknown:
         message = (
             f"{len(unknown)} vehículo(s) del panel no están en el holdout congelado "
@@ -235,7 +368,12 @@ def test_split_masks(
         )
 
     test_mask = np.isin(groups, np.array(sorted(test_vehicles), dtype=object).astype(str))
-    dev_mask = ~test_mask
+    # `dev` es pertenencia explícita, no el complemento de test: con un universo
+    # recortado, "no es test" incluiría a los excluidos y a cualquier forastero.
+    if dev_vehicles:
+        dev_mask = np.isin(groups, np.array(sorted(dev_vehicles), dtype=object).astype(str))
+    else:
+        dev_mask = ~test_mask
     assert_no_vehicle_leakage(groups[dev_mask], groups[test_mask])
     return dev_mask, test_mask
 
