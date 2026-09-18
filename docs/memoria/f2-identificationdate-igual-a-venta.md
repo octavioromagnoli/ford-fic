@@ -4,9 +4,16 @@
 (864 vehículos, 292 con evento) · **Reproduce:**
 `notebooks/eda-exhaustivo-dev.ipynb` §3.3 y §3.4.
 
-> **Esto bloquea F2.** No es un detalle de calidad: sin la posición del evento
-> sobre el eje de km no hay `time_to_event_km`, no hay etiqueta por punto de corte
-> y no tiene sentido elegir W, G, H ni Δ.
+> **RESUELTO el 2026-09-17.** Este archivo describe el problema y sigue siendo la
+> mejor explicación de por qué existe; **la salida que se tomó está en
+> [f2-universo-fecha-usable.md](f2-universo-fecha-usable.md)**: se recortó el
+> universo del estudio a 364 vehículos (290 dev / 74 test), quedándose con los
+> positivos de fecha discriminante y con los mercados que la registran. Lo que sigue
+> se lee en pasado.
+>
+> Cuando se escribió: *esto bloquea F2. No es un detalle de calidad: sin la posición
+> del evento sobre el eje de km no hay `time_to_event_km`, no hay etiqueta por punto
+> de corte y no tiene sentido elegir W, G, H ni Δ.*
 
 ## El hecho
 
@@ -85,19 +92,23 @@ nombre.
 de observación termina el mismo día para toda la flota, así que un vehículo
 producido tarde tuvo menos tiempo de registrar un evento.
 
-## Qué queda pendiente de decidir
+## Qué se decidió (2026-09-17)
 
-1. **La posición del evento.** Tres salidas, ninguna gratis: (a) preguntarle a Ford
-   qué es `IdentificationDate` para esos 231 vehículos; (b) restringir las filas
-   etiquetadas a los 61 con fecha discriminante —quedan ~20% de los positivos, con
-   lo que eso implica para la potencia de la métrica—; (c) pasar a un objetivo a
-   nivel vehículo en vez de por punto de corte, resignando la curva de anticipación
-   que es la portada del pitch.
-2. **`static_daysUntilSale` en el set base.** Auditarla con el mismo criterio con el
-   que se sacó `Engine`, y en todo caso medir el aporte real como ablación.
-
-Ninguna de las dos se decide en un notebook. Hasta que se decidan, **F2 no tiene
-etiqueta por punto de corte**.
+1. **La posición del evento: salida (b), con un agregado que no estaba previsto.**
+   Se restringe a los positivos con fecha discriminante —y, porque la convención de
+   registro resultó ser **del mercado**, también se descartan los sanos de los
+   mercados donde ningún evento es observable, que si no quedaban como negativos de
+   otra población—. El universo pasa a 364 vehículos y 80 eventos.
+   Detalle y evidencia: [f2-universo-fecha-usable.md](f2-universo-fecha-usable.md).
+   La salida (a) —preguntarle a Ford— **sigue abierta en paralelo**: no bloquea, y si
+   la respuesta permite recuperar a los 284, el universo se amplía cambiando dos
+   claves de `configs/data/test_split.yaml`.
+2. **`static_daysUntilSale` deja de ser el problema urgente.** Con el universo
+   recortado ya no es numéricamente igual a la etiqueta para nadie, y queda en
+   ρ = −0,261. Se audita como ablación, no se excluye de oficio. **El lugar que
+   ocupaba lo tomó `static_ProductionDay`**, que sobre los 290 de dev da ρ = −0,435 y
+   es la variable más correlacionada de todo el EDA: esa sí se recomienda excluir.
+   Ver la entrada del 17-09 en [decisiones.md](decisiones.md).
 
 ## Lo que este hallazgo NO dice
 

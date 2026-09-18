@@ -1,7 +1,12 @@
 # Tres defectos de columna que no se ven en la tabla de nulos
 
 **Fecha:** 2026-09-16 · **Fase:** F2 (previo) · **Alcance de la medición:** dev
-(864 vehículos, 1.947.866 viajes, 7.534.459 señales) · **Reproduce:**
+dev **antes del recorte del universo del 17-09** (864 vehículos, 1.947.866 viajes,
+7.534.459 señales). Los tres hallazgos siguen valiendo como propiedades de las
+columnas; **el primero dejó de aplicar al universo actual**: sobre los 290 de dev el
+nulo de `OdometerValue` baja de 11,15% a 0,009% y ningún vehículo pasa del 1%,
+porque los cuatro que concentraban el problema estaban en los mercados descartados
+([f2-universo-fecha-usable.md](f2-universo-fecha-usable.md)). · **Reproduce:**
 `notebooks/eda-exhaustivo-dev.ipynb` §4 y §5.3.
 
 Los tres pasan el chequeo de nulos de

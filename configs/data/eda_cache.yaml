@@ -15,20 +15,25 @@
 # Al revés, las filas del código clon descartado (p. ej. `VEH_0345`) no matchean
 # ninguna id de la lista —que solo tiene `VEH_0344`— y se pierden en silencio.
 #
-# Los 217 vehículos de test NO entran en ningún cómputo de este cache. El
-# script lo verifica con un assert sobre cada tabla materializada.
+# El universo del EDA son los 290 vehículos de `dev_vehicles`, y nada más. Del
+# holdout salen tres listas, no dos: los 74 de test (intocables hasta el final) y
+# los 717 que quedan fuera del estudio —positivos sin fecha de evento utilizable y
+# mercados donde ningún evento es observable, ver `src/data/usable.py`—. El script
+# lo verifica con `assert_dev_only()` sobre cada tabla materializada: chequea
+# pertenencia a dev, no ausencia de test, porque con el universo recortado las dos
+# cosas dejaron de ser lo mismo.
 seed: 42
 
 sources: configs/data/raw_sources.yaml
 dedupe: configs/data/vehicle_dedupe.yaml    # 13 vehículos duplicados bajo dos códigos (F1)
 panel: configs/data/panel_v1.yaml           # de acá salen las columnas static_*
 
-# Holdout congelado. `dev_vehicles` es el universo del EDA; `test_vehicles` es la
-# lista contra la que se chequea que no se coló nadie.
+# Holdout congelado. `dev_vehicles` es el universo del EDA; contra esa lista se
+# chequea cada tabla.
 test_split: ${DATA_DIR}/processed/test_split.json
 
-# Unión a nivel vehículo ya construida por `scripts/make_test_split.py`. Se reusa
-# en vez de recalcularla: son los mismos 1081 vehículos, recortados a dev.
+# Unión a nivel vehículo ya construida por `scripts/make_test_split.py`. Trae los
+# 1081 sin recortar —es el artefacto de auditoría—; acá se recorta a dev.
 vehicle_table: ${DATA_DIR}/processed/vehicles.parquet
 
 scan:

@@ -30,9 +30,12 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f2-union-y-holdout-dev-test.md](f2-union-y-holdout-dev-test.md) | Cómo une (y cómo NO une) el join, y el test 80/20 congelado |
 | [f2-diccionario-trips-incompleto.md](f2-diccionario-trips-incompleto.md) | `TripSummary` trae 25 de las 40 columnas del anexo: qué features mueren |
 | [f2-columnas-airfilter-airregeneration.md](f2-columnas-airfilter-airregeneration.md) | El DPF estaba en `trips` con otro nombre: la familia B se puede construir |
-| [f2-identificationdate-igual-a-venta.md](f2-identificationdate-igual-a-venta.md) | **Bloqueante:** el 79% de los eventos no tiene fecha utilizable |
+| [f2-identificationdate-igual-a-venta.md](f2-identificationdate-igual-a-venta.md) | El 78% de los eventos no tiene fecha utilizable (resuelto por el de abajo) |
+| [f2-universo-fecha-usable.md](f2-universo-fecha-usable.md) | Por qué el estudio son 364 vehículos y no 1081, y cómo se recortó sin re-sortear |
 | [f2-calidad-columnas-dev.md](f2-calidad-columnas-dev.md) | Tres defectos de columna que la tabla de nulos no muestra |
+| [f2-eda-revision-y-features.md](f2-eda-revision-y-features.md) | **Revisión del EDA (18-09) y panel v1**: el marcador `Regenerations` cortado, el confusor calendario, los idle de 0 km, la terna, el emparejado y cuánta señal hay de verdad |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
+| [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 
 ## Cómo se reproduce todo esto
 
@@ -40,10 +43,19 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 python scripts/eda_raw.py          # deja los CSV en experiments/eda/
 python scripts/make_test_split.py  # auditoría del join + holdout dev/test congelado
 python scripts/build_eda_cache.py  # cache dev-only del EDA (experiments/eda/dev/)
+python scripts/eda_gaps.py         # complemento del EDA: factibilidad, perfil alineado al evento, calendario (experiments/eda/dev/gaps/)
+python scripts/build_dataset.py --config configs/data/panel_v1.yaml   # panel real + splits sobre dev + panel_meta.json
+python scripts/log_panel_artifact.py --config configs/data/panel_v1.yaml  # publica panel-v1 y test-split como wandb Artifacts
+python scripts/train.py --config configs/exp_baserate.yaml            # piso contra el panel real
 python scripts/check_setup.py      # 15 chequeos del harness
 ```
 
-Los cuatro hallazgos `f2-*` de arriba salen del EDA exhaustivo sobre dev:
+> Ojo: `notebooks/eda-exhaustivo-dev.ipynb` §6.2, §6.3 y §7.4 muestran `regen_per_1000km`
+> como la señal más fuerte. Está medido con el marcador `Regenerations`, que se corta el
+> 25-05-2026: es exposición al calendario, no física. La versión vigente es
+> [f2-eda-revision-y-features.md](f2-eda-revision-y-features.md) §2.1.
+
+Los hallazgos `f2-*` de arriba salen del EDA exhaustivo sobre dev:
 [`notebooks/eda-exhaustivo-dev.ipynb`](../../notebooks/eda-exhaustivo-dev.ipynb)
 (ejecutado, con sus figuras), y su versión navegable en
 `streamlit run scripts/dashboard_eda.py`. Los dos leen el mismo cache, así que el

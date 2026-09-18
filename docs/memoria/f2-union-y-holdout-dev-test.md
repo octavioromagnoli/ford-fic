@@ -150,6 +150,12 @@ de km sigue disponible para F2.
 
 ## El holdout dev/test
 
+> **Actualizado el 2026-09-17.** Lo que sigue describe el **sorteo**, que no cambió
+> y sigue siendo bit a bit el mismo. Lo que sí cambió es que encima de ese sorteo se
+> aplica un **recorte del universo** a 364 vehículos (290 dev / 74 test), y las
+> cifras de esta sección son las de antes del recorte. Ver
+> [f2-universo-fecha-usable.md](f2-universo-fecha-usable.md).
+
 80/20 sobre el universo de 1081 vehículos, agrupado por `vehicle_id` y
 estratificado por `event_observed`, con `StratifiedGroupKFold(5)` y semilla 42
 (`src/eval/splits.py::make_test_split`, parámetros en
@@ -193,9 +199,10 @@ sin que nadie lo note.
 
 ## Cómo se consume
 
-El panel de F2 se construye con **los 1081** y el recorte es por máscara, no por
-un panel más chico: así la evaluación final no obliga a regenerar el panel con
-otro conjunto de vehículos.
+El panel de F2 se construye con **los 364 del universo** —no con los 1081: los
+717 excluidos no son holdout, están fuera del estudio— y el recorte dev/test es por
+máscara, no por un panel más chico: así la evaluación final no obliga a regenerar el
+panel con otro conjunto de vehículos.
 
 ```yaml
 # en el YAML del experimento — clave OBLIGATORIA
@@ -210,7 +217,13 @@ las dos ruidosas y probadas:
 | Situación | Qué pasa |
 |---|---|
 | el YAML no declara `splits.test_split` | `KeyError` antes de entrenar |
-| el holdout no corresponde al panel | `ValueError: N vehículo(s) del panel no están en el holdout congelado` |
+| el panel trae vehículos **excluidos** del universo | `ValueError: N vehículo(s) del panel están EXCLUIDOS…` |
+| el panel trae vehículos que el holdout **no conoce** | `ValueError: N vehículo(s) del panel no están en el holdout congelado` |
+
+Las dos últimas están separadas a propósito: la primera es un panel construido con
+el universo viejo (se regenera el panel), la segunda es que el universo cambió abajo
+del holdout (se regenera el holdout). Sin distinguirlas, las dos terminan en dev por
+descarte.
 
 El segundo caso es el que importa: un panel regenerado con vehículos nuevos los
 mandaría a dev por descarte, sin que ninguna métrica lo delate.

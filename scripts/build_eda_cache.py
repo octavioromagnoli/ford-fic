@@ -26,17 +26,26 @@ no se ve en ninguna parte. Por eso, siempre:
 `src/data/join.iter_enriched_table` ya canoniza antes de procesar; acá se reusa esa
 misma mecánica y se le agrega el filtro a dev encima.
 
+## El universo es dev, y dev ya no es "todo lo que no es test"
+
+`test_split.json` congela tres listas, no dos: `dev_vehicles` (290), `test_vehicles`
+(74) y `excluded_vehicles` (717, fuera del estudio — ver `src/data/usable.py`). El
+EDA corre sobre la primera y nada más. Por eso la guarda es
+`assert_dev_only()`, que verifica **pertenencia a dev**, y no "ausencia de test":
+con un universo recortado, un vehículo excluido no es test pero tampoco es dev, y
+el complemento lo dejaría entrar sin ruido.
+
 ## Lo que este script NO hace
 
 No construye el panel de F2, no define W/G/H/Δ y no mira una sola fila de test:
-los 217 vehículos del holdout quedan afuera de **todos** los agregados, y cada
-tabla materializada pasa por `assert_no_test()` antes de escribirse.
+los 74 vehículos del holdout quedan afuera de **todos** los agregados, y cada
+tabla materializada pasa por `assert_dev_only()` antes de escribirse.
 
 ## Qué deja en `experiments/eda/dev/` (gitignored)
 
 | Archivo | Grano |
 |---|---|
-| `vehicles_dev.parquet` | un vehículo (864) · estáticas, etiqueta, cobertura, odómetro del evento |
+| `vehicles_dev.parquet` | un vehículo (290) · estáticas, etiqueta, cobertura, odómetro del evento |
 | `trips_agg_dev.parquet` | un vehículo · agregados de `trips` (uso, térmica, postratamiento) |
 | `signals_agg_dev.parquet` | un vehículo · agregados de `signals` (severidad, regeneraciones) |
 | `severity_scopes_dev.parquet` | vehículo × alcance (`full`, `p70`, `p80`) · severidad truncando la cola |
@@ -181,19 +190,24 @@ def dev_universe(cfg: dict[str, Any]) -> tuple[set[str], set[str], dict[str, Any
     return set(split["dev_vehicles"]), set(split["test_vehicles"]), split
 
 
-def assert_no_test(frame: pd.DataFrame, test_vehicles: set[str], *, name: str, id_col: str = ID_COL) -> None:
-    """Guarda ejecutable: falla ruidosamente si alguna fila de test se coló.
+def assert_dev_only(frame: pd.DataFrame, dev_vehicles: set[str], *, name: str, id_col: str = ID_COL) -> None:
+    """Guarda ejecutable: falla si la tabla trae un vehículo que no es de dev.
 
     Va después de armar **cada** tabla, no una vez al principio: la restricción
     dev-only tiene que ser verificable en el artefacto, no una promesa del código.
+
+    Chequea pertenencia, no ausencia de test. Con el universo recortado hay tres
+    poblaciones —dev, test y excluidos— y "no es test" ya no implica "es dev": un
+    vehículo excluido pasaría el chequeo viejo y entraría a los agregados igual.
     """
     if id_col not in frame.columns:
         raise KeyError(f"`{name}` no tiene la columna `{id_col}`: no se puede verificar el holdout")
-    intrusos = set(frame[id_col].astype(str).unique()) & test_vehicles
+    intrusos = set(frame[id_col].astype(str).unique()) - dev_vehicles
     if intrusos:
         raise AssertionError(
-            f"`{name}`: {len(intrusos)} vehículo(s) de TEST en una tabla de dev "
-            f"(ej.: {sorted(intrusos)[:3]}). El holdout está congelado: nada de test se mira."
+            f"`{name}`: {len(intrusos)} vehículo(s) que no son de dev "
+            f"(ej.: {sorted(intrusos)[:3]}). Son de test o están fuera del universo "
+            "del estudio; ninguno de los dos entra al EDA."
         )
 
 
@@ -293,7 +307,7 @@ def _slope_per_1000km(frame: pd.DataFrame, x: str, y: str) -> pd.Series:
     """Pendiente OLS de `y` contra `x` por vehículo, expresada por cada 1.000 km.
 
     Vectorizado con sumas por grupo (n·Sxy − Sx·Sy) / (n·Sxx − Sx²) en vez de un
-    `apply` por vehículo: son 864 grupos y hasta 8M de filas.
+    `apply` por vehículo: son cientos de grupos y millones de filas.
     """
     data = frame[[ID_COL, x, y]].dropna()
     data = data.assign(_xy=data[x] * data[y], _xx=data[x] * data[x])
@@ -717,12 +731,16 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
     eda = cfg["eda"]
     out_dir = ensure_dir(cfg["output"]["dir"])
     dev_vehicles, test_vehicles, split = dev_universe(cfg)
-    logger.info("Holdout: %d vehículos de dev, %d de test (intocables)", len(dev_vehicles), len(test_vehicles))
+    universe = split.get("universe") or {}
+    logger.info(
+        "Holdout: %d de dev, %d de test (intocables), %d fuera del universo del estudio",
+        len(dev_vehicles), len(test_vehicles), int(split.get("n_excluded", 0)),
+    )
 
     # --- nivel vehículo -----------------------------------------------------------
     vehicles = pd.read_parquet(resolve_path(cfg["vehicle_table"]))
     vehicles = vehicles[vehicles[ID_COL].isin(dev_vehicles)].reset_index(drop=True)
-    assert_no_test(vehicles, test_vehicles, name="vehicles_dev")
+    assert_dev_only(vehicles, dev_vehicles, name="vehicles_dev")
     if len(vehicles) != len(dev_vehicles):
         raise ValueError(f"vehicles.parquet cubre {len(vehicles)} de los {len(dev_vehicles)} vehículos de dev")
 
@@ -731,17 +749,17 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
 
     # --- trips --------------------------------------------------------------------
     trips, trip_counters = read_dev_table("trips", TRIP_COLUMNS, dev_vehicles=dev_vehicles, cfg=cfg)
-    assert_no_test(trips, test_vehicles, name="trips_dev")
+    assert_dev_only(trips, dev_vehicles, name="trips_dev")
     trips = with_trip_derived(trips)
 
     trips_agg = trip_aggregates(trips, eda)
-    assert_no_test(trips_agg, test_vehicles, name="trips_agg_dev")
+    assert_dev_only(trips_agg, dev_vehicles, name="trips_agg_dev")
     km_by_vehicle = trips_agg.set_index(ID_COL)["trip_km_sum"]
     labels = vehicles.set_index(ID_COL)["event_observed"]
 
     events = event_odometer(vehicles, trips, origin_day)
     vehicles = vehicles.merge(events, on=ID_COL, how="left")
-    # Nullable: los 572 vehículos sin evento no tienen valor. Sin el cast explícito el
+    # Nullable: los 230 vehículos sin evento no tienen valor. Sin el cast explícito el
     # left join la deja como `object` y `~columna` hace un NOT de enteros, no booleano.
     vehicles["ident_equals_sale"] = vehicles["ident_equals_sale"].astype("boolean")
     vehicles["km_observed"] = vehicles[ID_COL].map(trips_agg.set_index(ID_COL)["trip_odo_max"])
@@ -754,13 +772,13 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
         vehicles[f"duration_km{suffix}"] = np.where(
             vehicles["event_observed"].eq(1) & odo.notna(), odo, vehicles["km_observed"]
         )
-    assert_no_test(vehicles, test_vehicles, name="vehicles_dev+evento")
+    assert_dev_only(vehicles, dev_vehicles, name="vehicles_dev+evento")
 
     # --- signals ------------------------------------------------------------------
     signals, signal_counters = read_dev_table("signals", SIGNAL_COLUMNS, dev_vehicles=dev_vehicles, cfg=cfg)
-    assert_no_test(signals, test_vehicles, name="signals_dev")
+    assert_dev_only(signals, dev_vehicles, name="signals_dev")
     signals_agg = signal_aggregates(signals, km_by_vehicle, eda)
-    assert_no_test(signals_agg, test_vehicles, name="signals_agg_dev")
+    assert_dev_only(signals_agg, dev_vehicles, name="signals_agg_dev")
 
     # --- severidad por alcance (preview del gap de blanking) ----------------------
     odo_min = trips_agg.set_index(ID_COL)["trip_odo_min"]
@@ -779,8 +797,8 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
         messages.append(message_counts(signals_t, scope=name))
     severity = pd.concat(scopes, ignore_index=True)
     message_long = pd.concat(messages, ignore_index=True)
-    assert_no_test(severity, test_vehicles, name="severity_scopes_dev")
-    assert_no_test(message_long, test_vehicles, name="message_counts_dev")
+    assert_dev_only(severity, dev_vehicles, name="severity_scopes_dev")
+    assert_dev_only(message_long, dev_vehicles, name="message_counts_dev")
 
     # --- niveles de AirFilter (las columnas que el diccionario oficial no declara) --
     air_filter = pd.concat(
@@ -795,7 +813,7 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
         ignore_index=True,
     )
     air_filter["slug"] = air_filter["level"].map(MESSAGE_SLUGS).fillna("otro")
-    assert_no_test(air_filter, test_vehicles, name="airfilter_counts_dev")
+    assert_dev_only(air_filter, dev_vehicles, name="airfilter_counts_dev")
 
     # --- resúmenes exactos y muestras ---------------------------------------------
     quantiles = exact_quantiles(trips, labels)
@@ -805,8 +823,8 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
 
     trips_sample = _sample(trips, int(eda["sample_rows_trips"]), rng)
     signals_sample = _sample(signals, int(eda["sample_rows_signals"]), rng)
-    assert_no_test(trips_sample, test_vehicles, name="trips_sample_dev")
-    assert_no_test(signals_sample, test_vehicles, name="signals_sample_dev")
+    assert_dev_only(trips_sample, dev_vehicles, name="trips_sample_dev")
+    assert_dev_only(signals_sample, dev_vehicles, name="signals_sample_dev")
 
     # --- sonda: historial completo de unos pocos vehículos ------------------------
     n_probe = int(eda["probe_vehicles"])
@@ -820,8 +838,8 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
     )
     probe_trips = trips[trips[ID_COL].isin(probe_ids)].copy()
     probe_signals = signals[signals[ID_COL].isin(probe_ids)].copy()
-    assert_no_test(probe_trips, test_vehicles, name="probe_trips_dev")
-    assert_no_test(probe_signals, test_vehicles, name="probe_signals_dev")
+    assert_dev_only(probe_trips, dev_vehicles, name="probe_trips_dev")
+    assert_dev_only(probe_signals, dev_vehicles, name="probe_signals_dev")
 
     # --- escritura ----------------------------------------------------------------
     tables = {
@@ -845,7 +863,7 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
         # `vehicle_id`: salen de tablas que YA pasaron el assert, así que la guarda
         # se aplica donde puede verificarse fila a fila.
         if ID_COL in frame.columns:
-            assert_no_test(frame, test_vehicles, name=name)
+            assert_dev_only(frame, dev_vehicles, name=name)
         frame.to_parquet(out_dir / f"{name}.parquet", index=False)
         logger.info("  %-24s %8d filas x %3d columnas", name, len(frame), frame.shape[1])
 
@@ -856,6 +874,9 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
         "scope": "dev-only",
         "n_dev_vehicles": int(len(vehicles)),
         "n_test_vehicles_excluidos": int(len(test_vehicles)),
+        "n_fuera_del_universo": int(split.get("n_excluded", 0)),
+        "universe": {k: v for k, v in universe.items() if k != "markets"},
+        "market_usability": universe.get("markets"),
         "n_event_vehicles": int(vehicles["event_observed"].sum()),
         "event_rate": float(vehicles["event_observed"].mean()),
         "test_split_created_at": split.get("created_at"),

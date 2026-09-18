@@ -5,10 +5,207 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
-## 2026-09-16 · F2 no define W, G, H ni Δ hasta resolver la fecha del evento — DECISIÓN PENDIENTE
+## 2026-09-18 · Panel v1: W=1000, G=500, H=3000, Δ=500; sanos emparejados por odómetro **y mes**
 
-**Registró:** Santino · **Fase:** F2 (previo) · **Estado: abierta.** Esta entrada
-no decide nada; registra un bloqueante y quién tiene que decidirlo.
+**Decidió:** Santino (implementación de F2). **Detalle y evidencia:**
+[f2-eda-revision-y-features.md](f2-eda-revision-y-features.md).
+
+**Terna.** Con Δ = 500, W = 1000 y G = 500 conservan 54 de los 60 eventos de dev con al
+menos un corte positivo; cada 500 km más de W cuesta ~3 eventos, y el barrido
+W ∈ {1000, 2000, 3000} da la misma métrica dentro del ruido. H = 3000 pone los positivos
+en 500–3.500 km antes del evento, que es donde el perfil alineado muestra que la señal
+existe. Los sanos solo aportan cortes **verificables** (`corte + G + H` dentro de lo
+observado, `censored_policy: drop`); los cortes de un vehículo con evento llegan hasta
+E − G y nada posterior al evento entra a ninguna ventana (después de la fecha el uso
+cambia en el 80% de los vehículos).
+
+**Emparejado.** Los 60 eventos caen entre sep-2025 y mar-2026 y la exposición sana se
+concentra en 2026: emparejar los cortes de los sanos solo por odómetro deja el
+calendario como atajo (agregar tres columnas de calendario sube el ROC de 0,67 a 0,76;
+con emparejado por mes, de 0,57 a 0,60). Se conserva el mayor subconjunto de filas sanas
+que reproduce la distribución conjunta (4.000 km × mes) de los positivos de dev, con 25%
+de déficit: 1.241 filas de 7.308, 144 vehículos de 243. Celdas más finas dejan 682 filas.
+El test no se mira ni para esto (la referencia son los positivos de dev).
+
+**Qué se resigna:** volumen de negativos y 34 vehículos de test que quedan sin filas.
+**Alternativa disponible sin tocar código:** `configs/data/panel_v1_unmatched.yaml`
+(todo), `panel_w2000.yaml`, `panel_w3000.yaml`.
+
+---
+
+## 2026-09-18 · `Regenerations` y `DistanceBetweenRegenerations` fuera del modelo; la familia B se cuenta desde `AirRegeneration`
+
+**Decidió:** Santino. El marcador `Regenerations` de `signals` se corta el 25-05-2026
+para toda la flota (0 marcadores en jun–sep 2026 contra ~2.000 caídas de nivel por mes
+en `trips`). Una tasa de marcadores por km mide qué fracción del historial cae antes de
+esa fecha, y eso lo fija `ProductionDay` (ρ = −0,515). Era la "feature más fuerte del
+EDA" (ρ = 0,317 con la etiqueta); contada desde las caídas > 5 puntos de
+`AirRegeneration` dentro del viaje —que se registran hasta el final— da ρ = 0,072. Se
+queda en el panel como `aux_regen_marker_per_1000km` solo para auditar. Retira la
+recomendación §3 de `docs/f2-feature-engineering-candidatas.md`.
+
+---
+
+## 2026-09-18 · Fuera del set base: `ProductionDay` (aplica la pendiente del 17-09), `ModelSeries`, `daysUntilSale`, temperatura ambiente
+
+**Decidió:** Santino. Todas quedan en el panel como `aux_*` (convención nueva: columna
+que está y no entra al modelo), así las ablaciones no requieren reconstruir.
+
+- `ProductionDay`: ρ = −0,435, tasa por quintil 0,46 → 0,00 (ventana de observación).
+- `ModelSeries`: el cruce con `Engine` es casi diagonal; MODEL_3 0 eventos de 24,
+  MODEL_4 2 de 91. Sacar `Engine` y dejarlo renombra el sesgo.
+- `daysUntilSale`: la fecha de venta (`ProductionDay + daysUntilSale`) da ρ = −0,48 y
+  tasa por quintil 0,53 → 0,00; sola, ρ = −0,41 con el odómetro final. Es exposición.
+- `AirTemperature*`: estacional (16,7 → 25,0 °C de mediana mensual) con los eventos
+  concentrados en siete meses: mide el calendario.
+
+La única `static_` del set base es `SalesCountry_cd` (dos mercados que miden con
+distinto nivel; el modelo necesita verlo).
+
+---
+
+## 2026-09-18 · Idle (0 km) separado de los viajes; velocidad recalculada; topes físicos, no cuantiles
+
+**Decidió:** Santino. El 35% de las filas de `trips` tiene 0 km (motor encendido sin
+moverse); `KilometerPerHour` es nulo exactamente ahí y, cuando existe, es
+`trip_km / duración` (Pearson 0,99999). Los idle son la señal que más anticipa
+(P(evento > sano) 0,58 → 0,74 al acercarse el evento) y contaminaban cualquier
+"fracción de viajes cortos". Toda fracción de viaje se calcula entre los que se
+mueven; los idle tienen su propia feature. Los recortes son a topes físicos declarados
+en `features_v1.yaml` (200 km/h, [−40, 60] °C ambiente, 24 h por viaje) y no a
+cuantiles, porque un cuantil dependería del train de cada fold.
+
+---
+
+## 2026-09-17 · El universo del estudio son 364 vehículos: fecha de evento utilizable + mercados que la registran
+
+**Decidió:** Santino · **Fase:** F2 (previo). **Cierra la entrada de abajo**, que
+quedaba abierta desde el 16.
+
+De los 1081 vehículos entran al estudio **364** (290 dev / 74 test, 80 eventos). Se
+descartan 717 por dos criterios que se componen, declarados en `universe` de
+`configs/data/test_split.yaml`:
+
+1. **`require_usable_event_date`** — un positivo entra solo si
+   `IdentificationDate > daysUntilSale`. Saca 284.
+2. **`keep_markets: [CNTRY_3, CNTRY_4]`** — solo los mercados donde el evento se
+   puede observar. Saca 433 más, casi todos sanos.
+
+**Por qué el criterio 1:** para 284 de los 365 positivos `IdentificationDate` es
+*exactamente* `daysUntilSale`, y ahí el evento cae con el odómetro en ~13 km y el
+2,3% del historial por delante: no hay ventana W que agregar ni gap G que blanquear,
+así que la fila no se puede etiquetar. Que sea una convención administrativa y no
+física lo cierra un conteo que no admite lectura alternativa: **`IdentificationDate`
+nunca es menor que `daysUntilSale`, 0 casos de 365**. Si la fecha marcara la falla
+real, alguna caería antes de la venta.
+
+**Por qué el criterio 2, que no estaba en el plan:** la convención resultó ser **del
+mercado, no del vehículo**. En CNTRY_1 y CNTRY_5 ningún evento tiene fecha
+utilizable; en CNTRY_2, uno de 105. Tirando solo los positivos, esos tres mercados
+quedaban aportando **432 negativos y 1 positivo** —el 54% de dev— y eso no es un
+desbalance: es **selección sobre el resultado**. Se descarta un vehículo según lo
+que le pasó, y los negativos dejan de venir de la misma población que los
+positivos. Excluir `SalesCountry_cd` del set de features no lo arregla: el sesgo
+está en quién entró a la muestra. La regla que sí cierra es simétrica: **se conserva
+el mercado donde el evento se puede observar**. Un sano de CNTRY_4 es un negativo
+legítimo porque si hubiera fallado lo habríamos visto; uno de CNTRY_1 no.
+
+**Qué se eligió y qué se resignó.** De las tres salidas que dejaba abierta la
+entrada de abajo se tomó la (b), quedarse con los datos confiables, porque el
+objetivo es predecir la falla por **uso del cliente** y un evento pegado al día de
+la venta no habla de uso. Se resigna volumen: 365 eventos pasan a 80, y el test de
+73 a 20. El error estándar de la curva de anticipación se ensancha de ±11 pp a
+~±20 pp, que es del orden de la diferencia entre modelos que esperamos medir. **Se
+acepta a conciencia:** 73 eventos mal ubicados en el tiempo no permiten medir
+anticipación, y la anticipación es el pedido central del desafío. Un intervalo ancho
+sobre la métrica que se pidió es mejor que uno angosto sobre otra cosa.
+
+**Cómo se aplicó, que es la parte que puede salir mal.** `make_test_split.py` corre
+en **dos etapas**: primero sortea los 1081 con la semilla de siempre, después
+recorta el resultado conservando el lado de cada sobreviviente. El recorte **no
+re-sortea**. Verificado: la huella del reparto padre (`ba9aa4d290bc6610`) coincide
+con la del holdout congelado el 16, ningún vehículo cambió de lado y las dos listas
+nuevas son subconjuntos de las viejas.
+
+**Por qué no re-sortear, si el balance queda peor.** Re-sortear el universo
+recortado sería un dado nuevo tirado *después* de haber mirado los datos que
+motivaron el recorte —exactamente lo que el holdout existe para impedir—. Filtrar es
+determinista y no depende de ninguna métrica. El costo es que las tasas quedan
+desparejas (0,207 dev contra 0,270 test) porque la estratificación se hizo sobre la
+población vieja; el desvío juega a favor del número de portada, porque deja 20
+eventos en test en vez de los ~16 que habría dado un sorteo nuevo.
+
+**Alternativa descartada:** quedarse con los 797 (solo el criterio 1). Más
+vehículos, pero con el 54% de dev viniendo de mercados sin eventos observables. El
+número sería más grande y mediría menos.
+
+**Qué cambia río abajo:**
+
+- **El panel se construye con los 364, no con los 1081.** El contrato de
+  `CLAUDE.md` decía lo contrario y quedó actualizado: `test_split_masks()` ahora
+  falla si el panel trae un vehículo excluido.
+- **`test_split.json` guarda tres listas** (`dev`, `test`, `excluded`) más el
+  informe del universo y la metadata del sorteo padre.
+- **`dev_mask` dejó de ser el complemento de `test_mask`**: con universo recortado,
+  "no es test" incluye a los excluidos.
+
+**Qué queda pendiente y no lo resuelve esta decisión:** preguntarle a Ford qué es
+`IdentificationDate` para los 284 descartados. Si la respuesta permite recuperarlos,
+el universo se amplía cambiando dos claves del YAML y regenerando: no hay código que
+tocar.
+
+**Detalle:** [f2-universo-fecha-usable.md](f2-universo-fecha-usable.md)
+
+---
+
+## 2026-09-17 · `static_ProductionDay` fuera del set base — PENDIENTE DE APLICAR
+
+**Registró:** Santino · **Fase:** F2 (previo) · **Estado: recomendación del EDA,
+todavía no aplicada en `panel_v1.yaml`.**
+
+Medido sobre los 290 de dev del universo recortado, `static_ProductionDay` es **la
+variable más correlacionada con la etiqueta de todo el EDA**: ρ de Spearman
+**−0,435**, por encima de cualquier feature física. La tasa de eventos por quintil
+va de 0,459 a **0,000** —el quintil de los producidos más tarde tiene 56 vehículos y
+ni un solo evento— y contra `span_days` da **ρ = −0,933**.
+
+**Por qué:** la ventana de observación termina el mismo día para toda la flota, así
+que un vehículo producido tarde tuvo menos kilómetros de exposición para llegar a
+fallar. Es el mismo caso de `ENG_3`: el modelo puede declarar sanos a 56 vehículos
+por su fecha de producción y acertar siempre, dentro de este dataset y en ninguno
+futuro.
+
+**Qué se recomienda, con tres niveles distintos de urgencia:**
+
+1. **`static_ProductionDay` a `features.static_excluded`.** Mismo criterio que
+   `Engine`.
+2. **`ModelSeries` hay que decidirlo explícitamente.** El EDA encontró algo que
+   antes no se veía: el cruce `Engine × ModelSeries` es **casi diagonal**
+   (ENG_1 con MODEL_4, ENG_2 con MODEL_1 y MODEL_2, ENG_3 con MODEL_3 y MODEL_4), y
+   en el universo recortado `MODEL_3` tiene 0 eventos de 24 y `MODEL_4` 2 de 91.
+   **Sacar `Engine` y dejar `ModelSeries` no saca el sesgo: lo renombra.** Esto
+   contradice la decisión del 15-09, que declaraba a `ModelSeries` limpio; era
+   cierto sobre los 1081 y dejó de serlo sobre los 364.
+3. **`static_daysUntilSale` se audita, no se saca de oficio.** Ya no es la etiqueta
+   disfrazada —ese caso se fue con el universo— y queda en ρ = −0,261. Puede tener
+   contenido real: un auto que tarda en venderse pasa meses parado. Ablación
+   explícita en otro YAML.
+
+**Por qué queda pendiente y no aplicada:** tocar `features.static_columns` es tocar
+el contrato del panel, y el panel todavía no existe. Se aplica en el mismo PR que
+construya `build_dataset.py`, para que el cambio y su efecto se vean juntos.
+
+**Detalle:** `notebooks/eda-exhaustivo-dev.ipynb` §2 y §7.3
+
+---
+
+## 2026-09-16 · F2 no define W, G, H ni Δ hasta resolver la fecha del evento — CERRADA el 17-09
+
+**Registró:** Santino · **Fase:** F2 (previo) · **Estado: cerrada** por la entrada
+de arriba, que tomó la salida (2) —quedarse con los datos confiables— y le agregó el
+criterio de mercado que este registro todavía no había visto. Se deja tal cual
+porque el razonamiento de por qué quedó abierta explica por qué se eligió lo que se
+eligió.
 
 En dev, `IdentificationDate == daysUntilSale` **exactamente** en 231 de los 292
 vehículos con evento (79,1%), y nunca es menor. Bajo la lectura literal del anexo

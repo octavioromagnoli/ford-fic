@@ -29,6 +29,15 @@ PR-AUC alto haciendo detección reactiva, que es lo que Ford ya tiene.
 
 ## Regeneraciones
 
+> **Corregido el 2026-09-18.** El marcador `Regenerations` **se corta el 25-05-2026
+> para toda la flota** (0 marcadores en jun–sep 2026 contra ~2.000 caídas de nivel por
+> mes en `trips`). La diferencia de tasas entre cohortes de la tabla de abajo es
+> exposición al calendario —los vehículos con evento se produjeron antes y tienen más
+> historial previo al corte—, no física: contada desde las caídas de
+> `trips.AirRegeneration*`, la tasa da ρ = 0,072 con la etiqueta. Ver
+> [f2-eda-revision-y-features.md](f2-eda-revision-y-features.md) §2.1. Lo que sigue se
+> deja como estaba, para que se entienda qué se creyó y por qué.
+
 `Regenerations` es el string `"Regeneration"` marcando la fila del evento (no un
 conteo). `DistanceBetweenRegenerations` acompaña: media 251 km.
 

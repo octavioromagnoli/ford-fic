@@ -1,7 +1,11 @@
 # `AirRegeneration*` y `AirFilter*`: el DPF estaba en `trips` con otro nombre
 
 **Fecha:** 2026-09-16 · **Fase:** F2 (previo) · **Alcance de la medición:** dev
-(864 vehículos) · **Reproduce:** `notebooks/eda-exhaustivo-dev.ipynb` §6.4.
+dev antes del recorte del universo del 17-09 (864 vehículos). **Re-medido sobre los
+290 del universo actual, el hallazgo se sostiene:** 13.919 pares alineados,
+`AirRegenerationEnd == Acumulation` en el **99,68%** (Pearson 0,9995) y
+`AirFilterEnd == Message` en el **99,97%**, con el mismo vocabulario de 9 niveles.
+· **Reproduce:** `notebooks/eda-exhaustivo-dev.ipynb` §6.4.
 
 Son las 4 columnas que `trips` trae y el diccionario oficial no menciona
 ([f2-diccionario-trips-incompleto.md](f2-diccionario-trips-incompleto.md)). Nadie
@@ -65,11 +69,17 @@ la explicación que mejor encaja, y hay cuatro indicios:
    anonimizadas";
 4. la dinámica es la de un filtro que carga y se regenera.
 
-**Pero no hay confirmación de Ford**, y hay un detalle que no cierra del todo: la
-escala llega a **95**, no a 100, lo que sugiere un tope de reporte y no un
-porcentaje literal. Tratarlo como "% de saturación del DPF" en el informe es una
-afirmación que hay que poder defender; tratarlo como "nivel de acumulación del
-filtro, escala 0–95" siempre es correcto.
+**Pero no hay confirmación de Ford.** Sobre la escala, corregido el 2026-09-18:
+**llega a 100** (0,58% de los fines de viaje, 39 vehículos de dev; 11.193 filas de
+`signals`), y 95 es un escalón con masa (5,8%), no el tope. Es compatible con un
+porcentaje. Aun así, tratarlo como "% de saturación del DPF" en el informe es una
+afirmación que hay que poder defender; "nivel de acumulación del filtro, escala
+0–100" siempre es correcto.
+
+Y sobre el punto (d): el marcador `Regenerations` no está "incompleto" al azar,
+**se corta el 25-05-2026 para toda la flota** (último marcador p90 = 25-05-2026 en las
+dos cohortes; 0 marcadores de junio en adelante contra ~2.000 caídas de nivel por mes).
+Ver [f2-eda-revision-y-features.md](f2-eda-revision-y-features.md) §2.1.
 
 ## Qué desbloquea
 

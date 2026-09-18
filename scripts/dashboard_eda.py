@@ -13,9 +13,11 @@ No es `scripts/dashboard.py`: ese consume predicciones de modelo (Track C, F4+) 
 todavía corre contra el panel dummy. Este mira el dato crudo, que es lo único real
 que hay antes de F2.
 
-**Alcance:** los 864 vehículos de dev del holdout congelado
-(`data/processed/test_split.json`). Los 217 de test no están en el cache y el
-banner de arriba lo dice en cada carga.
+**Alcance:** los 290 vehículos de dev del holdout congelado
+(`data/processed/test_split.json`). Los 74 de test no están en el cache, y tampoco
+los 717 que quedaron **fuera del universo del estudio** —positivos cuyo evento no
+se puede ubicar en el tiempo, y mercados donde ningún evento es observable, ver
+`src/data/usable.py`—. El banner de arriba lo dice en cada carga.
 """
 
 from __future__ import annotations
@@ -147,7 +149,9 @@ def construir_cache() -> None:
 def kpis(veh: pd.DataFrame, meta: dict[str, Any]) -> None:
     columnas = st.columns(6)
     columnas[0].metric("Vehículos (dev)", f"{len(veh):,}".replace(",", "."),
-                       help="Los 217 de test quedan fuera del cache.")
+                       help=f"{meta['n_test_vehicles_excluidos']} de test y "
+                            f"{meta.get('n_fuera_del_universo', 0)} fuera del universo "
+                            "quedan afuera del cache.")
     columnas[1].metric("Con evento", f"{int(veh['event_observed'].sum())}",
                        f"tasa {veh['event_observed'].mean():.3f}", delta_color="off")
     columnas[2].metric("Viajes", f"{meta['trips']['n_dev_deduplicadas']:,}".replace(",", "."),
@@ -161,8 +165,10 @@ def seccion_estaticas(veh: pd.DataFrame) -> None:
     st.subheader("Estáticas")
     st.caption(
         "`Engine` está **excluida del modelo** (`features.static_excluded` de "
-        "`configs/data/panel_v1.yaml`): dentro de dev, `ENG_3` es el 37% de los sanos y el 0% de los que "
-        "tienen evento. Se muestra para reportar el sesgo, no para usarla."
+        "`configs/data/panel_v1.yaml`): dentro de dev, `ENG_3` es el 20% de los sanos y el 0% de los que "
+        "tienen evento. Se muestra para reportar el sesgo, no para usarla. **Pero sacarla no "
+        "alcanza:** el cruce con `ModelSeries` es casi diagonal, así que `MODEL_3` (0 eventos de 24) "
+        "y `MODEL_4` (2 de 91) llevan la misma información con otro nombre."
     )
     columna = st.segmented_control(
         "Variable", CATEGORICAS, default=CATEGORICAS[0],
@@ -227,9 +233,12 @@ def seccion_estaticas(veh: pd.DataFrame) -> None:
     )
     st.altair_chart(estilar(densidad, altura=None), width="stretch", theme=None)
     st.warning(
-        "`daysUntilSale` y `ProductionDay` separan cohortes (ρ de Spearman −0,25 y −0,24 con la "
-        "etiqueta). No es física: los vehículos con evento se produjeron y se vendieron antes. "
-        "Ver la pestaña **Etiqueta** para el caso extremo.",
+        "**`ProductionDay` es la variable más correlacionada de todo el EDA** (ρ de Spearman −0,435; "
+        "`daysUntilSale` queda en −0,261). No es física: la ventana de observación termina el mismo "
+        "día para toda la flota, así que un vehículo producido tarde tuvo menos kilómetros para "
+        "llegar a fallar. La tasa de eventos por quintil va de 0,459 a **0,000**, y contra "
+        "`span_days` da ρ = −0,933: son la misma variable. Las dos están en el set base de "
+        "`panel_v1.yaml` y **`ProductionDay` habría que sacarla**, con el mismo criterio que `Engine`.",
         icon=":material/priority_high:",
     )
 
@@ -246,18 +255,50 @@ def seccion_etiqueta(cache: dict[str, Any], veh: pd.DataFrame) -> None:
     columnas[1].metric("Censurados", f"{len(veh) - len(eventos)}")
     columnas[2].metric("IQR del anclaje", f"{meta['anchor_offset_iqr_days']:.1f} d",
                        help="`primer_viaje − ProductionDay`. F1 midió 0,0 sobre los 1094.")
-    columnas[3].metric("Ident == daysUntilSale", f"{meta['ident_equals_sale_frac']:.1%}",
-                       help="De los vehículos con evento de dev.")
+    columnas[3].metric("Odómetro del evento", f"{meta['event_odo_median_km']:,.0f} km".replace(",", "."),
+                       f"mediana · {eventos['event_frac_trips_before'].median():.0%} del historial antes",
+                       delta_color="off")
 
-    st.error(
-        f"**La posición del evento sobre el eje de km no es utilizable para el "
-        f"{meta['ident_equals_sale_frac']:.0%} de los positivos.** `IdentificationDate` es "
-        f"exactamente igual a `daysUntilSale` en {int(eventos['ident_equals_sale'].sum())} de los "
-        f"{len(eventos)} vehículos con evento; bajo la lectura literal del anexo 7.3 esos eventos "
-        f"caen con una mediana de {meta['event_odo_median_km']:.0f} km de odómetro, antes de que el "
-        "vehículo entrara en servicio. Hay que resolverlo antes de definir W, G, H y Δ.",
-        icon=":material/error:",
+    universo = meta.get("universe") or {}
+    st.success(
+        f"**El evento se puede ubicar sobre el eje de km para los {len(eventos)} positivos de dev.** "
+        f"Mediana de {meta['event_odo_median_km']:,.0f} km de odómetro y "
+        f"{eventos['event_frac_trips_before'].median():.0%} del historial de viajes por delante. "
+        "Eso es lo que hace que haya ventana W que agregar y gap G que blanquear.\n\n"
+        f"Se paga con volumen: de {universo.get('events_input', '?')} eventos del dataset quedan "
+        f"{universo.get('events_kept', '?')}, y de {universo.get('n_input', '?')} vehículos, "
+        f"{universo.get('n_kept', '?')}. El criterio está abajo.".replace(",", "."),
+        icon=":material/check_circle:",
     )
+
+    with st.expander("Por qué el universo son 364 vehículos y no 1081", expanded=False):
+        st.markdown(
+            "`IdentificationDate` trae **dos convenciones de registro mezcladas**. En 284 de los 365 "
+            "positivos vale *exactamente* lo mismo que `daysUntilSale`, y ahí el evento queda pegado "
+            "al día de la venta, con el odómetro en ~13 km y sin historial por delante. Que sea "
+            "administrativo y no físico lo cierra un conteo: **`IdentificationDate < daysUntilSale` "
+            "no pasa nunca, 0 de 365**.\n\n"
+            "Y la convención es **del mercado, no del vehículo**: por eso no alcanza con filtrar los "
+            "positivos. Si se los tira y se dejan sus vehículos sanos, los mercados sin eventos "
+            "observables aportan 432 negativos y 1 positivo — eso es selección sobre el resultado, y "
+            "deja a los negativos viniendo de otra población que los positivos."
+        )
+        mercados = pd.DataFrame(meta.get("market_usability") or [])
+        if not mercados.empty:
+            mercados = mercados.set_index("static_SalesCountry_cd")
+            mercados.columns = ["vehículos", "sanos", "eventos", "fecha real",
+                                "fecha = venta", "frac. usable"]
+            st.dataframe(
+                mercados.style.format({"frac. usable": "{:.1%}"})
+                .background_gradient(subset=["frac. usable"], cmap="Blues"),
+                width="stretch",
+            )
+        st.caption(
+            "Este cuadro cubre los 1081 a propósito: es el **registro** de una decisión ya congelada "
+            "sobre la calidad del dato (bloque `universe` de `test_split.json`), no una medición que "
+            "se esté haciendo ahora. Define qué mercado entra, no qué modelo gana. "
+            "Detalle: `docs/memoria/f2-universo-fecha-usable.md`."
+        )
 
     izquierda, derecha = st.columns(2)
     with izquierda:
@@ -312,10 +353,14 @@ def seccion_etiqueta(cache: dict[str, Any], veh: pd.DataFrame) -> None:
         help="La B no está respaldada por el diccionario: se muestra para comparar, no como decisión.",
     )
     prefijo = "event" if hipotesis.startswith("A") else "event_alt"
+    # El corte por `ident_equals_sale` desapareció con el universo: en dev no queda ni un
+    # vehículo del grupo "Ident == venta". Lo que sí discrimina ahora es cuánto historial
+    # deja el evento por delante, que es la pregunta que decide si la fila se puede etiquetar.
+    frac_actual = eventos[f"{prefijo}_frac_trips_before"]
     datos = eventos.assign(
-        grupo=np.where(eventos["ident_equals_sale"].fillna(False), "Ident == venta", "Ident > venta"),
+        grupo=np.where(frac_actual < 0.05, "<5% del historial antes", "historial suficiente"),
         odo=eventos[f"{prefijo}_odo_km"],
-        frac=eventos[f"{prefijo}_frac_trips_before"],
+        frac=frac_actual,
     )
     izquierda, derecha = st.columns([3, 2])
     with izquierda:
@@ -327,7 +372,8 @@ def seccion_etiqueta(cache: dict[str, Any], veh: pd.DataFrame) -> None:
                         scale=alt.Scale(type="symlog")),
                 y=alt.Y("count():Q", title="vehículos"),
                 color=alt.Color("grupo:N",
-                                scale=alt.Scale(domain=["Ident == venta", "Ident > venta"],
+                                scale=alt.Scale(domain=["<5% del historial antes",
+                                                        "historial suficiente"],
                                                 range=[paleta()["cohort"][1], paleta()["cohort"][0]]),
                                 legend=alt.Legend(title=None, orient="top")),
                 tooltip=["grupo:N", alt.Tooltip("count():Q", title="vehículos")],
@@ -344,7 +390,10 @@ def seccion_etiqueta(cache: dict[str, Any], veh: pd.DataFrame) -> None:
         st.dataframe(resumen, width="stretch")
         st.caption(
             "`frac_historial_antes` es la fracción de los viajes del vehículo anteriores al evento. "
-            "Sin historial por delante no hay ventana W que agregar ni gap G que blanquear."
+            "Sin historial por delante no hay ventana W que agregar ni gap G que blanquear. "
+            "El criterio del universo es necesario pero no suficiente: **2 de los 60** pasan con un "
+            "delta de 1 y 2 días y caen igual en 8 y 5 km de odómetro. Los descarta "
+            "`sampling.min_trips_in_window` al armar el panel."
         )
 
     st.markdown("**Supervivencia sobre el eje de odómetro (Kaplan-Meier)**")
@@ -396,9 +445,13 @@ def seccion_odometro(veh: pd.DataFrame) -> None:
                        f"{int(veh['n_km_negative'].sum())} viajes", delta_color="off")
 
     st.info(
-        "**El nulo correlaciona con el vehículo, no con el mensaje.** La mediana por vehículo es "
-        "0,00% y unos pocos concentran casi todo. Descartar esas filas no sesga a la flota, pero "
-        "deja sin ninguna feature de `signals` a ese puñado.", icon=":material/info:",
+        "**El odómetro nulo de `signals` se fue con el recorte del universo.** Sobre los 1081 era "
+        "el 11,15% de las filas, concentrado en cuatro vehículos con entre el 66% y el 97% de sus "
+        "señales sin odómetro; esos cuatro estaban en los mercados descartados. Acá el nulo global "
+        "es 0,009%, la mediana por vehículo 0,00% y **ninguno pasa del 1%**, así que descartar esas "
+        "filas ya no tiene costo y la imputación por viaje deja de hacer falta. El que sí empeoró "
+        "es `KilometerPerHour`: 35,4% de nulos contra 32,5% sobre los 1081.",
+        icon=":material/info:",
     )
 
     izquierda, derecha = st.columns(2)
@@ -584,7 +637,9 @@ def seccion_severidad(cache: dict[str, Any], veh: pd.DataFrame) -> None:
         st.metric(
             "Mediana con evento / sin evento",
             f"{medianas.get(1, np.nan):.3f} vs {medianas.get(0, np.nan):.3f}",
-            help="Un punto = un vehículo. `regen_per_1000km` es la que más separa de todo el EDA.",
+            help="Un punto = un vehículo. OJO: `regen_per_1000km` y `dist_between_regen_mean` salen del "
+                 "marcador `Regenerations`, cortado el 25-05-2026: su separación es exposición al "
+                 "calendario, no física (corrección del 18-09, ver el aviso de arriba).",
         )
 
     st.divider()
@@ -718,6 +773,125 @@ def seccion_correlaciones(cache: dict[str, Any], veh: pd.DataFrame) -> None:
     )
     mostrar(mapa, altura=max(360, 16 * len(columnas)))
 
+    st.markdown("**Diagnóstico de forma** — qué transformación pediría cada feature, y si serviría.")
+    st.caption(
+        "Acá no se transforma nada: se mide. El punto que hay que tener presente es que **ρ de "
+        "Spearman no cambia con una transformación monótona**, así que a un árbol el `log1p` no le "
+        "agrega ni le saca nada. Lo que cambia es **Pearson**, o sea lo que ve un modelo lineal — la "
+        "regresión logística que es la línea de base."
+    )
+    candidatas = [c for fam, cols in familias.items() if not fam.startswith("·")
+                  for c in cols if c in veh.columns]
+    filas = []
+    for columna in dict.fromkeys(candidatas):
+        x = veh[columna].dropna()
+        if len(x) < 100 or x.nunique() < 3:
+            continue
+        objetivo_y = veh.loc[x.index, "event_observed"]
+        mediana = float(x.median())
+        pearson = abs(float(np.corrcoef(x, objetivo_y)[0, 1]))
+        pearson_log = (abs(float(np.corrcoef(np.log1p(x), objetivo_y)[0, 1]))
+                       if x.min() >= 0 else np.nan)
+        binaria = (x > 0).astype(int)
+        filas.append({
+            "variable": columna,
+            "asimetría": float(x.skew()),
+            "frac. ceros": float((x == 0).mean()),
+            "ρ Spearman": float(spearmanr(x, objetivo_y).statistic),
+            "|Pearson|": pearson,
+            "|Pearson| log1p": pearson_log,
+            "ganancia log": pearson_log - pearson,
+            "ρ del indicador": (float(spearmanr(binaria, objetivo_y).statistic)
+                                if binaria.nunique() > 1 else np.nan),
+        })
+    forma = pd.DataFrame(filas)
+
+    def _sugerencia(fila: pd.Series) -> str:
+        if fila["frac. ceros"] >= 0.60:
+            return "indicador binario"
+        if fila["asimetría"] > 2 and fila["ganancia log"] > 0.03:
+            return "log1p"
+        if fila["asimetría"] > 2:
+            return "log1p (cosmético)"
+        if fila["asimetría"] < -2:
+            return "satura arriba: usar frac. en nivel alto"
+        return "dejar como está"
+
+    forma["sugerencia"] = forma.apply(_sugerencia, axis=1)
+    forma = forma.sort_values("ganancia log", ascending=False)
+
+    izquierda, derecha = st.columns([3, 2])
+    with izquierda:
+        dispersion = (
+            alt.Chart(forma.dropna(subset=["ganancia log"]))
+            .mark_circle(size=130, opacity=0.8, stroke="white", strokeWidth=1.2)
+            .encode(
+                x=alt.X("asimetría:Q", title="asimetría (skew)"),
+                y=alt.Y("ganancia log:Q", title="ganancia de |Pearson| con log1p"),
+                color=alt.Color("sugerencia:N",
+                                scale=alt.Scale(range=list(paleta()["categorical"])),
+                                legend=alt.Legend(title=None, orient="top", columns=2)),
+                size=alt.Size("frac. ceros:Q", legend=None, scale=alt.Scale(range=[40, 420])),
+                tooltip=["variable:N", "sugerencia:N",
+                         alt.Tooltip("asimetría:Q", format=".2f"),
+                         alt.Tooltip("frac. ceros:Q", format=".1%"),
+                         alt.Tooltip("ρ Spearman:Q", format=".3f"),
+                         alt.Tooltip("ganancia log:Q", format=".3f")],
+            )
+            .properties(title="Asimetría alta no implica que el log sirva")
+        )
+        cero = (alt.Chart(pd.DataFrame({"y": [0.0]}))
+                .mark_rule(color=paleta()["ink"]["secondary"], strokeWidth=1).encode(y="y:Q"))
+        mostrar(dispersion + cero, altura=340)
+    with derecha:
+        st.dataframe(
+            forma.head(10)[["variable", "ρ Spearman", "ganancia log", "sugerencia"]]
+            .style.format({"ρ Spearman": "{:.3f}", "ganancia log": "{:+.3f}"}),
+            width="stretch", hide_index=True,
+        )
+        st.caption(
+            "**Ojo con la ganancia sin Spearman detrás.** `acumulation_median` gana +0,064 de "
+            "|Pearson| y su ρ de Spearman es −0,003: no hay señal que linealizar, el |Pearson| "
+            "subió por azar. Mirar siempre las dos columnas juntas."
+        )
+
+    st.markdown("**¿El valor aporta sobre el indicador `pasó / no pasó`?**")
+    zero = forma.dropna(subset=["ρ del indicador"]).copy()
+    zero["el valor aporta"] = zero["ρ Spearman"].abs() - zero["ρ del indicador"].abs()
+    comparacion = (
+        alt.Chart(zero)
+        .mark_circle(opacity=0.8, stroke="white", strokeWidth=1.2)
+        .encode(
+            x=alt.X("ρ del indicador:Q", title="|ρ| del indicador · ¿pasó alguna vez?",
+                    scale=alt.Scale(zero=False)),
+            y=alt.Y("ρ Spearman:Q", title="|ρ| del valor · ¿cuánto?", scale=alt.Scale(zero=False)),
+            size=alt.Size("frac. ceros:Q", legend=alt.Legend(title="frac. ceros"),
+                          scale=alt.Scale(range=[40, 420])),
+            color=alt.Color("el valor aporta:Q",
+                            scale=alt.Scale(scheme="redblue", domainMid=0),
+                            legend=alt.Legend(title="valor − indicador")),
+            tooltip=["variable:N", alt.Tooltip("frac. ceros:Q", format=".1%"),
+                     alt.Tooltip("ρ Spearman:Q", format=".3f"),
+                     alt.Tooltip("ρ del indicador:Q", format=".3f"),
+                     alt.Tooltip("el valor aporta:Q", format="+.3f")],
+        )
+        .properties(title="Sobre la diagonal, la magnitud aporta; sobre la línea, alcanza el indicador")
+    )
+    diagonal = (
+        alt.Chart(pd.DataFrame({"x": [0.0, float(zero["ρ Spearman"].abs().max())]}))
+        .mark_line(color=paleta()["ink"]["grid"], strokeWidth=1.8).encode(x="x:Q", y="x:Q")
+    )
+    mostrar(comparacion + diagonal, altura=340)
+    st.caption(
+        "`msg_at_limit_per_1000km` es 94,5% ceros y `msg_over_limit_per_1000km` 87,6%: en los dos, "
+        "el ρ del indicador iguala al del valor, así que **toda la señal está en \"pasó alguna "
+        "vez\"**. Al revés en `regen_per_1000km` (0,317 contra 0,183): ahí la magnitud es lo que "
+        "importa. Y en las de saturación el indicador **supera** al valor. "
+        "Todo esto se mide sobre 290 vehículos y 60 eventos: sirve para ordenar candidatas, no "
+        "para descartarlas."
+    )
+
+    st.divider()
     st.markdown("**Preview del gap G** — los mismos agregados sobre el primer 70% y 80% del recorrido.")
     severidad = cache["severity_scopes_dev"].merge(veh[["vehicle_id", "event_observed"]], on="vehicle_id")
     objetivo = [c for c in severidad.columns
@@ -751,18 +925,40 @@ def seccion_correlaciones(cache: dict[str, Any], veh: pd.DataFrame) -> None:
                             legend=alt.Legend(title=None, orient="top")),
             tooltip=["variable:N", "alcance:N", alt.Tooltip("rho:Q", format=".4f")],
         )
-        .properties(title="La correlación NO cae al blanquear la cola — y hay tres motivos posibles")
+        .properties(title="Al blanquear la cola: qué anticipa y qué solo describe el presente")
     )
     regla = (
         alt.Chart(truncado).mark_rule(color=paleta()["ink"]["grid"], strokeWidth=2)
         .encode(y=alt.Y("variable:N", sort=orden), x="min(rho):Q", x2="max(rho):Q")
     )
     mostrar(regla + puntos, altura=max(320, 24 * truncado["variable"].nunique()))
+    st.error(
+        "**Retirado el 2026-09-18.** El truncamiento al 70% del odómetro saca sobre todo km "
+        "posteriores a mayo de 2026, que es justo donde el marcador `Regenerations` deja de "
+        "registrarse: por eso las tasas de marcadores \"sobreviven\". No es evidencia de anticipación. "
+        "La prueba que sí la mide es el perfil alineado al evento de `scripts/eda_gaps.py` "
+        "(`docs/memoria/f2-eda-revision-y-features.md` §3.2). El texto de abajo se conserva tal cual.",
+        icon=":material/report:",
+    )
+    st.info(
+        "**Ahora esta prueba sí discrimina, y es el resultado más útil del EDA.** Con el evento "
+        "cayendo en la mediana a 7.987 km y el 39% del historial por delante, truncar al primer 70% "
+        "del recorrido se parece de verdad a blanquear el tramo previo.\n\n"
+        "**Sobreviven** (retienen ≥86% de su ρ): `regen_per_1000km` 90%, "
+        "`msg_over_limit_per_1000km` 101%, `msg_cleaning_auto_per_1000km` 91%, "
+        "`msg_at_limit_per_1000km` 86%. Son **frecuencias**: rasgo del régimen de uso, presentes "
+        "desde el principio del historial.\n\n"
+        "**Se caen**: `air_regen_saturated_frac` 58%, `air_regen_end_mean` 32%, "
+        "`acumulation_high_frac` 18%. Son **niveles de saturación**: estado que aparece cerca del "
+        "evento. Un modelo construido sobre estos daría un PR-AUC alto y sería detección reactiva, "
+        "que es lo que Ford ya tiene (regla 6).",
+        icon=":material/insights:",
+    )
     st.caption(
-        "Leerlo con cuidado: esta prueba compara contra una etiqueta **a nivel vehículo**, no "
-        "contra la etiqueta por punto de corte que F2 va a usar, y para el 79% de los positivos "
-        "el evento cae al principio del historial (pestaña **Etiqueta**), así que \"la cola\" no "
-        "es el período previo al evento. **El gap G se mantiene por regla, no por esta evidencia.**"
+        "Dos caveats: la etiqueta de esta prueba es **a nivel vehículo**, no por punto de corte, así "
+        "que el truncamiento es un proxy del gap G y no el gap G; y el 70% del recorrido deja dentro "
+        "parte del tramo post-evento para varios vehículos, con lo cual la prueba **subestima** "
+        "cuánto sobrevive la señal. La definitiva se hace sobre el panel, con y sin G."
     )
 
 
@@ -952,17 +1148,34 @@ def main() -> None:
     meta = cache["meta"]
 
     st.warning(
-        f"**Alcance: dev, {len(veh)} vehículos.** Los **{meta['n_test_vehicles_excluidos']} vehículos "
-        "de test** del holdout congelado (`data/processed/test_split.json`, semilla "
-        f"{meta['test_split_seed']}) **no están en estos datos** y no entran en ningún número de esta "
-        "página. El holdout se congeló antes de F2 para que ninguna decisión de diseño se tome "
-        "mirándolo.", icon=":material/lock:",
+        f"**Alcance: dev, {len(veh)} vehículos.** Los **{meta['n_test_vehicles_excluidos']} de test** "
+        "del holdout congelado (`data/processed/test_split.json`, semilla "
+        f"{meta['test_split_seed']}) **no están en estos datos**, y tampoco los "
+        f"**{meta.get('n_fuera_del_universo', 0)} que quedaron fuera del universo del estudio** "
+        "(pestaña **Etiqueta**). El holdout se congeló antes de F2 para que ninguna decisión de "
+        "diseño se tome mirándolo, y el recorte del universo se aplicó **sobre ese sorteo**, sin "
+        "volver a tirar el dado: cada vehículo que sobrevive conserva el lado que le había tocado.",
+        icon=":material/lock:",
+    )
+    st.error(
+        "**Corrección del 2026-09-18 (vale para las pestañas Severidad y Correlaciones).** "
+        "`regen_per_1000km` y `dist_between_regen_*` salen del marcador `signals.Regenerations`, que "
+        "**se corta el 25-05-2026 para toda la flota** (0 marcadores en jun–sep 2026 contra ~2.000 "
+        "caídas de nivel por mes en `trips`). Su correlación con la etiqueta (ρ = 0,317) es exposición "
+        "al calendario —ρ con `ProductionDay` = −0,515—, no física: contada desde las caídas de "
+        "`AirRegeneration` da ρ = 0,072. La conclusión \"las frecuencias sobreviven al truncamiento\" "
+        "queda retirada. La versión vigente del análisis es `docs/memoria/f2-eda-revision-y-features.md` "
+        "y `scripts/eda_gaps.py`; este dashboard no se regeneró.",
+        icon=":material/report:",
     )
 
     with st.sidebar:
         st.markdown("### Alcance")
         st.metric("Vehículos de dev", len(veh))
-        st.metric("Vehículos de test excluidos", meta["n_test_vehicles_excluidos"])
+        st.metric("De test (intocables)", meta["n_test_vehicles_excluidos"])
+        st.metric("Fuera del universo", meta.get("n_fuera_del_universo", 0),
+                  help="Positivos sin fecha de evento utilizable, y los mercados donde ningún "
+                       "evento es observable. Ver `src/data/usable.py`.")
         st.caption(
             f"Cache construido el {meta['created_at'][:10]} · semilla {meta['seed']}.\n\n"
             f"Filas deduplicadas: {meta['trips']['dup_clones']:,} viajes y "
