@@ -34,6 +34,21 @@ features:
 splits:
   n_splits: 5
   seed: 42
+  # De qué columna sale la etiqueta con la que se estratifican los folds. `label` es
+  # la que mide el PR-AUC (¿el evento cae en el horizonte de ESTA fila?);
+  # `event_observed` dice si el vehículo falló alguna vez, que no es lo mismo.
+  # `level: vehicle` la colapsa con max por vehículo: ¿tiene al menos un corte
+  # positivo? Ver src/eval/splits.py::make_splits.
+  stratify:
+    column: label
+    level: vehicle
+  # Guarda dura: un fold con menos de estas filas label=1 en validación hace fallar
+  # el armado. Con menos, el PR-AUC del fold es ruido; con cero, NaN.
+  min_valid_positives: 5
+  # Repeticiones de la CV, cada una con otra semilla (seed + r*10000). 1 = CV simple.
+  # La repetición 0 siempre son los folds de `seed`, así que subir R no invalida lo
+  # ya corrido: lo complementa.
+  n_repeats: 1
 
 output:
   panel: ${DATA_DIR}/processed/panel_w2000.parquet

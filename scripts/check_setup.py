@@ -7,7 +7,8 @@ Corre en segundos sobre un panel dummy chico y chequea las cuatro cosas que, si
 fallan, invalidan todo lo que venga después:
 
 1. El panel dummy cumple el contrato de datos (columnas, dtypes, prefijos).
-2. Los splits no filtran vehículos entre train y validación y cubren el panel.
+2. Los splits no filtran vehículos entre train y validación, cubren el panel,
+   se niegan a dejar un fold sin positivos y la CV repetida con R=1 es la simple.
 3. Un modelo de tasa base saca PR-AUC ≈ tasa base y ROC-AUC ≈ 0,5 (si saca más,
    hay leakage o un bug en la evaluación).
 4. Las métricas de anticipación premian a un ranker oráculo y castigan al ruido.
@@ -30,7 +31,7 @@ if hasattr(sys.stdout, "reconfigure"):
 from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from src.config import set_seed  # noqa: E402
 from src.eval.metrics import classification_metrics, lead_time_curve, operating_point  # noqa: E402
-from src.eval.splits import iter_folds, make_splits  # noqa: E402
+from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
 
 CONTRACT_COLUMNS = {
@@ -101,6 +102,83 @@ def main() -> int:
         all(f["n_valid_event_vehicles"] > 0 for f in splits["folds"]),
     )
 
+    # 2b · la estratificación nueva no cambia los folds mientras las dos variables
+    # coincidan (en el panel dummy y en el real, todo vehículo con evento tiene al
+    # menos un corte positivo). Es la compatibilidad hacia atrás, demostrada.
+    legacy = make_splits(
+        panel, n_splits=5, seed=7, stratify_column="event_observed", stratify_level="row"
+    )
+    same_folds = [f["valid_vehicles"] for f in legacy["folds"]] == [
+        f["valid_vehicles"] for f in splits["folds"]
+    ]
+    check(
+        "splits: estratificar por label/vehículo da los mismos folds que por event_observed",
+        same_folds,
+        "mientras todo vehículo con evento tenga un corte positivo",
+    )
+
+    # 2c · la guarda dura: un fold sin positivos suficientes tiene que hacer ruido.
+    thin = panel.copy()
+    thin["label"] = 0
+    # Seis vehículos con evento, una sola fila positiva cada uno: alcanzan para los 5
+    # folds (no dispara la guarda de "pocos vehículos"), pero reparten 6 positivos en
+    # 5 folds, así que alguno queda con 1 < 2.
+    positives = [g.index[-1] for _, g in
+                 panel[panel["event_observed"] == 1].groupby("vehicle_id", observed=True)][:6]
+    thin.loc[positives, "label"] = 1
+    thin_error = ""
+    try:
+        make_splits(thin, n_splits=5, seed=7, min_valid_positives=2)
+    except ValueError as exc:
+        thin_error = str(exc)
+    check(
+        "splits: un fold con pocos positivos hace fallar el armado",
+        "label=1" in thin_error and "fold" in thin_error.lower(),
+        thin_error.split(".")[0] if thin_error else "no falló (debería)",
+    )
+
+    # 2d · y si el splits.json es viejo y se armó sin la guarda, el chequeo se
+    # rehace al entrenar contra el panel que toca.
+    late_error = ""
+    try:
+        list(iter_folds(panel, splits, min_valid_positives=10_000))
+    except ValueError as exc:
+        late_error = str(exc)
+    check(
+        "splits: la guarda se rechequea al entrenar, no solo al armar los folds",
+        "chequeado al entrenar" in late_error,
+        late_error.split(".")[0] if late_error else "no falló (debería)",
+    )
+
+    few_error = ""
+    try:
+        make_splits(thin.assign(label=0), n_splits=5, seed=7)
+    except ValueError as exc:
+        few_error = str(exc)
+    check(
+        "splits: sin vehículos positivos suficientes no se arman folds",
+        "vehículo(s) positivos" in few_error,
+        few_error.split(".")[0] if few_error else "no falló (debería)",
+    )
+
+    # 2e · CV repetida: la repetición 0 es, exactamente, la CV simple.
+    repeated = make_splits(panel, n_splits=5, seed=7, n_repeats=3)
+    check(
+        "splits: R=3 conserva los folds de R=1 como repetición 0",
+        [f["valid_vehicles"] for f in repeated["repeats"][0]["folds"]]
+        == [f["valid_vehicles"] for f in splits["folds"]],
+    )
+    check(
+        "splits: cada repetición tiene su propia semilla y sus propios folds",
+        len({r["seed"] for r in repeated["repeats"]}) == 3
+        and [f["valid_vehicles"] for f in repeated["repeats"][1]["folds"]]
+        != [f["valid_vehicles"] for f in repeated["repeats"][0]["folds"]],
+    )
+    check(
+        "splits: iter_repeats recorre R juegos de folds sin fugas",
+        sum(len(masks) for _, masks in iter_repeats(panel, repeated)) == 15,
+    )
+
     # 3 · el harness sobre un modelo que no sabe nada
     predictions, fold_metrics = run_cv(panel, splits, model_name="baserate")
     oof = classification_metrics(predictions["label"], predictions["score"])
@@ -116,6 +194,44 @@ def main() -> int:
     )
     check("cv: hay predicción out-of-fold para toda fila", predictions["score"].notna().all())
     check("cv: una métrica por fold", len(fold_metrics) == splits["n_splits"])
+    check(
+        "cv: con R=1 las columnas son las de siempre (score, fold)",
+        "score_std" not in predictions.columns
+        and not [c for c in predictions.columns if c.startswith(("score_r", "fold_r"))],
+    )
+
+    # La CV repetida con R=1 tiene que dar exactamente la CV simple; con R=3, la
+    # repetición 0 sigue siendo la misma corrida (lo que se suma no pisa lo que había).
+    rep_predictions, rep_fold_metrics = run_cv(panel, repeated, model_name="baserate")
+    check(
+        "cv: R=3 reproduce la repetición 0 de la CV simple",
+        bool(np.allclose(rep_predictions["score_r0"], predictions["score"])),
+    )
+    check("cv: R=3 corre 3 × 5 folds", len(rep_fold_metrics) == 15)
+    check(
+        "cv: con R>1 el score guardado es el promedio de las repeticiones",
+        bool(
+            np.allclose(
+                rep_predictions["score"],
+                rep_predictions[[f"score_r{r}" for r in range(3)]].mean(axis=1),
+            )
+        ),
+    )
+    check(
+        "cv: lead_time_curve funciona sobre las predicciones promediadas",
+        len(lead_time_curve(rep_predictions, k_consecutive=2)) > 1,
+    )
+
+    dup_error = ""
+    try:
+        lead_time_curve(pd.concat([predictions, predictions], ignore_index=True))
+    except ValueError as exc:
+        dup_error = str(exc)
+    check(
+        "métricas: un corte repetido no pasa como alerta sostenida",
+        "repetido" in dup_error,
+        dup_error.split(".")[0] if dup_error else "no falló (debería)",
+    )
 
     # 4 · las métricas de anticipación distinguen señal de ruido
     rng = np.random.default_rng(7)

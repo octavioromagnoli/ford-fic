@@ -5,8 +5,15 @@ Dos reglas, centralizadas acá para que ningún modelo pueda saltearlas:
 1. **Split agrupado por vehículo**: un mismo `vehicle_id` nunca aparece en train y
    en validación a la vez. Si se partiera, el modelo memoriza el vehículo y no
    el mecanismo.
-2. **Estratificado por presencia de evento**: con pocos vehículos etiquetados,
-   un fold sin eventos vuelve la métrica indefinida.
+2. **Estratificado por la variable que mide la métrica**: por `label` colapsado a
+   nivel vehículo (¿tiene al menos un corte positivo?), no por `event_observed`.
+   Con pocos vehículos etiquetados, un fold sin positivos vuelve la métrica
+   indefinida, y una guarda dura (`min_valid_positives`) falla antes de que eso
+   pase en silencio.
+
+Encima de las dos, **CV repetida**: `n_repeats` juegos de folds con semillas
+distintas, para que la diferencia entre dos modelos no se confunda con la varianza
+del sorteo (plan §10, riesgo "pocos eventos").
 
 Los folds se serializan a `data/processed/splits.json` como listas de
 `vehicle_id` (no de índices de fila) para que sigan siendo válidos cuando el
@@ -42,6 +49,24 @@ logger = logging.getLogger(__name__)
 
 GROUP_COLUMN = "vehicle_id"
 EVENT_COLUMN = "event_observed"
+LABEL_COLUMN = "label"
+
+# Estratificación por defecto: la etiqueta de la FILA (`label`), colapsada a nivel
+# vehículo. El porqué está en el docstring de `make_splits`.
+STRATIFY_COLUMN = LABEL_COLUMN
+STRATIFY_LEVEL = "vehicle"
+STRATIFY_LEVELS = ("vehicle", "row")
+
+# Piso de filas positivas por fold en validación. Por debajo de esto el PR-AUC del
+# fold no es una métrica mala: es ruido, y con cero positivos queda indefinido (NaN)
+# y ensucia el promedio out-of-fold sin que nadie se entere.
+MIN_VALID_POSITIVES = 5
+
+N_REPEATS = 1
+# Separación entre las semillas de dos repeticiones. Con paso 1, la repetición 1 de
+# la semilla 42 sería la repetición 0 de la 43: dos corridas "independientes"
+# compartirían folds y nadie lo notaría.
+REPEAT_SEED_STEP = 10_000
 
 
 def _digest(vehicles: list[str]) -> str:
@@ -60,54 +85,201 @@ def panel_fingerprint(panel: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def make_splits(
+def stratify_labels(
     panel: pd.DataFrame,
     *,
-    n_splits: int = 5,
-    seed: int = 42,
     group_column: str = GROUP_COLUMN,
-    event_column: str = EVENT_COLUMN,
-) -> dict[str, Any]:
-    """Construye los folds agrupados por vehículo y estratificados por evento.
+    column: str = STRATIFY_COLUMN,
+    level: str = STRATIFY_LEVEL,
+) -> np.ndarray:
+    """Vector binario por fila con el que se estratifican los folds.
 
-    Devuelve un dict serializable: metadatos + `folds[i].valid_vehicles`.
-    El train de cada fold es el complemento, así no hay riesgo de que las dos
-    listas se desincronicen al editarlas a mano.
+    `level="row"` usa la columna tal cual. `level="vehicle"` la colapsa con `max`
+    por vehículo y la reparte de vuelta a todas sus filas: con `column="label"` eso
+    contesta *¿este vehículo tiene al menos un corte positivo?*.
+
+    El nivel no cambia que el vehículo caiga entero de un lado —eso lo garantiza
+    `groups=vehicle_id`, no la estratificación—: cambia qué se equilibra entre folds.
     """
-    _validate_panel(panel, group_column, event_column)
-
-    vehicle_level = (
-        panel.groupby(group_column, observed=True)[event_column].max().astype(int).reset_index()
-    )
-    n_event_vehicles = int(vehicle_level[event_column].sum())
-    if n_event_vehicles < n_splits:
+    if level not in STRATIFY_LEVELS:
         raise ValueError(
-            f"Solo {n_event_vehicles} vehículos con evento para {n_splits} folds. "
-            "Bajá n_splits o cambiá a CV repetida (ver plan §10, riesgo 'pocos eventos')."
+            f"`stratify_level` desconocido: {level!r}. Opciones: {list(STRATIFY_LEVELS)}"
         )
+    if column not in panel.columns:
+        raise KeyError(
+            f"El panel no tiene la columna de estratificación `{column}`. Sale del YAML "
+            "(`splits.stratify.column`), así que revisá el config antes que el panel."
+        )
+    values = panel[column]
+    if level == "vehicle":
+        values = panel.groupby(group_column, observed=True)[column].transform("max")
+    return (values.astype(float) > 0).astype(int).to_numpy()
 
+
+def _thin_fold_message(
+    *, repeat: int, fold: int, n_positives: int, minimum: int, n_valid_rows: int, where: str
+) -> str:
+    """Un solo texto para la guarda, la arme `make_splits` o la re-chequee `iter_repeats`."""
+    return (
+        f"Repetición {repeat}, fold {fold}: {n_positives} fila(s) `label=1` en validación "
+        f"sobre {n_valid_rows} (mínimo {minimum}, {where}). Con menos positivos el PR-AUC "
+        "del fold es ruido, y con cero queda indefinido y ensucia el promedio out-of-fold. "
+        "Bajá `splits.n_splits`, agrandá H, o movés `splits.min_valid_positives` en el YAML "
+        "sabiendo lo que eso implica."
+    )
+
+
+def _group_max(values: np.ndarray, groups: np.ndarray) -> int:
+    """Cuántos grupos distintos tienen al menos un 1 en `values`."""
+    return int(pd.Series(values).groupby(groups).max().sum())
+
+
+def _build_folds(
+    panel: pd.DataFrame,
+    groups: np.ndarray,
+    y: np.ndarray,
+    *,
+    n_splits: int,
+    seed: int,
+    repeat: int,
+    label_column: str,
+    min_valid_positives: int,
+) -> list[dict[str, Any]]:
+    """Los `n_splits` folds de UNA repetición, ya chequeados contra la guarda de positivos."""
+    labels = panel[label_column].astype(int).to_numpy()
+    events = (
+        panel[EVENT_COLUMN].astype(int).to_numpy() if EVENT_COLUMN in panel.columns else None
+    )
     splitter = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-    groups = panel[group_column].astype(str).to_numpy()
-    y = panel[event_column].astype(int).to_numpy()
 
     folds = []
     for fold, (_, valid_idx) in enumerate(splitter.split(np.zeros(len(panel)), y, groups)):
         valid_vehicles = sorted(pd.unique(groups[valid_idx]).tolist())
         valid_mask = np.isin(groups, valid_vehicles)
+        n_positives = int(labels[valid_mask].sum())
+        if n_positives < min_valid_positives:
+            raise ValueError(
+                _thin_fold_message(
+                    repeat=repeat,
+                    fold=fold,
+                    n_positives=n_positives,
+                    minimum=min_valid_positives,
+                    n_valid_rows=int(valid_mask.sum()),
+                    where="al armar los folds",
+                )
+            )
         folds.append(
             {
                 "fold": fold,
                 "valid_vehicles": valid_vehicles,
                 "n_valid_rows": int(valid_mask.sum()),
                 "n_train_rows": int((~valid_mask).sum()),
-                "n_valid_event_vehicles": int(
-                    vehicle_level.loc[
-                        vehicle_level[group_column].astype(str).isin(valid_vehicles), event_column
-                    ].sum()
+                "n_valid_event_vehicles": (
+                    _group_max(events[valid_mask], groups[valid_mask])
+                    if events is not None
+                    else None
                 ),
-                "valid_positive_rate": float(panel.loc[valid_mask, "label"].mean())
-                if "label" in panel.columns
-                else None,
+                "valid_positive_rate": float(labels[valid_mask].mean()),
+                # Lo que mira la guarda, escrito en el JSON para que la tabla de folds
+                # salga del archivo y no haya que recalcularla contra el panel.
+                "n_valid_positives": n_positives,
+                "n_valid_positive_vehicles": _group_max(labels[valid_mask], groups[valid_mask]),
+            }
+        )
+    return folds
+
+
+def make_splits(
+    panel: pd.DataFrame,
+    *,
+    n_splits: int = 5,
+    seed: int = 42,
+    group_column: str = GROUP_COLUMN,
+    stratify_column: str = STRATIFY_COLUMN,
+    stratify_level: str = STRATIFY_LEVEL,
+    label_column: str = LABEL_COLUMN,
+    min_valid_positives: int = MIN_VALID_POSITIVES,
+    n_repeats: int = N_REPEATS,
+) -> dict[str, Any]:
+    """Construye los folds agrupados por vehículo y estratificados.
+
+    Devuelve un dict serializable: metadatos + `repeats[r].folds[i].valid_vehicles`.
+    El train de cada fold es el complemento, así no hay riesgo de que las dos listas
+    se desincronicen al editarlas a mano.
+
+    **Por qué la estratificación sale de `label` y no de `event_observed`.** El
+    PR-AUC se calcula sobre `label` —¿el evento cae en el horizonte de ESTA fila?—,
+    mientras que `event_observed` dice si el vehículo tuvo evento alguna vez. Hoy,
+    con W=1000/G=500, los dos coinciden: los 53 vehículos de dev con evento que
+    llegan al panel tienen al menos un corte positivo, porque los cortes de un
+    vehículo con evento terminan en `E − G` y ese último corte es positivo por
+    construcción (`src/data/panel.py::vehicle_cuts`). Pero nada lo garantiza:
+    alcanza con que el QC de ventana (`min_trips_in_window`, `min_km_covered_frac`)
+    descarte los cortes tardíos de un vehículo —más probable con W grande— para que
+    entre al panel con cero positivos y la estratificación quede equilibrando una
+    variable que la métrica no usa. Derivarla de `label` cierra esa puerta sin
+    cambiar nada mientras las dos coincidan. `event_observed` sigue disponible como
+    `stratify.column` para el panel dummy y para reproducir corridas viejas.
+
+    `stratify_level="vehicle"` (default) colapsa la columna con `max` por vehículo;
+    `"row"` la usa fila a fila, lo que equilibra el CONTEO de filas positivas por
+    fold. Ninguno de los dos afecta la integridad del vehículo: eso lo da `groups`.
+
+    **Guarda de positivos.** Si un fold queda con menos de `min_valid_positives`
+    filas `label=1` en validación, esto falla nombrando repetición, fold y conteo.
+    Antes el caso pasaba en silencio y el PR-AUC del fold salía NaN.
+
+    **CV repetida.** Con `n_repeats > 1` se sortean R juegos de folds con semillas
+    `seed + r * REPEAT_SEED_STEP`. La repetición 0 usa `seed` tal cual, así que
+    subir R **no** cambia los folds que ya existían: los suma. `folds` en la raíz
+    del dict es siempre la repetición 0, para que lo que lea el formato viejo siga
+    leyendo una CV válida.
+    """
+    _validate_panel(panel, group_column, stratify_column, label_column)
+    if n_splits < 2:
+        raise ValueError(f"n_splits={n_splits}: hacen falta al menos 2 folds")
+    if n_repeats < 1:
+        raise ValueError(f"n_repeats={n_repeats}: tiene que ser >= 1 (1 = CV simple)")
+    if min_valid_positives < 1:
+        raise ValueError(
+            f"min_valid_positives={min_valid_positives}: con 0 la guarda no guarda nada. "
+            "Si un fold sin positivos es aceptable, el problema es otro."
+        )
+
+    groups = panel[group_column].astype(str).to_numpy()
+    y = stratify_labels(
+        panel, group_column=group_column, column=stratify_column, level=stratify_level
+    )
+    n_positive_vehicles = _group_max(y, groups)
+    if n_positive_vehicles < n_splits:
+        raise ValueError(
+            f"Solo {n_positive_vehicles} vehículo(s) positivos según `{stratify_column}` "
+            f"({stratify_level}) para {n_splits} folds. Bajá n_splits o subí H "
+            "(ver plan §10, riesgo 'pocos eventos')."
+        )
+
+    events = panel[EVENT_COLUMN] if EVENT_COLUMN in panel.columns else None
+    n_event_vehicles = (
+        _group_max(events.astype(int).to_numpy(), groups) if events is not None else None
+    )
+
+    repeats = []
+    for repeat in range(n_repeats):
+        repeat_seed = int(seed) + repeat * REPEAT_SEED_STEP
+        repeats.append(
+            {
+                "repeat": repeat,
+                "seed": repeat_seed,
+                "folds": _build_folds(
+                    panel,
+                    groups,
+                    y,
+                    n_splits=n_splits,
+                    seed=repeat_seed,
+                    repeat=repeat,
+                    label_column=label_column,
+                    min_valid_positives=min_valid_positives,
+                ),
             }
         )
 
@@ -116,11 +288,73 @@ def make_splits(
         "n_splits": n_splits,
         "seed": seed,
         "group_column": group_column,
-        "event_column": event_column,
+        "stratify": {
+            "column": stratify_column,
+            "level": stratify_level,
+            "n_positive_vehicles": n_positive_vehicles,
+        },
+        "label_column": label_column,
+        "min_valid_positives": int(min_valid_positives),
+        "n_repeats": int(n_repeats),
         "panel": panel_fingerprint(panel),
         "n_event_vehicles": n_event_vehicles,
-        "folds": folds,
+        "repeats": repeats,
+        # Espejo de la repetición 0: compatibilidad con todo lo que lee `splits["folds"]`.
+        "folds": repeats[0]["folds"],
     }
+
+
+# Con qué parámetros se armó un `splits.json` que no los declara: son los que el
+# código usaba antes de que la estratificación fuera configurable.
+LEGACY_OPTIONS = {"stratify_column": EVENT_COLUMN, "stratify_level": "row", "n_repeats": 1}
+
+
+def split_options(cfg: dict[str, Any], *, key: str = "splits") -> dict[str, Any]:
+    """Traduce el bloque `splits:` de un YAML a los kwargs de `make_splits` (regla 7).
+
+    Vive acá y no en cada script para que los cuatro entrypoints que arman folds
+    —`build_dataset.py`, `make_splits.py`, `make_dummy.py`, `train.py`— lean las
+    mismas claves con los mismos defaults. Un default distinto entre dos scripts es
+    un split distinto sin que ningún YAML lo diga.
+    """
+    block = cfg.get(key, {}) or {}
+    stratify = block.get("stratify", {}) or {}
+    return {
+        "n_splits": int(block.get("n_splits", 5)),
+        "seed": int(block.get("seed", 42)),
+        "stratify_column": str(stratify.get("column", STRATIFY_COLUMN)),
+        "stratify_level": str(stratify.get("level", STRATIFY_LEVEL)),
+        "min_valid_positives": int(block.get("min_valid_positives", MIN_VALID_POSITIVES)),
+        "n_repeats": int(block.get("n_repeats", N_REPEATS)),
+    }
+
+
+def splits_declared(splits: dict[str, Any]) -> dict[str, Any]:
+    """Con qué parámetros se armó un `splits.json` (incluido uno del formato viejo)."""
+    stratify = splits.get("stratify") or {}
+    return {
+        "n_splits": int(splits.get("n_splits", len(splits.get("folds", [])))),
+        "seed": splits.get("seed"),
+        "stratify_column": str(stratify.get("column", LEGACY_OPTIONS["stratify_column"])),
+        "stratify_level": str(stratify.get("level", LEGACY_OPTIONS["stratify_level"])),
+        "n_repeats": int(splits.get("n_repeats", len(_repeats_of(splits)))),
+    }
+
+
+def splits_match_options(splits: dict[str, Any], options: dict[str, Any]) -> list[str]:
+    """Diferencias entre lo que declara el YAML y con qué se armó el archivo congelado.
+
+    Devuelve la lista de discrepancias (vacía si coinciden). No compara
+    `min_valid_positives`: ese no cambia los folds, y el valor del YAML se aplica
+    igual al entrenar, aunque el archivo sea viejo y no lo traiga.
+    """
+    declared = splits_declared(splits)
+    diffs = []
+    for key in ("n_splits", "seed", "stratify_column", "stratify_level", "n_repeats"):
+        want, got = options.get(key), declared.get(key)
+        if want is not None and got is not None and want != got:
+            diffs.append(f"{key} (YAML={want!r}, archivo={got!r})")
+    return diffs
 
 
 def make_test_split(
@@ -450,14 +684,38 @@ def load_test_split(path: str | Path) -> dict[str, Any]:
     return _read_json(target)
 
 
-def iter_folds(
-    panel: pd.DataFrame, splits: dict[str, Any], *, strict: bool = True
-) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
-    """Itera `(fold, train_mask, valid_mask)` sobre el panel dado.
+def _repeats_of(splits: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normaliza el formato: un `splits.json` viejo (solo `folds`) es una repetición."""
+    if "repeats" in splits:
+        if not splits["repeats"]:
+            raise ValueError("El splits.json no tiene ninguna repetición")
+        return splits["repeats"]
+    if "folds" in splits:
+        return [{"repeat": 0, "seed": splits.get("seed"), "folds": splits["folds"]}]
+    raise KeyError("El splits.json no tiene ni `repeats` ni `folds`: no es un split de este repo")
+
+
+def iter_repeats(
+    panel: pd.DataFrame,
+    splits: dict[str, Any],
+    *,
+    strict: bool = True,
+    min_valid_positives: int | None = None,
+) -> Iterator[tuple[int, list[tuple[int, np.ndarray, np.ndarray]]]]:
+    """Itera `(repeat, [(fold, train_mask, valid_mask), ...])` sobre el panel dado.
+
+    Es el único camino para conseguir máscaras de fold: `run_cv` no arma splits, los
+    pide (CLAUDE.md, regla 2).
 
     Con `strict=True` verifica que la huella del panel coincida con la que se usó
-    para generar los splits: un panel regenerado con otro Δ cambia el número de
-    filas y ahí es donde aparecen los bugs silenciosos.
+    para generar los splits: un panel regenerado con otro Δ cambia el set de
+    vehículos y ahí es donde aparecen los bugs silenciosos.
+
+    `min_valid_positives` re-chequea la guarda **al entrenar**, no solo al armar los
+    folds. Importa porque un `splits.json` congelado antes de que la guarda existiera
+    no la trae adentro: sin este segundo control, un fold flaco entra a la CV igual.
+    Si no se pasa, se usa el valor que el archivo declare; si el archivo tampoco lo
+    trae, no se chequea (y se avisa por log una vez).
     """
     group_column = splits.get("group_column", GROUP_COLUMN)
     if strict:
@@ -469,14 +727,66 @@ def iter_folds(
                 "Regeneralos antes de entrenar."
             )
 
+    if min_valid_positives is None:
+        min_valid_positives = splits.get("min_valid_positives")
+    label_column = splits.get("label_column", LABEL_COLUMN)
+    labels = (
+        panel[label_column].astype(int).to_numpy() if label_column in panel.columns else None
+    )
+    if min_valid_positives and labels is None:
+        logger.warning(
+            "El panel no tiene `%s`: no se puede chequear el mínimo de positivos por fold",
+            label_column,
+        )
+
     groups = panel[group_column].astype(str).to_numpy()
-    for fold in splits["folds"]:
-        valid_mask = np.isin(groups, np.array(fold["valid_vehicles"], dtype=object).astype(str))
-        train_mask = ~valid_mask
-        assert_no_vehicle_leakage(groups[train_mask], groups[valid_mask])
-        if valid_mask.sum() == 0 or train_mask.sum() == 0:
-            raise ValueError(f"Fold {fold['fold']} vacío para este panel")
-        yield int(fold["fold"]), train_mask, valid_mask
+    for entry in _repeats_of(splits):
+        repeat = int(entry.get("repeat", 0))
+        masks: list[tuple[int, np.ndarray, np.ndarray]] = []
+        for fold in entry["folds"]:
+            valid_mask = np.isin(groups, np.array(fold["valid_vehicles"], dtype=object).astype(str))
+            train_mask = ~valid_mask
+            assert_no_vehicle_leakage(groups[train_mask], groups[valid_mask])
+            if valid_mask.sum() == 0 or train_mask.sum() == 0:
+                raise ValueError(
+                    f"Fold {fold['fold']} de la repetición {repeat} vacío para este panel"
+                )
+            if min_valid_positives and labels is not None:
+                n_positives = int(labels[valid_mask].sum())
+                if n_positives < int(min_valid_positives):
+                    raise ValueError(
+                        _thin_fold_message(
+                            repeat=repeat,
+                            fold=int(fold["fold"]),
+                            n_positives=n_positives,
+                            minimum=int(min_valid_positives),
+                            n_valid_rows=int(valid_mask.sum()),
+                            where="chequeado al entrenar contra este panel",
+                        )
+                    )
+            masks.append((int(fold["fold"]), train_mask, valid_mask))
+        yield repeat, masks
+
+
+def iter_folds(
+    panel: pd.DataFrame,
+    splits: dict[str, Any],
+    *,
+    strict: bool = True,
+    min_valid_positives: int | None = None,
+) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
+    """Itera `(fold, train_mask, valid_mask)` de la **repetición 0**.
+
+    Existe para el código que no sabe de CV repetida (y para leer un `splits.json`
+    del formato viejo). Lo que entrena de verdad usa `iter_repeats`: con R > 1 esto
+    devolvería un quinto de los folds y el promedio saldría de menos pasadas de las
+    que el config pidió.
+    """
+    for _, masks in iter_repeats(
+        panel, splits, strict=strict, min_valid_positives=min_valid_positives
+    ):
+        yield from masks
+        return
 
 
 def assert_no_vehicle_leakage(train_groups: np.ndarray, valid_groups: np.ndarray) -> None:
@@ -514,8 +824,8 @@ def _read_json(path: str | Path) -> dict[str, Any]:
         return json.load(fh)
 
 
-def _validate_panel(panel: pd.DataFrame, group_column: str, event_column: str) -> None:
-    missing = [c for c in (group_column, event_column) if c not in panel.columns]
+def _validate_panel(panel: pd.DataFrame, *columns: str) -> None:
+    missing = [c for c in dict.fromkeys(columns) if c not in panel.columns]
     if missing:
         raise KeyError(f"El panel no tiene las columnas requeridas: {missing}")
     if panel.empty:

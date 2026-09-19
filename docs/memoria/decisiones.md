@@ -5,6 +5,75 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-18 · La CV estratifica por `label` a nivel vehículo, con guarda de positivos y CV repetida
+
+**Decidió:** Santino (auditoría de la CV sobre el universo de 364). **Código:**
+`src/eval/splits.py`. **Parámetros:** bloque `splits:` de
+`configs/data/panel_v1.yaml` y de cada `configs/exp_*.yaml`.
+
+**Qué cambia.** `make_splits()` estratifica por `label` colapsado a nivel vehículo
+(*¿tiene al menos un corte positivo?*) en lugar de `event_observed`; falla si algún
+fold queda con menos de `min_valid_positives` filas `label=1` en validación
+(default 5); y acepta `n_repeats` juegos de folds con semillas distintas
+(`seed + r·10000`, default 1). Las tres salen del YAML.
+
+**Por qué la estratificación.** El PR-AUC se calcula sobre `label` —¿el evento cae
+en el horizonte de ESTA fila?— y se estratificaba por `event_observed` —¿el vehículo
+falló alguna vez?—. Hoy las dos coinciden y por eso **el reparto no cambió**: en los
+cuatro paneles que existen, todo vehículo con evento que llega al panel tiene al
+menos un corte positivo (panel v1: 53 de 53; w2000: 46; w3000: 40; sin emparejar:
+53). No es casualidad: los cortes de un vehículo con evento terminan en `E − G` y
+`label = 1 ⟺ corte ≥ E − G − H`, así que **el último corte es positivo por
+construcción** (`src/data/panel.py::vehicle_cuts`). La brecha se abre solo si el QC
+de ventana (`min_trips_in_window`, `min_km_covered_frac`) descarta los cortes
+tardíos de un vehículo, que es más probable cuanto más grande sea W. Derivarla de
+`label` cierra esa puerta antes de que W crezca, y el día que se abra, la CV se
+entera en vez de equilibrar una variable que la métrica no usa.
+
+**Lo que NO arregla.** Estratificar a nivel vehículo no achica la dispersión de
+positivos por fold, porque un vehículo aporta entre 1 y 6 filas positivas. Con la
+terna actual el spread es 1,13x (47/53/53/52/49) y sigue igual. Lo único medido que
+lo baja es estratificar por `label` **fila a fila** (`stratify.level: row`): 1,06x
+con seed 42, y entre 1,04x y 1,08x en cinco semillas, contra 1,08x–1,20x. Quedó
+implementado y configurable, pero **no adoptado**: cambia el reparto y obliga a
+recorrer de nuevo todo lo comparado. Se decide cuando haya modelos que comparar.
+
+**Por qué la guarda.** `make_splits` reportaba `valid_positive_rate` y no lo
+chequeaba: un fold sin positivos daba PR-AUC = NaN y se promediaba en silencio. La
+guarda vieja (`n_event_vehicles < n_splits`) miraba la variable equivocada por el
+mismo motivo que la estratificación. Ahora falla nombrando repetición, fold y
+conteo, y se **re-chequea al entrenar** (`iter_repeats`), porque un `splits.json`
+congelado antes de que la guarda existiera no la trae adentro.
+
+**Por qué la CV repetida.** Con 47–53 positivos por fold, la diferencia de PR-AUC
+entre dos modelos se confunde con la varianza del sorteo (plan §10, "pocos
+eventos"). Default 1 para no mover nada: la repetición 0 usa `seed` tal cual, así
+que subir R **suma** pasadas y no invalida lo ya corrido. Medido con el piso de
+tasa base y R=5: PR-AUC 0,1221 ± 0,0007 (min 0,1211, max 0,1230).
+
+**Qué se guarda y qué no.** `predictions.parquet` sigue teniendo **una fila por
+corte**, con `score` = promedio de las R repeticiones (más `score_std` y
+`score_r{i}`/`fold_r{i}` cuando R > 1). El motivo es `lead_time_curve()`: agrupa por
+vehículo y busca K cortes seguidos sobre el umbral, así que R filas por corte harían
+pasar un pico aislado por alerta sostenida e inflarían la anticipación —justo el
+número del pitch—. `_vehicle_sequences()` ahora falla si le llegan cortes
+duplicados. El **PR-AUC de selección es el promedio de los PR-AUC de cada
+repetición**, no el PR-AUC de los scores promediados: eso último es un ensamble
+encubierto y da mejor de lo que el modelo es.
+
+**Cómo se reproduce:**
+
+```bash
+python scripts/check_setup.py                                      # 28 chequeos
+python scripts/make_splits.py --config configs/data/panel_v1.yaml --dry-run
+```
+
+El segundo rearma los folds sobre el panel que ya existe (sin releer los crudos) y
+dice si el reparto cambia respecto del `splits.json` congelado. Al adoptar esto
+informó `IDÉNTICO`.
+
+---
+
 ## 2026-09-18 · Panel v1: W=1000, G=500, H=3000, Δ=500; sanos emparejados por odómetro **y mes**
 
 **Decidió:** Santino (implementación de F2). **Detalle y evidencia:**

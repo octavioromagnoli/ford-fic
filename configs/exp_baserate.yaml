@@ -15,6 +15,15 @@ splits:
   seed: 42
   build_if_missing: false    # los folds los deja scripts/build_dataset.py, sobre dev
   strict: true
+  # Tiene que decir lo mismo que el splits.json congelado: los folds salen del
+  # archivo, así que si esto no coincide, train.py falla en vez de entrenar una
+  # corrida distinta de la que el YAML describe. Se regenera con
+  # `python scripts/make_splits.py --config configs/data/panel_v1.yaml`.
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5     # guarda dura: filas label=1 por fold en validación
+  n_repeats: 1               # CV repetida: R pasadas con semillas distintas
   # Holdout dev/test congelado (regla 2): la CV corre solo sobre dev.
   test_split: ${DATA_DIR}/processed/test_split.json
 

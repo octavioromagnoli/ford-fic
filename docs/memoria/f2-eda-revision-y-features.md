@@ -207,9 +207,10 @@ mes del corte)** reproduce la de las filas positivas de dev, tolerando un 25% de
 
 Panel resultante: **2.507 filas, 211 vehículos**; dev 2.029 filas / 171 vehículos / 53
 con evento (todos con algún positivo) / 254 positivas (tasa 0,125); test 478 filas / 40
-vehículos / 14 con evento / 69 positivas. 34 vehículos de test no aparecen (sanos sin
-corte verificable o fuera de las celdas emparejadas, y 6 eventos con menos de 1.500 km
-de historial previo).
+vehículos. Del test no se registra nada más (ni positivos ni tasa): `build_dataset.py`
+solo imprime filas y vehículos de ese lado, y `panel_meta.json` igual. 34 vehículos de
+test no aparecen (sanos sin corte verificable o fuera de las celdas emparejadas, o
+eventos con menos de 1.500 km de historial previo).
 
 ### 4.4 · Qué da, honestamente (dev, CV agrupada, folds congelados)
 

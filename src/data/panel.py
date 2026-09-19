@@ -168,20 +168,17 @@ def build_panel(
     panel["gap_km"] = float(cfg.gap_km)
     panel = panel[_column_order(panel)]
 
+    # El informe no cuenta positivos: el panel trae dev y test, y una cifra global permite
+    # deducir la de test por diferencia. Los positivos se reportan sobre dev, en el script.
     report = {
         "n_vehicles_in": int(len(vehicles)),
         "n_vehicles_out": int(panel[ID_COL].nunique()),
-        "n_event_vehicles_out": int(panel.groupby(ID_COL)["event_observed"].max().sum()),
-        "n_event_vehicles_with_positive": int(panel.loc[panel["label"].eq(1), ID_COL].nunique()),
         "rows": int(len(panel)),
-        "rows_positive": int(panel["label"].sum()),
         "rows_dropped_qc": rows_dropped_qc,
         "dropped_vehicles": {k: v for k, v in dropped.items()},
     }
-    logger.info("Panel: %d filas, %d vehículos (%d con evento, %d con algún positivo), %d positivos; "
-                "QC descartó %d filas; vehículos sin cortes: %s",
-                report["rows"], report["n_vehicles_out"], report["n_event_vehicles_out"],
-                report["n_event_vehicles_with_positive"], report["rows_positive"], rows_dropped_qc,
+    logger.info("Panel: %d filas, %d vehículos; QC descartó %d filas; vehículos sin cortes: %s",
+                report["rows"], report["n_vehicles_out"], rows_dropped_qc,
                 {k: len(v) for k, v in dropped.items()})
     return panel, report
 

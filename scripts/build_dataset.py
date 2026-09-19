@@ -51,7 +51,13 @@ from src.data.anchor import estimate_origin_day, event_dates, project_dates_to_o
 from src.data.join import load_vehicle_static  # noqa: E402
 from src.data.panel import LabelConfig, build_panel, match_healthy_cuts  # noqa: E402
 from src.data.subset import read_table_for_vehicles  # noqa: E402
-from src.eval.splits import load_test_split, make_splits, save_splits, test_split_masks  # noqa: E402
+from src.eval.splits import (  # noqa: E402
+    load_test_split,
+    make_splits,
+    save_splits,
+    split_options,
+    test_split_masks,
+)
 from src.features.signals import derive_signal_columns  # noqa: E402
 from src.features.trips import derive_trip_columns  # noqa: E402
 from src.features.windows import load_feature_specs  # noqa: E402
@@ -146,7 +152,7 @@ def main() -> int:
     # 6 · holdout, splits de CV sobre dev, salida ----------------------------------
     dev_mask, test_mask = test_split_masks(panel, split, strict=True)
     dev_panel = panel.loc[dev_mask].reset_index(drop=True)
-    splits = make_splits(dev_panel, n_splits=int(cfg["splits"]["n_splits"]), seed=int(cfg["splits"]["seed"]))
+    splits = make_splits(dev_panel, **split_options(cfg))
 
     panel_path = resolve_path(cfg["output"]["panel"])
     ensure_dir(panel_path.parent)
@@ -175,11 +181,20 @@ def main() -> int:
         "panel": report,
         "sampling": sampling_summary,
         "dev": _side_summary(panel.loc[dev_mask]),
-        "test": _side_summary(panel.loc[test_mask]),
+        # Del test solo se registra cuántos vehículos quedaron con filas: ni positivos ni
+        # tasa. Es el holdout; hasta la corrida final nadie lo mira, ni en agregado.
+        "test": {"rows": int(test_mask.sum()), "vehicles": int(panel.loc[test_mask, ID].nunique())},
         "columns": {"feat": feat_cols, "static": static_cols, "aux": aux_cols},
         "thresholds": spec_cfg.get("thresholds"),
         "clip": spec_cfg.get("clip"),
-        "splits": {"n_splits": splits["n_splits"], "seed": splits["seed"], "panel": splits["panel"]},
+        "splits": {
+            "n_splits": splits["n_splits"],
+            "seed": splits["seed"],
+            "stratify": splits["stratify"],
+            "min_valid_positives": splits["min_valid_positives"],
+            "n_repeats": splits["n_repeats"],
+            "panel": splits["panel"],
+        },
     }
     meta_path = resolve_path(cfg["output"]["meta"])
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False, default=_json_default), encoding="utf-8")
@@ -189,12 +204,12 @@ def main() -> int:
           f"Δ={label_cfg.cut_step_km:.0f} km · censurados: {label_cfg.censored_policy}")
     print(f"origen         : día {origin_day:.0f} desde epoch (IQR {anchor_stats['iqr_days']:.2f} d) · "
           f"evento mediano {meta['events']['odo_km_median']:.0f} km · fuentes {source_counts}")
-    print(f"filas          : {len(panel)} · positivas {int(panel['label'].sum())} "
-          f"(tasa {panel['label'].mean():.4f}) · features {len(feat_cols)} feat_ + {len(static_cols)} static_ + {len(aux_cols)} aux_")
-    for side, mask in (("dev", dev_mask), ("test", test_mask)):
-        s = _side_summary(panel.loc[mask])
-        print(f"{side:<15}: {s['rows']} filas · {s['vehicles']} vehículos ({s['event_vehicles']} con evento, "
-              f"{s['event_vehicles_with_positive']} con positivo) · {s['rows_positive']} positivas · tasa {s['positive_rate']:.4f}")
+    print(f"filas          : {len(panel)} (dev + test) · features {len(feat_cols)} feat_ + "
+          f"{len(static_cols)} static_ + {len(aux_cols)} aux_")
+    s = _side_summary(panel.loc[dev_mask])
+    print(f"{'dev':<15}: {s['rows']} filas · {s['vehicles']} vehículos ({s['event_vehicles']} con evento, "
+          f"{s['event_vehicles_with_positive']} con positivo) · {s['rows_positive']} positivas · tasa {s['positive_rate']:.4f}")
+    print(f"{'test':<15}: {int(test_mask.sum())} filas · {panel.loc[test_mask, ID].nunique()} vehículos (holdout: no se mira nada más)")
     if sampling_summary:
         print(f"sanos          : {sampling_summary['healthy_rows_before']} -> {sampling_summary['healthy_rows_after']} filas "
               f"({sampling_summary['healthy_vehicles_before']} -> {sampling_summary['healthy_vehicles_after']} vehículos) "

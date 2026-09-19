@@ -90,6 +90,20 @@ def _first_sustained_index(flags: np.ndarray, k: int) -> int | None:
 def _vehicle_sequences(predictions: pd.DataFrame) -> dict[str, dict[str, np.ndarray | int]]:
     """Agrupa por vehículo y ordena por odómetro (una sola vez, se reusa por umbral)."""
     _validate_predictions(predictions)
+
+    # Un corte repetido rompe la regla de alerta sostenida: la misma fila contada dos
+    # veces hace que un pico aislado parezca una racha de K, y la anticipación sale
+    # inflada. Pasa si alguien serializa las R repeticiones de la CV repetida en
+    # formato largo (`run_cv` guarda el promedio justamente para evitarlo) o si el
+    # panel tiene varios horizontes por corte. Falla acá, no en el número del pitch.
+    duplicated = predictions.duplicated(subset=["vehicle_id", "cut_odo"]).sum()
+    if duplicated:
+        raise ValueError(
+            f"{duplicated} fila(s) con `(vehicle_id, cut_odo)` repetido. Las métricas de "
+            "anticipación necesitan una fila por corte: promediá las repeticiones (ver "
+            "`src/training/cv.py::run_cv`) o filtrá un solo horizonte antes de llamar."
+        )
+
     ordered = predictions.sort_values(["vehicle_id", "cut_odo"])
     sequences: dict[str, dict[str, np.ndarray | int]] = {}
     for vehicle_id, group in ordered.groupby("vehicle_id", observed=True, sort=False):
@@ -243,6 +257,27 @@ def bootstrap_ci(
         "point": float(func(clean)),
         "lo": float(np.quantile(stats, alpha / 2)),
         "hi": float(np.quantile(stats, 1 - alpha / 2)),
+        "n": int(clean.size),
+    }
+
+
+def dispersion(values: Sequence[float]) -> dict[str, float]:
+    """Media, desvío y extremos de una métrica **entre repeticiones** de la CV.
+
+    Es la otra mitad de la CV repetida: sin la dispersión, R pasadas son solo un
+    número más estable y no se ve si la diferencia entre dos modelos entra dentro
+    del ruido del sorteo. Desvío poblacional (ddof=0) porque las R repeticiones son
+    las que hay, no una muestra de una población de repeticiones.
+    """
+    clean = np.asarray([v for v in values if np.isfinite(v)], dtype=float)
+    if clean.size == 0:
+        return {"mean": float("nan"), "std": float("nan"), "min": float("nan"),
+                "max": float("nan"), "n": 0}
+    return {
+        "mean": float(clean.mean()),
+        "std": float(clean.std(ddof=0)),
+        "min": float(clean.min()),
+        "max": float(clean.max()),
         "n": int(clean.size),
     }
 
