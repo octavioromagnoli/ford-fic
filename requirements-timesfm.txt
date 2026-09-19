@@ -1,0 +1,5 @@
+# Dependencia OPCIONAL: solo para scripts/eval_timesfm.py. No entra a requirements.txt
+# (pinneado y compartido) hasta que se discuta en PR.
+#   Apple silicon:  uv pip install -r requirements-timesfm.txt
+#   Linux/CUDA:     cambiar el extra a [torch] y model.backend: torch en el YAML
+timesfm[mlx]==3.0.2

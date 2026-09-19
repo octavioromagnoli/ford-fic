@@ -86,8 +86,9 @@ def derive_trip_columns(
 
     Devuelve `(trips, contadores)`. Se descartan (y se cuentan) las filas sin
     `OdometerTripEnd` y las de kilometraje negativo: no tienen posición confiable
-    sobre el eje del panel. Todo lo demás se conserva; las fechas nulas (0,3%) solo
-    dejan en NaN las derivadas temporales.
+    sobre el eje del panel. Todo lo demás se conserva; una fecha nula solo deja en NaN
+    las derivadas temporales (con `date_format: ISO8601` en `raw_sources.yaml` no hay
+    ninguna: el 0,3% que había era de parseo, ver `docs/memoria/f2-fechas-formato-mixto.md`).
     """
     missing = [c for c in REQUIRED if c not in trips.columns]
     if missing:

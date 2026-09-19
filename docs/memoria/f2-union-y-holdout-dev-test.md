@@ -89,11 +89,9 @@ Solo las columnas con algún nulo:
 |---|---|---|---|
 | `signals` | `Regenerations` / `DistanceBetweenRegenerations` | 10.561.841 | 0,9947 |
 | `signals` | `OdometerValue` | 1.183.603 | **0,1115** |
-| `signals` | `eventTimestamp` | 18.124 | 0,0017 |
 | `signals` | `Message` | 4.227 | 0,0004 |
 | `trips` | `KilometerPerHour` | 821.929 | 0,3247 |
 | `trips` | `EngineOilLifePC*` / `AirFilter*` / `AirRegeneration*` | ~6.750 | 0,0027 |
-| `trips` | `TripDatetimeStart` / `TripDatetimeEnd` | 4.464 / 3.298 | 0,0018 |
 | `trips` | `OdometerTripStart` / `End`, `FuelLvl*` | 8 | 0,000003 |
 | `vehicles` | `IdentificationDate` | 742 | 0,6625 (es la etiqueta) |
 | `vehicles` | `daysUntilSale` | 18 | 0,0161 |
@@ -108,11 +106,10 @@ Solo las columnas con algún nulo:
   `KilometerPerHour` y `FuelLvl*` están vacíos y el resto poblado. Son 3 por millón
   —no cambia la decisión de usar `trips` como eje— pero el "ningún nulo" de F1 era
   literal y ya no lo es.
-- **Nuevo: `TripDatetimeStart` tiene 4.464 nulos (0,18%) y `TripDatetimeEnd` 3.298.**
-  No estaba medido. Importa en dos lugares: el primer viaje por vehículo (que es el
-  insumo del anclaje) y cualquier ventana cortada sobre el eje de fechas.
-- **Nuevo: `eventTimestamp` tiene 18.124 nulos (0,17%)** en `signals`. Esas filas no
-  se pueden ubicar en el tiempo ni imputarles odómetro por el viaje que las contiene.
+- **Las fechas no tienen nulos.** Esta tabla registraba 4.464 / 3.298 nulos en
+  `TripDatetimeStart` / `TripDatetimeEnd` y 18.124 en `eventTimestamp`: eran un error
+  de parseo (dos formatos mezclados), no del dato. Con `date_format: ISO8601` son 0.
+  Ver [f2-fechas-formato-mixto.md](f2-fechas-formato-mixto.md).
 - `KilometerPerHour` da 32,47% contra el "~31%" documentado: misma foto.
 - `daysUntilSale`, que **sí es una `static_*` del set base**, tiene 18 nulos. La
   imputación va dentro del `Pipeline` de cada fold (regla 3), no sobre el panel.
