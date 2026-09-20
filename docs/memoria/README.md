@@ -37,6 +37,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-cnn-lstm-tutora.md](f3-cnn-lstm-tutora.md) | La solución de la tutora (CNN-LSTM, rama dinámica + estática) como baseline: cómo se interpretó, cuánto da y qué auditorías pasó |
 | [f2-fechas-formato-mixto.md](f2-fechas-formato-mixto.md) | Las fechas no tienen nulos: el 0,3% era parseo de dos formatos mezclados, y también rompía el dedupe de `signals` |
 | [f2-umbral-regeneraciones.md](f2-umbral-regeneraciones.md) | Por qué las caídas de 5 puntos son ruido y el detector pasa a exigir 15 |
+| [f3-mil-agregacion-vehiculo.md](f3-mil-agregacion-vehiculo.md) | Medir por vehículo y no por corte (MIL): cuánto sube el lift de verdad y cuánto es el tamaño de la bolsa |
 | [f3-timesfm-zeroshot.md](f3-timesfm-zeroshot.md) | TimesFM zero-shot en el panel v1: no le gana a la tasa base, pero señaló el desvío respecto de la historia del vehículo |
 | [f3-survival-stacking.md](f3-survival-stacking.md) | Supervivencia en tiempo discreto sobre el panel: empata en PR-AUC pero calibrado y con el doble de detección; por qué el efecto aleatorio por vehículo no paga; y por qué la auditoría (a) de §0.4 no es un null en este panel |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
@@ -52,8 +53,10 @@ python scripts/eda_gaps.py         # complemento del EDA: factibilidad, perfil a
 python scripts/build_dataset.py --config configs/data/panel_v1.yaml   # panel real + splits sobre dev + panel_meta.json
 python scripts/log_panel_artifact.py --config configs/data/panel_v1.yaml  # publica panel-v1 y test-split como wandb Artifacts
 python scripts/train.py --config configs/exp_baserate.yaml            # piso contra el panel real
+python scripts/train.py --config configs/exp_lgbm_panel_v1_mil.yaml    # el mismo modelo, medido por vehículo
+python scripts/audit_mil_bagsize.py f3-lgbm-panel-v1-mil              # ¿el lift por vehículo es señal o tamaño de bolsa?
 python scripts/audit_model.py --config configs/exp_<x>.yaml           # las auditorías obligatorias de F3 §0.4
-python scripts/check_setup.py      # 36 chequeos del harness
+python scripts/check_setup.py      # chequeos del harness
 ```
 
 > Ojo: `notebooks/eda-exhaustivo-dev.ipynb` §6.2, §6.3 y §7.4 muestran `regen_per_1000km`
