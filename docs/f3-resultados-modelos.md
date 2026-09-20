@@ -68,10 +68,20 @@ hay una mejora real**, pero mucho más chica que el ×4: el ROC sube 0,086 punto
 
 Y hay una tercera lectura que es la que más importa, del test de permutación:
 
-| panel | nulo (etiqueta permutada) | real | p |
-|---|---|---|---|
-| v1 canónico | ROC **0,555 ± 0,059** | 0,617 | **0,20** |
-| evento ficticio | ROC **0,501 ± 0,057** | 0,703 | **< 0,001** |
+| panel | modelo | nulo (etiqueta permutada) | real | p |
+|---|---|---|---|---|
+| v1 canónico | `logistic_l1` | ROC **0,555 ± 0,059** | 0,617 | **0,20** |
+| v1 canónico | `gbm` | ROC **0,541 ± 0,043** | 0,603 | **0,067** |
+| evento ficticio | `logistic` | ROC **0,501 ± 0,057** | 0,703 | **< 0,001** |
+| evento ficticio | `gbm` | ROC **0,504 ± 0,065** | 0,692 | **< 0,001** |
+
+**Los dos modelos cuentan la misma historia, así que no es cosa de uno.** En el v1 el
+nulo está alto (0,54–0,56) y ninguno de los dos lo despega: p = 0,20 y p = 0,067. En el
+panel del evento ficticio el nulo vuelve a 0,50 y los dos pasan con p < 0,001.
+
+El desvío del nulo también dice algo: es más chico en el v1 (±0,043 con 2.029 filas) que
+en el panel nuevo (±0,065 con 455). Más filas estiman mejor — el problema del v1 nunca
+fue la precisión sino **dónde está centrado el nulo**.
 
 **El nulo del panel v1 no es 0,50: es 0,555.** Con la etiqueta rota, el modelo todavía
 saca 0,555 de ese panel, porque las filas positivas son los últimos cortes de su vehículo
@@ -127,6 +137,7 @@ python scripts/train.py --config configs/exp_logistic_pseudo.yaml
 python scripts/train.py --config configs/exp_gbm_pseudo.yaml
 python scripts/compare.py
 python scripts/permutation_test.py --config configs/exp_logistic_pseudo.yaml   # el nulo del panel
+python scripts/permutation_test.py --config configs/exp_gbm_pseudo.yaml
 ```
 
 El catálogo completo de modelos probados, con su config y su panel, está en
