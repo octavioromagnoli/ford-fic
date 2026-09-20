@@ -27,10 +27,21 @@ Y el protocolo, que no cambia con el modelo:
 2. **Presupuesto de comparaciones**: con ~12 eventos por fold, más de 6–8 candidatos
    garantiza que "el mejor" sea ruido. Preregistrar la lista y no agregar sobre la marcha.
 3. CV repetida (3 semillas de folds) para cualquier diferencia que se quiera declarar.
-4. Tres auditorías obligatorias por modelo: (a) permutar `label` dentro de cada
-   vehículo → PR-AUC tiene que caer a la tasa base; (b) agregar `aux_air_temp_avg`,
-   `aux_regen_marker_per_1000km`, `aux_static_ProductionDay` como `feat_` → el ROC no
-   tiene que saltar; (c) importancias/SHAP contra la hipótesis física (§3.2 del doc de F2).
+4. Tres auditorías obligatorias por modelo, que corre
+   `scripts/audit_ordinal_horizon.py` sobre cualquier YAML de experimento:
+   (a) permutar la etiqueta y reentrenar, con **dos nulos**; (b) agregar
+   `aux_air_temp_avg`, `aux_regen_marker_per_1000km`, `aux_static_ProductionDay` como
+   `feat_` → el ROC no tiene que saltar; (c) importancias/SHAP contra la hipótesis
+   física (§3.2 del doc de F2).
+
+   > **Corregido el 20-09-2026.** Este punto decía "permutar `label` dentro de cada
+   > vehículo → PR-AUC tiene que caer a la tasa base", y esa expectativa es falsa en
+   > este panel: permutando adentro del vehículo, un sano sigue sin ninguna fila
+   > positiva, así que la etiqueta permutada se predice perfecto desde la cohorte y el
+   > nulo queda muy por encima de la tasa base. El que tiene que caer a la tasa base es
+   > el nulo **global**; el nulo **intra-vehículo** es el piso contra el que se compara
+   > el modelo. Medido, ningún modelo del repo —tampoco el control binario— le gana a
+   > su nulo intra-vehículo: `docs/memoria/f3-ordinal-horizonte.md`.
 
 ---
 

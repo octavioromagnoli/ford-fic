@@ -39,7 +39,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f2-umbral-regeneraciones.md](f2-umbral-regeneraciones.md) | Por qué las caídas de 5 puntos son ruido y el detector pasa a exigir 15 |
 | [f3-mil-agregacion-vehiculo.md](f3-mil-agregacion-vehiculo.md) | Medir por vehículo y no por corte (MIL): cuánto sube el lift de verdad y cuánto es el tamaño de la bolsa |
 | [f3-timesfm-zeroshot.md](f3-timesfm-zeroshot.md) | TimesFM zero-shot en el panel v1: no le gana a la tasa base, pero señaló el desvío respecto de la historia del vehículo |
-| [f3-ordinal-horizonte.md](f3-ordinal-horizonte.md) | Target ordinal de 5 clases + matriz de costos: bins medidos, resultado comparable y decisión |
+| [f3-ordinal-horizonte.md](f3-ordinal-horizonte.md) | Target ordinal: dos variantes de bins (la restringida no aporta información), el costo como barrido de C_FN/C_FP y la permutación intra-vehículo que ningún modelo del repo supera |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 

@@ -5,22 +5,64 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
-## 2026-09-20 · El target ordinal queda como reporte, no reemplaza al binario
+## 2026-09-20 · Ninguna variante ordinal reemplaza al binario, y el costo se reporta como barrido
 
-**Qué.** Cinco clases: 0 sano/no inminente y cuatro buckets equidistantes dentro de
-500–3.500 km. LightGBM multiclase devuelve el score comparable como `P(clase >= 1)`;
-la matriz asimétrica de SCANIA se reporta aparte y PR-AUC OOF contra `label` sigue
-siendo la selección.
+**Código:** `src/training/targets.py` (registro de targets por nombre),
+`src/eval/metrics.py::cost_ratio_sweep`. **Auditoría:** `scripts/audit_ordinal_horizon.py`.
+**Configs:** `exp_ordinal_horizon.yaml`, `exp_ordinal_horizon_ext.yaml`.
 
-**Por qué esos bins.** `[1250, 2000, 2750, 3500]` deja 55/63/68/68 filas positivas
-y 38/43/46/47 vehículos: cinco clases totales sin bajar de 9 filas por bucket en
-ningún fold de validación.
+**Qué se probó: dos variantes de bins, no una.**
 
-**Resultado.** PR-AUC 0,152 (lift 1,22×), por debajo del control binario 0,165 y con
-IC por fold solapados. Costo OOF 18.872: mejora mucho contra nunca alertar (91.100),
-pero apenas contra alertar siempre en clase 4 (19.225), consecuencia directa de que
-un falso negativo cuesta 200–500 y un falso positivo 7–10. No entra como ganador; queda
-la infraestructura genérica de targets y el costo como lenguaje operativo.
+1. **Bins restringidos** `[1250, 2000, 2750, 3500]`, cuatro buckets adentro de
+   `[G, G+H]`. **Defectuosa por diseño**, y el propio doc lo verificaba sin leerlo:
+   `clase > 0 ⇔ label == 1`. El target era un refinamiento estricto adentro de la clase
+   positiva, así que no aportaba nada sobre las 1.775 filas negativas (87% del panel) y
+   solo pagaba el costo de varianza de partir 254 positivas en cuatro baldes de ~60.
+   PR-AUC 0,152 contra 0,165 del control, Brier 0,207 contra 0,173: la firma exacta de
+   más varianza sin más señal.
+2. **Bins extendidos** `[2000, 3500, 6000, 10000]`, la formulación de SCANIA donde la
+   clase 0 es "lejos del fallo" y no "sano". 394 filas que hoy son `label = 0` pero
+   vienen de vehículos que fallan pasan a las clases intermedias: ésa es la información
+   nueva. PR-AUC 0,157, el **mejor Brier de las tres corridas** (0,152, por debajo del
+   control) y clases parejas (mínimo por fold de validación: 21 filas contra 9).
+
+**Resultado: ninguna gana, y se miran los dos ejes.** Extender los bins acerca la tarea
+auxiliar a "identificar la cohorte de muestreo", que en este panel *es* la etiqueta, y
+ese modo de fallar empeora el PR-AUC por fila mientras mejora el ranking por vehículo.
+Por eso se reportan los dos. Por fila: control 0,165 > extendido 0,157 > restringido
+0,152. Por vehículo con `mean`: control 1,51× > restringido 1,42× > extendido 1,31×.
+**El modo de fallar temido no ocurrió** —el eje de vehículo bajó, no subió—, pero
+tampoco hay ganancia: el control les gana en los dos ejes. La selección sigue siendo
+PR-AUC OOF contra `label` y sigue eligiendo el binario.
+
+**El hallazgo que sí cambia cosas, y que salió de la auditoría (a).** Permutando la
+etiqueta **dentro de cada vehículo** —se conserva la cohorte, se destruye el orden
+interno— y reentrenando, el nulo queda muy por encima de la tasa base, y **ni el
+ordinal extendido ni el control binario le ganan a su propio nulo**. El nulo global
+(cohorte destruida) sí cae exacto a la tasa base, así que el pipeline está limpio: el
+problema no es fuga, es que el PR-AUC que tenemos es separación de vehículos y no
+anticipación adentro del vehículo. Vale para el control tanto como para el ordinal, así
+que **es del panel, no del target**. Detalle y números en el doc.
+
+**El costo deja de ser una matriz.** La matriz 5×5 de SCANIA es degenerada a esta tasa
+base: con `p = 0,125`, alertar siempre le gana a no alertar nunca en cuanto
+`C_FN/C_FP > (1-p)/p ≈ 7`, así que con sus 20–50× la política óptima es revisar todo
+gane quien gane, y el número mide la matriz y no el modelo. La reemplaza
+`cost_ratio_sweep()`, que barre el ratio y reporta el punto de quiebre; es
+model-agnóstica y sale de `eval.cost_ratios`. Las tres corridas dan el mismo perfil:
+**el modelo paga alrededor de `C_FN/C_FP = 7×`** (ahorra 14% sobre revisar todo), por
+debajo de 5× conviene no alertar a nadie y por encima de 10× conviene revisar todo,
+donde ahorra menos del 3%. Es reporte, no criterio de selección.
+
+**Qué queda pendiente.** (1) La formulación intra-vehículo que la auditoría (a) vuelve
+urgente: features medidas como desvío respecto de la historia previa del **mismo**
+vehículo —la pista que ya había dejado TimesFM y que el panel v1 no tiene— y, como
+variante del target, un ordinal entrenado **solo sobre los vehículos que fallan**, que
+aísla el horizonte de la cohorte en vez de mezclarlos. (2) Reemparejar el panel a nivel
+vehículo para que las bolsas sean simétricas, que es Track A y ya estaba anotado en
+[f3-mil-agregacion-vehiculo.md](f3-mil-agregacion-vehiculo.md). Lo que **no** queda
+pendiente es afinar más los bins: las dos variantes de este experimento acotan el
+rango y ninguna mueve la aguja.
 
 **Detalle:** [f3-ordinal-horizonte.md](f3-ordinal-horizonte.md).
 
