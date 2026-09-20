@@ -167,9 +167,10 @@ def vehicle_block(
     score promediado entre repeticiones sería un ensamble, y un ensamble de R pasadas
     da mejor que el modelo que se está evaluando.
 
-    Una agregación que no se puede calcular (el caso real: `noisy_or` sobre un modelo
-    que no devuelve probabilidades) no tumba la corrida: queda anotada con el motivo,
-    que es lo que hay que ver en `metrics.json`.
+    Una agregación que no se puede *medir* (el caso real: `noisy_or` sobre un modelo
+    que no devuelve probabilidades) no tumba la corrida ya entrenada: queda anotada con
+    el motivo en `metrics.json` y las otras se miden igual. Una agregación que no
+    *existe* —un nombre mal escrito en el YAML— sí falla, y antes de medir nada.
     """
     hows = eval_cfg.get("vehicle_aggregation", list(VEHICLE_AGGREGATIONS))
     if hows is None:
@@ -178,6 +179,14 @@ def vehicle_block(
         hows = [hows]
     if not hows:
         return None
+    unknown = [how for how in hows if how not in VEHICLE_AGGREGATIONS]
+    if unknown:
+        # Un nombre mal escrito en el YAML tiene que romper acá y no quedar como una
+        # agregación "que no se pudo medir" al final de metrics.json.
+        raise ValueError(
+            f"`eval.vehicle_aggregation` pide agregaciones que no existen: {unknown}. "
+            f"Disponibles: {list(VEHICLE_AGGREGATIONS)}."
+        )
     k = int(eval_cfg.get("vehicle_topk", DEFAULT_TOPK))
 
     # Una columna de score (y su fold) por repetición: con R=1, las de siempre.
@@ -210,10 +219,7 @@ def vehicle_block(
         if len(runs) > 1:
             by_repeat[how] = runs
 
-    reference = next(
-        (m for m in aggregations.values() if "skipped" not in m),
-        None,
-    )
+    reference = next((m for m in aggregations.values() if "skipped" not in m), None)
     block: dict[str, Any] = {
         "label_column": VEHICLE_LABEL_COLUMN,
         "topk_k": k,
