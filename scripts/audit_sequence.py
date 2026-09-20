@@ -1,8 +1,15 @@
 #!/usr/bin/env python
-"""¿Las features de secuencia separan, o miden la posición del corte en la serie?
+"""¿Una feature separa, o mide la posición del corte en la serie?
 
     python scripts/audit_sequence.py --panel data/processed/panel.parquet
     python scripts/audit_sequence.py --panel data/processed/panel_delta250.parquet
+    python scripts/audit_sequence.py --panel data/processed/panel_v2.parquet --columns all
+    python scripts/audit_sequence.py --panel data/processed/panel_v2.parquet \
+        --columns feat_regen_efficiency_mean,feat_regen_residual_slope
+
+Nació para la familia E (secuencia) y `--columns` lo abre a cualquier candidata: la
+pregunta del bloque 3 —¿sigue separando entre filas que están en el mismo punto de su
+serie?— es la misma para todas.
 
 Corre **solo sobre dev** (recorta con el holdout congelado, igual que `train.py`) y no
 escribe nada: imprime la auditoría. Existe porque la familia E (`src/features/sequence.py`)
@@ -70,6 +77,23 @@ def p_positive_gt_healthy(frame: pd.DataFrame, column: str, *, min_n: int = 10) 
     return float(u / (len(a) * len(b)))
 
 
+def select_columns(dev: pd.DataFrame, spec: str, seq_cols: list[str]) -> list[str]:
+    """Qué columnas se auditan: las de secuencia (default), todas las `feat_*`, o una lista."""
+    if spec == "sequence":
+        cols = [c for c in INDEX_COMPONENTS if c in dev.columns] + seq_cols
+    elif spec == "all":
+        cols = [c for c in dev.columns if c.startswith("feat_")]
+    else:
+        cols = [c.strip() for c in spec.split(",") if c.strip()]
+        missing = [c for c in cols if c not in dev.columns]
+        if missing:
+            raise SystemExit(f"El panel no tiene estas columnas: {missing}")
+    numeric = [c for c in cols if pd.api.types.is_numeric_dtype(dev[c])]
+    if not numeric:
+        raise SystemExit(f"Ninguna columna numérica para auditar (`--columns {spec}`)")
+    return numeric
+
+
 def with_position(dev: pd.DataFrame) -> pd.DataFrame:
     """Agrega la posición del corte dentro de la serie de su vehículo."""
     out = dev.copy()
@@ -84,6 +108,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--panel", default="data/processed/panel.parquet")
     parser.add_argument("--test-split", default="data/processed/test_split.json")
+    parser.add_argument("--columns", default="sequence",
+                        help="`sequence` (las de secuencia + los niveles del índice), `all` "
+                             "(todas las feat_*) o una lista separada por comas.")
+    parser.add_argument("--top", type=int, default=25,
+                        help="Cuántas columnas se imprimen en los bloques 1 y 3, por |0,5 − P|.")
     args = parser.parse_args()
 
     panel = pd.read_parquet(resolve_path(args.panel))
@@ -95,19 +124,23 @@ def main() -> int:
           f"{int(dev['label'].sum())} positivas (tasa {dev['label'].mean():.4f})")
 
     seq_cols = [c for c in dev.columns if c.endswith("_zself") or "degradation" in c]
-    if not seq_cols:
+    if not seq_cols and args.columns == "sequence":
         print("\nEste panel no tiene features de secuencia (`sequence.enabled: false`). "
               "Se audita igual el atajo de posición, que no depende de ellas.")
+
+    audited = select_columns(dev, args.columns, seq_cols)
 
     # 1 ------------------------------------------------------------------------------
     print("\n== 1 · separación por fila (dev) ==")
     rows = []
-    for c in [c for c in INDEX_COMPONENTS if c in dev.columns] + seq_cols:
+    for c in audited:
         p = p_positive_gt_healthy(dev, c)
         rows.append({"columna": c, "P(pos>sano)": p, "|0,5-P|": abs(p - 0.5),
                      "nulos": float(dev[c].isna().mean())})
     table = pd.DataFrame(rows).set_index("columna").sort_values("|0,5-P|", ascending=False)
-    print(table.round(3).to_string())
+    print(table.head(args.top).round(3).to_string())
+    if len(table) > args.top:
+        print(f"  ... {len(table) - args.top} columnas más (se listan las {args.top} que más separan)")
 
     # 2 ------------------------------------------------------------------------------
     print("\n== 2 · el atajo de posición ==")
@@ -115,21 +148,26 @@ def main() -> int:
         print(f"  {c:8s} P(pos>sano) = {p_positive_gt_healthy(dev, c):.3f}")
     print("  (`_frac` alto es la etiqueta por construcción: las positivas son los "
           "últimos H/Δ cortes de un vehículo cuya serie termina en E − G)")
-    for c in seq_cols:
+    flagged = 0
+    for c in audited:
         rho = dev[[c, "_rank"]].corr(method="spearman").iloc[0, 1]
         if abs(rho) >= 0.2:
             print(f"  corr({c}, posición) = {rho:.2f}  <-- hereda parte del atajo")
+            flagged += 1
+    if not flagged:
+        print("  Ninguna de las columnas auditadas correlaciona |ρ| >= 0,2 con la posición.")
 
     # 3 ------------------------------------------------------------------------------
     print("\n== 3 · separación DENTRO de estratos de posición ==")
     dev["_stratum"] = pd.qcut(dev["_rank"], 4, labels=["q1", "q2", "q3", "q4"], duplicates="drop")
-    cols = [c for c in INDEX_COMPONENTS[:1] + seq_cols if c in dev.columns]
+    cols = list(table.head(args.top).index)
     strata = []
     for name, sub in dev.groupby("_stratum", observed=True):
         row = {"estrato": name, "n": len(sub), "positivas": int(sub["label"].sum())}
         row.update({c: p_positive_gt_healthy(sub, c) for c in cols})
         strata.append(row)
-    print(pd.DataFrame(strata).set_index("estrato").round(3).to_string())
+    # Traspuesta: con `--columns all` son 25 columnas y una fila por estrato no se lee.
+    print(pd.DataFrame(strata).set_index("estrato").T.round(3).to_string())
     print("  Una columna que separa por física sostiene el número en los cuatro estratos.")
 
     # 4 ------------------------------------------------------------------------------

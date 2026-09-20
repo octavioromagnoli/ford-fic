@@ -19,7 +19,12 @@ panel real. **Lo siguiente es F3 y F4 (dashboard contra el panel real)**, y dent
 del 19-09 es **features antes que modelos**: con ROC ≈ 0,58–0,60, un modelo mejor no
 rescata un panel que no mide el mecanismo. El menú de features está en
 `docs/f3-features-candidatas-fisica.md` (arranca por la contradicción del catalizador) y
-el de modelos en `docs/f3-modelos-candidatos.md`. La §2.4 de ese menú (desvío contra uno
+el de modelos en `docs/f3-modelos-candidatos.md`. **Ese menú ya se agotó**: las 16
+features de las seis candidatas están construidas (`configs/data/features_v2.yaml`,
+`panel_v2.yaml`), medidas y ninguna gana; y la contradicción del catalizador se resolvió
+**en contra** de la hipótesis del esfuerzo de control —los que fallan no regeneran más ni
+cargan más por km—, así que la pregunta abierta ya no es qué feature falta sino **qué es
+el evento** (`docs/memoria/f3-esfuerzo-de-control-y-dosis.md`). La §2.4 de ese menú (desvío contra uno
 mismo + CUSUM) **se implementó, se midió y quedó apagada**: no le gana al nivel y heredaba
 el atajo de posición.
 
@@ -217,6 +222,14 @@ revisar el YAML para no duplicar con otro nombre. Resumen:
   `features_v1.yaml`: no son agregados de una ventana sino de la **serie de cortes**, y
   por eso viven en su propio bloque. Los primeros `min_history` cortes de cada vehículo
   salen NaN a propósito.
+
+- **F3 candidatas físicas (16), `configs/data/features_v2.yaml` — MEDIDAS Y NEGATIVAS.**
+  Eficiencia y residuo de la regeneración, ciclos que no terminan, dosis de km fríos,
+  temperatura condicionada por el largo del viaje y oportunidad de regenerar. Las
+  columnas derivadas están en `src/features/trips.py` y el agregador `slope_per_1000km`
+  en `windows.py`; el panel que las lleva es `panel_v2.yaml`, que **no** reemplaza al v1.
+  Antes de proponer una de estas otra vez, leer
+  `docs/memoria/f3-esfuerzo-de-control-y-dosis.md`.
 
 Lo que **no** se construye y por qué: elevación y presión de neumáticos (no hay
 columna), `accumulation_*` desde `signals` (es la misma variable que `AirRegeneration`),

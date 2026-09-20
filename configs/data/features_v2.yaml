@@ -1,0 +1,168 @@
+# MEDIDO Y NEGATIVO (19-09): las 16 features nuevas de este archivo se construyeron, se
+# midieron sobre dev y ninguna le gana a la feature de v1 de la que sale. La mejor
+# (`regen_opportunity_per_1000km`) da P(pos>sano) = 0,561 con IC95% [0,501 – 0,628],
+# contra 0,597 de `feat_idle_frac`. **El panel canónico sigue siendo el v1.** Este spec
+# queda como registro medido, para no volver a proponer lo mismo: el detalle, los signos
+# que no cierran y el porqué están en `docs/memoria/f3-esfuerzo-de-control-y-dosis.md`.
+#
+# Features de ventana del panel v2 (F3). Es `features_v1.yaml` **más** las candidatas
+# del menú `docs/f3-features-candidatas-fisica.md` §1 a §5: esfuerzo de control del
+# ciclo de regeneración, ciclos que no terminan, dosis de km fríos, temperatura
+# condicionada por el largo del viaje y oportunidad de regenerar. Las 53 de v1 quedan
+# idénticas a propósito: el panel v2 se compara contra el v1 feature a feature, y para
+# eso la única diferencia tiene que ser lo que se agregó.
+#
+# Lo consume `src/features/windows.py` vía `configs/data/panel_v2.yaml`
+# (`features.spec`).
+#
+# Cada línea es una feature: `name` (sin prefijo; el panel emite `feat_<name>`),
+# `source` (`trips` o `signals`), `column` (una derivada de `src/features/trips.py`
+# o `src/features/signals.py`) y `agg` (un agregador de `windows.AGGREGATORS`).
+# `aux: true` la deja en el panel como `aux_<name>` —para auditar— pero NO entra al
+# modelo (`src/training/cv.py` selecciona por prefijo `feat_`/`static_`).
+#
+# Evidencia y criterio de cada elección: docs/memoria/f2-eda-revision-y-features.md.
+# Regla que manda: toda columna mira solo hacia atrás desde el corte (regla 3).
+
+thresholds:
+  short_trip_km: 5.0          # trayecto corto, entre viajes CON desplazamiento
+  regime_temp_c: 70.0         # EngineTemperatureMax por debajo => no llegó a régimen
+  urban_speed_kmh: 30.0       # velocidad media (recalculada) por debajo => urbano
+  cold_start_c: 40.0          # CoolantTemperatureStart por debajo => arranque en frío
+  chained_trip_min: 30.0      # arranca < 30 min después del viaje anterior => motor caliente
+  regen_drop_points: 5.0      # caída de AirRegeneration en el viaje que cuenta como regeneración
+  saturation_level: 95.0      # AirRegenerationEnd >= 95 => saturado (la escala llega a 100)
+  fuel_min_trip_km: 5.0       # km mínimos para estimar consumo en un viaje
+  # F3. Los cuatro salen de los datos de dev, no de la intuición:
+  aborted_level: 50.0         # AirRegenerationEnd por encima => el filtro quedó cargado
+  long_trip_km: 15.0          # viaje largo: no llegar a régimen con esta distancia es defecto
+  opportunity_km: 15.0        # p25 de trip_km de los viajes donde SÍ ocurre una regeneración
+  opportunity_temp_c: 90.0    # p10 de EngineTemperatureMax de esos mismos viajes
+
+# Topes FÍSICOS (no cuantiles: los cuantiles dependerían del train de cada fold).
+clip:
+  speed_kmh: [0, 200]
+  trip_duration_min: [0, 1440]
+  AirTemperatureAvg: [-40, 60]
+  AirTemperatureMin: [-40, 60]
+  CoolantTemperatureStart: [-40, 130]
+  CoolantTemperatureEnd: [-40, 130]
+  EngineTemperatureMin: [-40, 130]
+  EngineTemperatureMax: [-40, 130]
+  EngineTemperatureAvg: [-40, 130]
+
+families:
+  # ------------------------------------------------------------------------------
+  # A · Régimen térmico y trayectos cortos. La hipótesis causal del enunciado, y la
+  # familia que más anticipa según el perfil alineado al evento: los idle (motor
+  # encendido sin moverse) y los viajes que no llegan a régimen suben de forma
+  # progresiva en los últimos ~4.000 km antes del evento.
+  # ------------------------------------------------------------------------------
+  A_thermal:
+    - {name: idle_frac,                       source: trips, column: idle,                   agg: mean}
+    - {name: idle_per_1000km,                 source: trips, column: idle,                   agg: per_1000km}
+    - {name: idle_frac_trend,                 source: trips, column: idle,                   agg: half_mean_delta}
+    - {name: short_trip_frac_5km,             source: trips, column: short_trip_moving,      agg: mean}
+    - {name: trips_below_regime_temp_frac,    source: trips, column: below_regime,           agg: mean}
+    - {name: below_regime_moving_frac,        source: trips, column: below_regime_moving,    agg: mean}
+    - {name: below_regime_frac_trend,         source: trips, column: below_regime,           agg: half_mean_delta}
+    - {name: engine_temp_avg_median,          source: trips, column: EngineTemperatureAvg_moving, agg: median}
+    - {name: engine_temp_max_median,          source: trips, column: EngineTemperatureMax_moving, agg: median}
+    - {name: engine_temp_amplitude_mean,      source: trips, column: engine_temp_amplitude_moving, agg: mean}
+    - {name: coolant_temp_end_mean,           source: trips, column: CoolantTemperatureEnd_moving, agg: mean}
+    - {name: coolant_temp_start_median,       source: trips, column: CoolantTemperatureStart, agg: median}
+    - {name: cold_start_frac,                 source: trips, column: cold_start,             agg: mean}
+    - {name: chained_trip_frac,               source: trips, column: chained,                agg: mean}
+    - {name: trip_distance_median_km,         source: trips, column: trip_km_moving,         agg: median}
+    - {name: trip_distance_p25_km,            source: trips, column: trip_km_moving,         agg: p25}
+    - {name: trip_duration_median_min,        source: trips, column: trip_duration_min_moving, agg: median}
+    # F3 §3 · dosis, no fracción: km recorridos por debajo de régimen por cada 1.000 km
+    # de ventana. Las 17 de arriba cuentan VIAJES fríos; el hollín se acumula por km.
+    - {name: cold_km_per_1000km,              source: trips, column: km_below_regime,      agg: per_1000km}
+    - {name: cold_km_trend,                   source: trips, column: km_below_regime,      agg: half_count_delta_per_1000km}
+    # F3 §4 · la misma temperatura significa cosas opuestas según el viaje. Partir
+    # `trips_below_regime_temp_frac` separa "el auto está roto" de "lo usan mal".
+    - {name: long_trip_below_regime_frac,     source: trips, column: long_trip_below_regime,  agg: mean}
+    - {name: short_trip_below_regime_frac,    source: trips, column: short_trip_below_regime, agg: mean}
+
+  # ------------------------------------------------------------------------------
+  # B · Salud del ciclo de regeneración, desde `trips.AirRegeneration*` (== signals
+  # .Acumulation, 99,8%). "Regeneración" = caída > 5 puntos dentro del viaje: el
+  # marcador `Regenerations` de `signals` se corta el 25-05-2026 y queda como aux.
+  # ------------------------------------------------------------------------------
+  B_regeneration:
+    - {name: regenerations_per_1000km,        source: trips, column: regen_drop,             agg: per_1000km}
+    - {name: regenerations_trend_per_1000km,  source: trips, column: regen_drop,             agg: half_count_delta_per_1000km}
+    - {name: distance_between_regen_mean_km,  source: trips, column: regen_drop,             agg: gap_mean_km}
+    - {name: distance_between_regen_trend,    source: trips, column: regen_drop,             agg: gap_trend_km}
+    - {name: km_since_last_regen,             source: trips, column: regen_drop,             agg: km_since_last}
+    - {name: regen_residual_mean,             source: trips, column: regen_residual,         agg: mean}
+    - {name: regen_start_level_mean,          source: trips, column: regen_start_level,      agg: mean}
+    - {name: dpf_end_mean,                    source: trips, column: AirRegenerationEnd,     agg: mean}
+    - {name: dpf_end_max,                     source: trips, column: AirRegenerationEnd,     agg: max}
+    - {name: dpf_end_slope_per_1000km,        source: trips, column: AirRegenerationEnd,     agg: half_slope_per_1000km}
+    - {name: dpf_positive_delta_frac,         source: trips, column: dpf_positive_delta_moving, agg: mean}
+    - {name: dpf_saturated_frac,              source: trips, column: dpf_saturated_end,      agg: mean}
+    - {name: filter_abnormal_end_frac,        source: trips, column: filter_abnormal_end,    agg: mean}
+    - {name: filter_cleaning_auto_end_frac,   source: trips, column: filter_cleaning_auto_end, agg: mean}
+    - {name: manual_regen_ever,               source: trips, column: filter_manual,          agg: any}
+    # F3 §1 · esfuerzo de control. El nivel del DPF es la salida de un lazo cerrado
+    # (por eso los que fallan lo tienen MÁS bajo); esto mide lo que le cuesta al lazo.
+    - {name: regen_efficiency_mean,           source: trips, column: regen_efficiency,       agg: mean}
+    - {name: regen_efficiency_frac_mean,      source: trips, column: regen_efficiency_frac,  agg: mean}
+    - {name: regen_efficiency_slope,          source: trips, column: regen_efficiency,       agg: slope_per_1000km}
+    # §1.2 · el residuo que no se va. La ceniza es irreversible: su pendiente a lo largo
+    # de las regeneraciones de la ventana es la firma de envejecimiento del filtro.
+    # `slope_per_1000km` y no `half_delta` porque hay ~4 regeneraciones por 1.000 km.
+    - {name: regen_residual_slope,            source: trips, column: regen_residual,         agg: slope_per_1000km}
+    - {name: regen_residual_max,              source: trips, column: regen_residual,         agg: max}
+    # §2 · ciclos que no terminan (el mecanismo "el viaje corto corta la regeneración").
+    - {name: regen_aborted_per_1000km,        source: trips, column: regen_aborted_end,      agg: per_1000km}
+    - {name: regen_aborted_ever,              source: trips, column: regen_aborted_end,      agg: any}
+    - {name: regen_partial_per_1000km,        source: trips, column: regen_partial,          agg: per_1000km}
+    - {name: regen_partial_frac,              source: trips, column: regen_partial,          agg: mean}
+    # §5 · oportunidad de regenerar: si el vehículo nunca da una corrida larga y
+    # caliente, el hollín se acumula aunque el resto del uso sea impecable.
+    - {name: regen_opportunity_per_1000km,    source: trips, column: regen_opportunity,      agg: per_1000km}
+    - {name: opportunity_km_per_1000km,       source: trips, column: km_in_opportunity,      agg: per_1000km}
+    # Riesgo de posición (`docs/memoria/f3-posicion-en-la-serie.md`): es un "hace cuánto
+    # que", así que se audita por estratos antes de creerle.
+    - {name: km_since_last_opportunity,       source: trips, column: regen_opportunity,      agg: km_since_last}
+
+  # ------------------------------------------------------------------------------
+  # C · Contexto de uso. La temperatura ambiente queda como aux: los 60 eventos de
+  # dev caen entre sep-2025 y mar-2026 y la exposición sana se concentra en 2026,
+  # así que una variable estacional mide el calendario y el calendario mide la
+  # etiqueta. Se conserva para auditar y para una ablación explícita.
+  # ------------------------------------------------------------------------------
+  C_usage:
+    - {name: speed_kmh_mean,                  source: trips, column: speed_kmh_moving,       agg: mean}
+    - {name: trips_below_30kmh_frac,          source: trips, column: urban_moving,           agg: mean}
+    - {name: moving_trips_per_1000km,         source: trips, column: moving,                 agg: per_1000km}
+    - {name: km_per_day,                      source: trips, column: trip_km,                agg: per_day}
+    - {name: trips_per_day,                   source: trips, column: moving,                 agg: per_day}
+    - {name: hours_between_trips_median,      source: trips, column: soak_min,               agg: median}
+    - {name: air_temp_avg,                    source: trips, column: AirTemperatureAvg,      agg: mean, aux: true}
+    - {name: air_temp_min,                    source: trips, column: AirTemperatureMin,      agg: mean, aux: true}
+
+  # ------------------------------------------------------------------------------
+  # D · Severidad y proxies baratos. Tasas de `Message` por 1.000 km + indicador
+  # "pasó alguna vez" para las zero-inflated (§1 de las candidatas). `oil_life_drop`
+  # es la pendiente del nivel (el delta intra-viaje es 0 siempre).
+  # ------------------------------------------------------------------------------
+  D_severity:
+    - {name: msg_full_per_1000km,             source: signals, column: msg_full,             agg: per_1000km}
+    - {name: msg_overloaded_per_1000km,       source: signals, column: msg_overloaded,       agg: per_1000km}
+    - {name: msg_overloaded_ever,             source: signals, column: msg_overloaded,       agg: any}
+    - {name: msg_over_limit_per_1000km,       source: signals, column: msg_over_limit,       agg: per_1000km}
+    - {name: msg_over_limit_ever,             source: signals, column: msg_over_limit,       agg: any}
+    - {name: msg_at_limit_ever,               source: signals, column: msg_at_limit,         agg: any}
+    - {name: msg_cleaning_auto_per_1000km,    source: signals, column: msg_cleaning_auto,    agg: per_1000km}
+    - {name: msg_cleaning_auto_trend_per_1000km, source: signals, column: msg_cleaning_auto, agg: half_count_delta_per_1000km}
+    - {name: msg_abnormal_frac,               source: signals, column: msg_abnormal,         agg: mean}
+    - {name: msgs_per_1000km,                 source: signals, column: msg_any,              agg: per_1000km}
+    - {name: oil_life_mean,                   source: trips,   column: oil_life,             agg: mean}
+    - {name: oil_life_slope_per_1000km,       source: trips,   column: oil_life,             agg: half_slope_per_1000km}
+    - {name: fuel_pct_per_100km_median,       source: trips,   column: fuel_pct_per_100km,   agg: median}
+    # Marcador literal de `signals`: se corta el 25-05-2026 para toda la flota. Solo auditoría.
+    - {name: regen_marker_per_1000km,         source: signals, column: regen_marker,         agg: per_1000km, aux: true}

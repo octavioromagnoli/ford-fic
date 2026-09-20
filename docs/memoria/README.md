@@ -37,6 +37,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-cadencia-y-ventana.md](f3-cadencia-y-ventana.md) | Por qué la ventana es de km y la cadencia puede ser quincenal (no son lo mismo) |
 | [f3-posicion-en-la-serie.md](f3-posicion-en-la-serie.md) | **La posición del corte en su serie separa con P = 0,83**: el atajo que hereda cualquier feature acumulativa |
 | [f3-secuencia-zself-cusum.md](f3-secuencia-zself-cusum.md) | `_zself` + CUSUM: se construyó, se midió y no da. Qué quedó y qué no queda descartado |
+| [f3-esfuerzo-de-control-y-dosis.md](f3-esfuerzo-de-control-y-dosis.md) | **Las 16 candidatas físicas del menú, medidas: ninguna gana.** Y la contradicción del catalizador resuelta: el DPF no anticipa, y probablemente el evento no es obstrucción |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 | [../f3-features-candidatas-fisica.md](../f3-features-candidatas-fisica.md) | **Lo que sigue**: candidatas por mecanismo físico, empezando por la contradicción del catalizador |
@@ -51,7 +52,9 @@ python scripts/eda_gaps.py         # complemento del EDA: factibilidad, perfil a
 python scripts/build_dataset.py --config configs/data/panel_v1.yaml   # panel real + splits sobre dev + panel_meta.json
 python scripts/log_panel_artifact.py --config configs/data/panel_v1.yaml  # publica panel-v1 y test-split como wandb Artifacts
 python scripts/train.py --config configs/exp_baserate.yaml            # piso contra el panel real
+python scripts/build_dataset.py --config configs/data/panel_v2.yaml   # el mismo panel + las 16 candidatas físicas de F3 (medidas, negativas)
 python scripts/audit_sequence.py --panel data/processed/panel.parquet  # atajo de posición + features de secuencia
+python scripts/audit_sequence.py --panel data/processed/panel_v2.parquet --columns all  # la misma auditoría, sobre cualquier feature
 python scripts/check_setup.py      # 34 chequeos del harness
 ```
 

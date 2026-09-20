@@ -1,6 +1,14 @@
-# Features candidatas por mecanismo físico · nada implementado
+# Features candidatas por mecanismo físico · MEDIDAS, ninguna gana
 
-**Fecha:** 2026-09-19 · **Estado: ninguna está implementada.** Es el menú de lo que sigue
+> **Estado al 19-09 (tarde): las seis están implementadas y medidas, y ninguna se
+> promueve al panel v1.** El resultado completo —con la contradicción del §0 resuelta en
+> contra de la hipótesis (1)— está en
+> [`memoria/f3-esfuerzo-de-control-y-dosis.md`](memoria/f3-esfuerzo-de-control-y-dosis.md).
+> Este archivo se conserva como el razonamiento que llevó a probarlas: la física de cada
+> §, y por qué parecía que tenía que funcionar. Lo que sigue no es otra feature de este
+> menú, es responder **qué es el evento**.
+
+**Fecha:** 2026-09-19 · Era el menú de lo que sigue
 después de que la familia E (secuencia) diera negativo
 ([`memoria/f3-secuencia-zself-cusum.md`](memoria/f3-secuencia-zself-cusum.md)). La
 decisión fue **trabajar features útiles antes que modelos**: con ROC ≈ 0,58–0,60 de las

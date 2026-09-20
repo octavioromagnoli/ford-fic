@@ -52,6 +52,10 @@ DEFAULT_THRESHOLDS: dict[str, float] = {
     "regen_drop_points": 5.0,    # caída de AirRegeneration dentro del viaje que cuenta como regeneración
     "saturation_level": 95.0,    # nivel de AirRegeneration considerado saturado
     "fuel_min_trip_km": 5.0,     # km mínimos para estimar consumo en un viaje
+    "aborted_level": 50.0,       # nivel al que todavía se considera "cargado": ciclo que no terminó
+    "long_trip_km": 15.0,        # viaje largo: si con esa distancia no llega a régimen, es defecto
+    "opportunity_km": 15.0,      # corrida mínima para que quepa un ciclo de regeneración (p25 de las que ocurren)
+    "opportunity_temp_c": 90.0,  # y temperatura mínima (p10 de EngineTemperatureMax de las que ocurren)
 }
 
 DEFAULT_CLIP: dict[str, tuple[float, float]] = {
@@ -136,6 +140,47 @@ def derive_trip_columns(
     out["filter_abnormal_end"] = out["AirFilterEnd"].notna() & out["AirFilterEnd"].ne(NORMAL_MESSAGE)
     out["filter_cleaning_auto_end"] = out["AirFilterEnd"].eq(CLEANING_AUTO)
     out["filter_manual"] = out["AirFilterEnd"].isin(MANUAL_LEVELS) | out["AirFilterStart"].isin(MANUAL_LEVELS)
+
+    # F3 · esfuerzo de control, no nivel. El nivel del DPF es una variable controlada
+    # (los que fallan terminan los viajes MENOS cargados: P = 0,31), así que lo
+    # informativo es cuánto trabajo cuesta mantenerlo bajo. Detalle del mecanismo en
+    # `docs/f3-features-candidatas-fisica.md` §1.
+    # `regen_efficiency` son los puntos que removió el ciclo; la fracción normaliza por
+    # el nivel de arranque, que se correlaciona 0,55 con la caída (regenerar desde 90 y
+    # desde 60 no es lo mismo, y sin normalizar la feature mide desde dónde arrancó).
+    out["regen_efficiency"] = (-out["air_regen_delta"]).where(out["regen_drop"])
+    start = out["AirRegenerationStart"].where(out["AirRegenerationStart"] > 0)
+    out["regen_efficiency_frac"] = (out["regen_efficiency"] / start).where(out["regen_drop"])
+
+    # Ciclo que no termina. Dos lecturas del mismo mecanismo ("el viaje corto corta la
+    # regeneración"), porque cada una falla distinto:
+    #   - `regen_aborted_end`: el viaje TERMINA con el sistema limpiando y el filtro
+    #     todavía cargado. Es literal, pero raro (0,28% de los viajes, 161 vehículos).
+    #   - `regen_partial`: hubo caída pero el nivel final sigue alto. Más frecuente
+    #     (0,4-0,8%) y no depende de que el mensaje esté puesto en el último registro.
+    out["regen_aborted_end"] = out["filter_cleaning_auto_end"] & out["AirRegenerationEnd"].gt(thr["aborted_level"])
+    out["regen_partial"] = out["regen_drop"] & out["AirRegenerationEnd"].gt(thr["aborted_level"])
+
+    # F3 §3 · dosis de km fríos, no fracción de viajes fríos. El hollín se acumula por
+    # kilómetro frío: 40 viajes de 1 km y 3 de 20 km dan fracciones opuestas y dosis
+    # parecidas. Agregado con `per_1000km` queda "km fríos por cada 1.000 km".
+    out["km_below_regime"] = out["trip_km"].where(out["below_regime"], 0.0)
+
+    # F3 §4 · la temperatura baja significa cosas distintas según el largo del viaje:
+    # un viaje largo que no llega a régimen es un defecto; uno corto, uso normal. Las
+    # dos columnas son NaN fuera de su subconjunto, así que `mean` es la fracción dentro.
+    long_trip = out["moving"] & out["trip_km"].ge(thr["long_trip_km"])
+    out["long_trip_below_regime"] = out["below_regime"].astype("float64").where(long_trip)
+    out["short_trip_below_regime"] = out["below_regime"].astype("float64").where(out["short_trip"])
+
+    # F3 §5 · oportunidad de regenerar: corrida lo bastante larga y caliente como para
+    # que quepa un ciclo. Los umbrales salen de los viajes donde SÍ ocurre una
+    # regeneración en dev (p25 de trip_km = 15 km, p10 de EngineTemperatureMax = 91 °C),
+    # no de un número inventado.
+    out["regen_opportunity"] = (out["moving"]
+                                & out["trip_km"].ge(thr["opportunity_km"])
+                                & out["EngineTemperatureMax"].ge(thr["opportunity_temp_c"]))
+    out["km_in_opportunity"] = out["trip_km"].where(out["regen_opportunity"], 0.0)
 
     # Consumo: caída del nivel de combustible por 100 km, solo en viajes sin recarga y con distancia.
     fuel_drop = out["FuelLvlStartPc"] - out["FuelLvlEndPc"]

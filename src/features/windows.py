@@ -129,6 +129,26 @@ def _half_mean_delta(x: np.ndarray, ctx: WindowContext) -> float:
     return float(b.mean() - a.mean())
 
 
+def _slope_per_1000km(x: np.ndarray, ctx: WindowContext) -> float:
+    """Pendiente OLS de la columna contra el odómetro, en unidades por 1.000 km.
+
+    Existe porque `half_delta` necesita `MIN_HALF_POINTS` puntos **en cada mitad** y
+    hay columnas que solo tienen valor en unas pocas filas de la ventana (el residuo
+    de una regeneración: ~4 por cada 1.000 km). Sobre esas, la recta usa los puntos
+    que hay; con menos de `MIN_HALF_POINTS` en total, o sin dispersión en el eje,
+    devuelve NaN en vez de un número inventado.
+    """
+    x = np.asarray(x, dtype="float64")
+    ok = ~np.isnan(x)
+    if int(ok.sum()) < MIN_HALF_POINTS:
+        return np.nan
+    pos, y = ctx.positions[ok], x[ok]
+    if float(np.ptp(pos)) <= 0:
+        return np.nan
+    slope = float(np.polyfit(pos - pos.mean(), y, 1)[0])
+    return slope * 1000.0
+
+
 def _half_count_delta_per_1000km(x: np.ndarray, ctx: WindowContext) -> float:
     """Eventos por 1.000 km en la segunda mitad menos la primera (mitades de W/2 km)."""
     x = np.nan_to_num(np.asarray(x, dtype="float64"))
@@ -187,6 +207,7 @@ AGGREGATORS: dict[str, Callable[[np.ndarray, WindowContext], float]] = {
     "half_delta": _half_delta,
     "half_mean_delta": _half_mean_delta,
     "half_slope_per_1000km": _half_slope_per_1000km,
+    "slope_per_1000km": _slope_per_1000km,
     "half_count_delta_per_1000km": _half_count_delta_per_1000km,
     "gap_mean_km": _gap_mean_km,
     "gap_median_km": _gap_median_km,

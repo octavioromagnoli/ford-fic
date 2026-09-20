@@ -5,6 +5,36 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-19 · Las 16 candidatas físicas se miden y no se promueven; la hipótesis del DPF se cae
+
+**Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:** `src/features/trips.py`
+(11 columnas derivadas nuevas), `src/features/windows.py` (`slope_per_1000km`),
+`configs/data/features_v2.yaml` + `configs/data/panel_v2.yaml` (quedan; **no** reemplazan
+a v1).
+
+**Qué cambia.** Nada del panel canónico: sigue con 53 `feat_` y 2.507 filas. Las 16
+columnas nuevas viven en el panel v2, que es el v1 con otro spec de features y que
+reproduce las 53 compartidas con diferencia máxima 0.
+
+**Por qué.** Se construyeron las cinco candidatas de
+[`../f3-features-candidatas-fisica.md`](../f3-features-candidatas-fisica.md) y ninguna le
+gana a lo que ya había: la mejor (`regen_opportunity_per_1000km`) da P = 0,561 con IC95%
+[0,501 – 0,628] contra P = 0,597 de `feat_idle_frac`, y la dosis de km fríos pierde
+contra la fracción de viajes fríos que reemplazaba (0,549 vs. 0,573). Los signos del
+mecanismo de regeneración no cierran entre sí, lo cual es el resultado importante.
+
+**Lo que el resultado obliga a revisar.** La hipótesis que organizaba el menú —el nivel
+del DPF es una variable controlada, lo informativo es el esfuerzo del lazo— **no se
+sostiene**: los que fallan no regeneran más (3,67 vs. 3,47 por 1.000 km), no cargan más
+por km (0,222 vs. 0,235) y el canal está igual de vivo en las dos cohortes. Tampoco es un
+sensor que se muere. Queda la tercera explicación: que `IdentificationDate` no marque una
+obstrucción progresiva del DPF. La próxima pregunta del proyecto es **qué es el evento**,
+no qué feature falta.
+
+**Detalle:** [f3-esfuerzo-de-control-y-dosis.md](f3-esfuerzo-de-control-y-dosis.md)
+
+---
+
 ## 2026-09-19 · La familia E (secuencia) queda apagada, y primero se trabajan features
 
 **Decidió:** Gonzalo · **Código:** `src/features/sequence.py` (queda),
