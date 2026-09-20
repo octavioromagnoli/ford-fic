@@ -5,7 +5,8 @@
 
 Hace siempre lo mismo, en este orden: levanta el config, fija la semilla, carga
 el panel, **lo recorta a dev con el holdout congelado**, carga los splits, corre
-la CV agrupada por vehículo, calcula las métricas (clasificación + anticipación),
+la CV agrupada por vehículo, calcula las métricas (clasificación por fila,
+anticipación y clasificación **por vehículo**, que es la unidad de decisión de Ford),
 loguea todo a wandb y deja los outputs en `experiments/<run_name>/`.
 
 El recorte a dev no es opcional ni implícito: el YAML tiene que declarar
@@ -26,6 +27,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -35,11 +37,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import ensure_dir, load_config, repo_root, resolve_path, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
+    DEFAULT_TOPK,
+    VEHICLE_AGGREGATIONS,
+    VEHICLE_LABEL_COLUMN,
     classification_metrics,
     dispersion,
     lead_time_curve,
     operating_point,
     summarize_folds,
+    vehicle_metrics,
 )
 from src.eval.splits import (  # noqa: E402
     MIN_VALID_POSITIVES,
@@ -146,6 +152,95 @@ def repeat_metrics(predictions: pd.DataFrame, n_repeats: int) -> list[dict[str, 
     ]
 
 
+def vehicle_block(
+    predictions: pd.DataFrame, eval_cfg: dict, n_repeats: int
+) -> dict[str, Any] | None:
+    """Las mismas métricas, con el vehículo como unidad de decisión (MIL).
+
+    El PR-AUC por fila contesta "¿el evento cae en el horizonte de este corte?"; la
+    decisión de Ford es "¿marco este auto?". Cada vehículo es una bolsa de cortes y
+    su etiqueta es `event_observed`; las agregaciones que se miden salen de
+    `eval.vehicle_aggregation` en el YAML (lista vacía o `null` para no medir nada).
+
+    Con CV repetida se hace lo mismo que con las métricas por fila: se calcula cada
+    repetición por separado sobre su propio `score_r{i}` y se promedia. Agregar el
+    score promediado entre repeticiones sería un ensamble, y un ensamble de R pasadas
+    da mejor que el modelo que se está evaluando.
+
+    Una agregación que no se puede *medir* (el caso real: `noisy_or` sobre un modelo
+    que no devuelve probabilidades) no tumba la corrida ya entrenada: queda anotada con
+    el motivo en `metrics.json` y las otras se miden igual. Una agregación que no
+    *existe* —un nombre mal escrito en el YAML— sí falla, y antes de medir nada.
+    """
+    hows = eval_cfg.get("vehicle_aggregation", list(VEHICLE_AGGREGATIONS))
+    if hows is None:
+        hows = []
+    if isinstance(hows, str):
+        hows = [hows]
+    if not hows:
+        return None
+    unknown = [how for how in hows if how not in VEHICLE_AGGREGATIONS]
+    if unknown:
+        # Un nombre mal escrito en el YAML tiene que romper acá y no quedar como una
+        # agregación "que no se pudo medir" al final de metrics.json.
+        raise ValueError(
+            f"`eval.vehicle_aggregation` pide agregaciones que no existen: {unknown}. "
+            f"Disponibles: {list(VEHICLE_AGGREGATIONS)}."
+        )
+    k = int(eval_cfg.get("vehicle_topk", DEFAULT_TOPK))
+
+    # Una columna de score (y su fold) por repetición: con R=1, las de siempre.
+    columns = (
+        [("score", "fold")]
+        if n_repeats <= 1
+        else [(f"score_r{r}", f"fold_r{r}") for r in range(n_repeats)]
+    )
+
+    aggregations: dict[str, Any] = {}
+    by_repeat: dict[str, list[dict[str, Any]]] = {}
+    for how in hows:
+        try:
+            runs = [
+                vehicle_metrics(
+                    predictions, how, k=k, score_column=score_column, fold_column=fold_column
+                )
+                for score_column, fold_column in columns
+            ]
+        except (ValueError, KeyError) as exc:
+            logger.warning("Agregación por vehículo `%s` no se pudo medir: %s", how, exc)
+            aggregations[how] = {"skipped": str(exc)}
+            continue
+        # Igual que `oof`: se promedia entre repeticiones lo que es métrica, y lo que
+        # describe la corrida (cuántos vehículos, cuál agregación) se copia tal cual.
+        aggregations[how] = {
+            key: value if key in ("how", "k", "n", "n_positive") else float(np.mean([r[key] for r in runs]))
+            for key, value in runs[0].items()
+        }
+        if len(runs) > 1:
+            by_repeat[how] = runs
+
+    reference = next((m for m in aggregations.values() if "skipped" not in m), None)
+    block: dict[str, Any] = {
+        "label_column": VEHICLE_LABEL_COLUMN,
+        "topk_k": k,
+        "aggregations": aggregations,
+    }
+    if reference is not None:
+        # La tasa base por vehículo no es la de las filas: el PR-AUC de los dos ejes
+        # no se compara. Queda escrito en metrics.json para que nadie lo intente.
+        block["n_vehicles"] = reference["n"]
+        block["n_event_vehicles"] = reference["n_positive"]
+        block["base_rate"] = reference["base_rate"]
+        block["bag_size_mean"] = reference["bag_size_mean"]
+        block["comparabilidad"] = (
+            "El PR-AUC por vehículo tiene otra tasa base que el de filas: se compara el "
+            "lift (`pr_auc_lift`), no el PR-AUC pelado."
+        )
+    if by_repeat:
+        block["by_repeat"] = by_repeat
+    return block
+
+
 def init_wandb(cfg: dict, run_name: str):
     """wandb opcional: `mode: disabled` para iterar rápido, `offline` sin red.
 
@@ -243,6 +338,7 @@ def main() -> None:
     )
     budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
     point = operating_point(curve, max_false_alarms_per_1000=budget)
+    vehicle = vehicle_block(predictions, eval_cfg, n_repeats)
 
     metrics = {
         "oof": oof,
@@ -257,6 +353,8 @@ def main() -> None:
         "stratify": splits.get("stratify"),
         "min_valid_positives": splits.get("min_valid_positives"),
     }
+    if vehicle is not None:
+        metrics["vehicle"] = vehicle
 
     logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
                 oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
@@ -275,6 +373,22 @@ def main() -> None:
     else:
         logger.info("Ningún umbral respeta el presupuesto de %.0f falsas alarmas/1000", budget)
 
+    if vehicle is not None and "base_rate" in vehicle:
+        logger.info(
+            "Por vehículo (bolsa = %s) | %d vehículos, %d con evento | tasa base %.4f "
+            "(la de filas es %.4f: se compara el lift, no el PR-AUC)",
+            vehicle["label_column"], vehicle["n_vehicles"], vehicle["n_event_vehicles"],
+            vehicle["base_rate"], oof["base_rate"],
+        )
+        for how, m in vehicle["aggregations"].items():
+            if "skipped" in m:
+                logger.info("  %-9s | no medida: %s", how, m["skipped"].split(".")[0])
+                continue
+            logger.info(
+                "  %-9s | PR-AUC=%.4f (lift %.2fx) | ROC-AUC=%.4f | Brier=%.4f",
+                how, m["pr_auc"], m["pr_auc_lift"], m["roc_auc"], m["brier"],
+            )
+
     out_dir = ensure_dir(Path(resolve_path(cfg.get("output_dir", "experiments"))) / run_name)
     predictions.to_parquet(out_dir / "predictions.parquet", index=False)
     curve.to_csv(out_dir / "lead_time_curve.csv", index=False)
@@ -291,6 +405,22 @@ def main() -> None:
         flat.update({f"repeats/{k}_{stat}": v
                      for k, stats in repeats_spread.items()
                      for stat, v in stats.items()})
+        if vehicle is not None:
+            flat.update(
+                {
+                    f"vehicle/{key}": value
+                    for key, value in vehicle.items()
+                    if isinstance(value, (int, float)) and not isinstance(value, bool)
+                }
+            )
+            flat.update(
+                {
+                    f"vehicle/{how}/{key}": value
+                    for how, m in vehicle["aggregations"].items()
+                    for key, value in m.items()
+                    if isinstance(value, (int, float)) and not isinstance(value, bool)
+                }
+            )
         if point:
             flat.update(
                 {

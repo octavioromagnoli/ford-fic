@@ -5,6 +5,35 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-20 · La decisión se mide por vehículo con `mean`, y siempre como lift
+
+**Código:** `src/eval/metrics.py::vehicle_scores/vehicle_metrics`, bloque
+`eval.vehicle_aggregation` en el YAML. **Auditoría:** `scripts/audit_mil_bagsize.py`.
+
+**Qué.** Además del PR-AUC por fila (que sigue siendo el número de selección de modelo),
+cada corrida reporta las mismas métricas con el vehículo como unidad de decisión: los
+cortes de un vehículo son una bolsa (MIL) y se colapsan a un score único. De las cuatro
+agregaciones implementadas, **la que se usa para leer un resultado es `mean`**, y se
+reporta el **lift**, nunca el PR-AUC pelado.
+
+**Por qué.** Ford marca autos, no cortes: el PR-AUC por fila contesta una pregunta que
+nadie hace. Pero el eje de vehículo tiene dos trampas. (1) La tasa base cambia (0,310
+contra 0,125), así que los PR-AUC de los dos ejes no se comparan entre sí. (2) En el
+panel v1 la bolsa de los que fallan tiene el doble de cortes que la de los sanos —los
+fallados conservan todos sus cortes, los sanos solo los que llenan las celdas del
+emparejado—, y el tamaño de la bolsa **solo** ya da lift 1,79×. `max`, `topk` y
+`noisy_or` no le ganan a su propio nulo de permutación (p = 0,19 / 0,42 / 0,15); `mean`
+sí (1,51× contra 1,02×, p < 0,005), y es la única insensible al tamaño.
+
+**Qué queda abierto:** las bolsas asimétricas son del muestreo del panel, no de los
+vehículos. Emparejar a nivel vehículo (misma grilla de cortes para sanos y fallados) en
+vez de a nivel fila haría comparables las cuatro agregaciones. Es Track A y cambia el
+panel; hasta entonces, cualquier número de `noisy_or` se lee contra la auditoría.
+
+**Detalle:** [f3-mil-agregacion-vehiculo.md](f3-mil-agregacion-vehiculo.md).
+
+---
+
 ## 2026-09-20 · Una regeneración exige una caída mínima de 15 puntos
 
 **Qué.** `regen_drop_points` pasa de 5 a 15 en la fuente de verdad

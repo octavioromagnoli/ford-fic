@@ -7,6 +7,11 @@ Jerarquía explícita (plan §5):
    construcción y la accuracy premia al modelo que dice "sano" siempre.
 2. **Curva de anticipación vs. falsas alarmas** es el número de portada del pitch.
 3. **Bootstrap sobre los folds** para no confundir una diferencia con un ruido.
+4. **Las mismas métricas a nivel vehículo** (`vehicle_scores` / `vehicle_metrics`):
+   Ford marca autos, no cortes, así que la unidad de decisión es el vehículo —una
+   bolsa de cortes, en el marco de Multiple-Instance Learning—. No reemplaza al
+   PR-AUC por fila (cambia la tasa base, así que los dos números no se comparan
+   entre sí: se compara el lift).
 
 Definición operativa de alerta (la que evita inflar la anticipación): un vehículo
 queda alertado cuando su score supera el umbral en `k_consecutive` cortes
@@ -232,6 +237,173 @@ def operating_point(
         ["detection_rate", "median_lead_km"], ascending=[False, False]
     ).iloc[0]
     return best.to_dict()
+
+
+# --------------------------------------------------------------------------- #
+# Agregación a nivel vehículo (Multiple-Instance Learning)
+# --------------------------------------------------------------------------- #
+VEHICLE_LABEL_COLUMN = "event_observed"
+VEHICLE_AGGREGATIONS = ("max", "mean", "topk", "noisy_or")
+DEFAULT_TOPK = 3
+
+
+def _bag_score(scores: np.ndarray, how: str, k: int) -> float:
+    """Pooling de una bolsa (Ilse, Tomczak & Welling, ICML 2018, §2).
+
+    `topk` con menos de `k` instancias promedia las que hay: una bolsa corta no se
+    castiga por ser corta.
+    """
+    if scores.size == 0:
+        return float("nan")
+    if how == "max":
+        return float(np.max(scores))
+    if how == "mean":
+        return float(np.mean(scores))
+    if how == "topk":
+        k_eff = int(min(max(k, 1), scores.size))
+        return float(np.mean(np.sort(scores)[-k_eff:]))
+    if how == "noisy_or":
+        return float(1.0 - np.prod(1.0 - scores))
+    raise ValueError(
+        f"Agregación de bolsa desconocida: {how!r}. Disponibles: {list(VEHICLE_AGGREGATIONS)}"
+    )
+
+
+def vehicle_scores(
+    predictions: pd.DataFrame,
+    how: str = "max",
+    *,
+    k: int = DEFAULT_TOPK,
+    score_column: str = "score",
+    label_column: str = VEHICLE_LABEL_COLUMN,
+    fold_column: str | None = "fold",
+) -> pd.DataFrame:
+    """Colapsa los cortes de cada vehículo en un score único: una bolsa por vehículo.
+
+    El panel tiene una fila por `(vehículo, corte)` y el PR-AUC de selección se mide
+    ahí, pero **la decisión de negocio es por vehículo**: Ford marca autos, no cortes.
+    Es el marco de Multiple-Instance Learning: cada vehículo es una bolsa, cada corte
+    una instancia, y la etiqueta de la bolsa es `event_observed` —el vehículo tuvo
+    evento— y no `label`, que es "el evento cae en el horizonte de *este* corte".
+    Acá no se entrena nada: es una capa de decisión sobre los scores out-of-fold que
+    ya existen (attention-MIL entrenado end-to-end sobreajusta con 53 bolsas).
+
+    Agregaciones (`how`), todas sin parámetros que ajustar salvo `k`:
+
+    * `max`: la regla operativa natural —alcanza un corte sospechoso para marcar el
+      auto—. Es la más sensible a un pico de ruido aislado.
+    * `mean`: el vehículo entero está degradado, no un corte. Diluye la señal de un
+      vehículo con historia larga y sana antes de empeorar.
+    * `topk`: media de los `k` cortes mayores. El punto medio entre las dos: exige
+      más de un corte alto sin pedir que toda la historia lo sea.
+    * `noisy_or`: `1 − Π(1 − p_i)`, el pooling probabilístico clásico ("al menos una
+      instancia positiva"). **Necesita que los scores sean probabilidades**: si el
+      modelo devuelve un margen, un riesgo relativo o cualquier cosa fuera de [0, 1],
+      esto levanta `ValueError` en vez de calibrar por su cuenta —calibrar acá
+      escondería el problema dentro de una métrica de selección—. Ojo además con que
+      crece con el tamaño de la bolsa: en el panel v1 las bolsas van de 1 a 68 cortes,
+      así que `noisy_or` mide en parte cuánta historia tiene el vehículo.
+
+    Out-of-fold: el split es agrupado por vehículo (CLAUDE.md, regla 2), así que
+    todas las filas de una bolsa salieron del mismo fold de validación y el score
+    agregado sigue siendo estrictamente out-of-fold. Si algún día alguien splitea por
+    fila, deja de serlo — por eso, si las predicciones traen la columna de fold, acá
+    se verifica que cada vehículo tenga uno solo.
+
+    Devuelve un DataFrame con `vehicle_id`, `score` (el de la bolsa), `label`
+    (la etiqueta de la bolsa) y `n_cuts`, ordenado por `vehicle_id`.
+    """
+    for column in ("vehicle_id", score_column, label_column):
+        if column not in predictions.columns:
+            raise KeyError(
+                f"Falta la columna `{column}` para agregar por vehículo. "
+                f"Las predicciones traen {list(predictions.columns)}."
+            )
+    if how not in VEHICLE_AGGREGATIONS:
+        raise ValueError(
+            f"Agregación de bolsa desconocida: {how!r}. Disponibles: {list(VEHICLE_AGGREGATIONS)}"
+        )
+
+    scores = predictions[score_column].to_numpy(dtype=float)
+    if not np.isfinite(scores).all():
+        raise ValueError(
+            f"La columna `{score_column}` tiene {int((~np.isfinite(scores)).sum())} valor(es) "
+            "no finitos: una bolsa con un NaN contamina el score del vehículo entero."
+        )
+    if how == "noisy_or" and (scores.min() < 0.0 or scores.max() > 1.0):
+        raise ValueError(
+            f"`noisy_or` necesita probabilidades y `{score_column}` está en "
+            f"[{scores.min():.4g}, {scores.max():.4g}]. Este modelo no devuelve "
+            "probabilidades: sacá `noisy_or` de `eval.vehicle_aggregation` o calibralo "
+            "explícitamente antes (calibrar acá adentro escondería el problema)."
+        )
+
+    if fold_column and fold_column in predictions.columns:
+        folds_per_vehicle = predictions.groupby("vehicle_id", observed=True)[fold_column].nunique()
+        leaky = folds_per_vehicle[folds_per_vehicle > 1]
+        if len(leaky):
+            raise ValueError(
+                f"{len(leaky)} vehículo(s) con cortes en más de un fold "
+                f"(`{fold_column}`): el score de la bolsa mezclaría folds y dejaría de ser "
+                "out-of-fold. El split tiene que ser agrupado por vehículo (CLAUDE.md, regla 2)."
+            )
+
+    rows = []
+    for vehicle_id, group in predictions.groupby("vehicle_id", observed=True, sort=True):
+        bag = group[score_column].to_numpy(dtype=float)
+        labels = group[label_column].to_numpy()
+        rows.append(
+            {
+                "vehicle_id": str(vehicle_id),
+                "score": _bag_score(bag, how, k),
+                "label": int(np.max(labels)),
+                "n_cuts": int(bag.size),
+            }
+        )
+    return pd.DataFrame(rows, columns=["vehicle_id", "score", "label", "n_cuts"])
+
+
+def vehicle_metrics(
+    predictions: pd.DataFrame,
+    how: str = "max",
+    *,
+    k: int = DEFAULT_TOPK,
+    score_column: str = "score",
+    label_column: str = VEHICLE_LABEL_COLUMN,
+    fold_column: str | None = "fold",
+) -> dict[str, Any]:
+    """Las métricas de clasificación, pero con el vehículo como unidad de decisión.
+
+    Mismas métricas que `classification_metrics()` (PR-AUC, ROC-AUC, Brier, tasa base
+    y lift) sobre las bolsas de `vehicle_scores()`, más `how`, `k` y el tamaño de bolsa.
+
+    **El PR-AUC por vehículo no se compara contra el PR-AUC por fila.** Son dos tasas
+    base distintas: en dev del panel v1 hay 53 vehículos con evento sobre 171 con
+    cortes (0,31) contra 254 filas positivas sobre 2.029 (0,125), y el PR-AUC arranca
+    en la tasa base. Un PR-AUC por vehículo de 0,40 con tasa base 0,31 es *peor* que
+    uno por fila de 0,165 con tasa base 0,125. Lo comparable es **el lift**
+    (`pr_auc_lift`), y es lo que hay que reportar.
+
+    Y ojo con la tasa base misma: 0,31 es la del panel, donde los sanos están
+    emparejados por odómetro y mes (`sampling` en `configs/data/panel_v1.yaml`), no la
+    de la flota de Ford. El lift es lo que sobrevive al cambio de prevalencia; el
+    número pelado no.
+    """
+    bags = vehicle_scores(
+        predictions,
+        how,
+        k=k,
+        score_column=score_column,
+        label_column=label_column,
+        fold_column=fold_column,
+    )
+    metrics: dict[str, Any] = dict(classification_metrics(bags["label"], bags["score"]))
+    metrics["how"] = how
+    if how == "topk":
+        metrics["k"] = int(k)
+    metrics["bag_size_mean"] = float(bags["n_cuts"].mean())
+    metrics["bag_size_median"] = float(bags["n_cuts"].median())
+    return metrics
 
 
 # --------------------------------------------------------------------------- #

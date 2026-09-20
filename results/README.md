@@ -8,6 +8,7 @@ un PR-AUC más bajo con otra tasa base puede ser un lift mayor. Las corridas `ti
 |---|---|---|---|---|---|---|---|---|---|
 | `f3-lgbm-timesfm` | lgbm | panel_timesfm.parquet | 0.125 | 0.170 [0.168, 0.244] | 1.36× | 13% | 4,802 km | `configs/exp_lgbm_timesfm.yaml` ⚠ |  |
 | `f3-lgbm-timesfm-r3` | lgbm | panel_timesfm.parquet | 0.125 | 0.169 [0.175, 0.219] | 1.35× | 9% | 11,906 km | `data/v364/cfg/exp_lgbm_timesfm_r3.yaml` ⚠ |  |
+| `f3-lgbm-panel-v1-mil` | lgbm | panel.parquet | 0.125 | 0.165 [0.173, 0.221] | 1.32× | 9% | 10,408 km | `configs/exp_lgbm_panel_v1_mil.yaml` | Mismo LightGBM y mismos folds que f3-lgbm-panel-v1: lo único que cambia es el eje de evaluación (agregación a nivel vehículo, MIL). Por vehículo el lift sube a 1,51x con `mean` (vs 1,32x por fila) y la detección a 15% (vs 9,4%) con el mismo presupuesto de falsas alarmas. `max`, `topk` y `noisy_or` dan más lift pero no le ganan a su propio nulo de permutación: es el tamaño de la bolsa (los que fallan conservan todos sus cortes, los sanos solo los emparejados). Detalle y evidencia: docs/memoria/f3-mil-agregacion-vehiculo.md. |
 | `f3-lgbm-panel-v1` | lgbm | panel.parquet | 0.125 | 0.165 [0.173, 0.221] | 1.32× | 9% | 10,408 km | `configs/exp_lgbm_panel_v1.yaml` ⚠ |  |
 | `f3-lgbm-panel-v1-r3` | lgbm | panel.parquet | 0.125 | 0.161 [0.169, 0.200] | 1.29× | 9% | 11,802 km | `data/v364/cfg/exp_lgbm_panel_v1_r3.yaml` ⚠ |  |
 | `f3-lgbm-thermal-debt` | lgbm | panel_thermal_debt.parquet | 0.125 | 0.157 [0.158, 0.207] | 1.26× | 9% | 9,908 km | `configs/exp_lgbm_thermal_debt.yaml` ⚠ |  |
