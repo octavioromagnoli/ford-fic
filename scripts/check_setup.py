@@ -13,6 +13,8 @@ fallan, invalidan todo lo que venga después:
    hay leakage o un bug en la evaluación).
 4. Las métricas de anticipación premian a un ranker oráculo y castigan al ruido.
 5. La agregación a nivel vehículo (MIL) colapsa bolsas sin romper el out-of-fold.
+6. La descomposición cohorte/cuándo: el techo de cohorte es el piso real de un
+   PR-AUC por fila, y (a') aísla lo que el modelo sabe del *cuándo*.
 """
 
 from __future__ import annotations
@@ -36,10 +38,13 @@ from src.config import load_config, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
     VEHICLE_AGGREGATIONS,
     classification_metrics,
+    cohort_ceiling,
     lead_time_curve,
     operating_point,
+    pr_auc_within_failed,
     vehicle_metrics,
     vehicle_scores,
+    when_contribution,
 )
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
@@ -452,6 +457,69 @@ def main() -> int:
             - float(np.mean([m["pr_auc"] for m in repeated_block["by_repeat"]["max"]]))
         )
         < 1e-12,
+    )
+
+    # 6 · descomposición cohorte / cuándo: contra qué piso se lee un PR-AUC por fila
+    #
+    # El panel dummy no tiene señal, así que acá no se verifican valores del panel real
+    # (eso lo hace `audit_model.py` sobre dev): se verifican las propiedades que hacen
+    # que la descomposición signifique algo.
+    ceiling = cohort_ceiling(predictions["label"], predictions["vehicle_id"])
+    check(
+        "cohorte: el techo es la precisión de marcar todos los cortes de los fallados",
+        abs(ceiling["pr_auc"] - ceiling["n_positive"] / ceiling["n_failed_rows"]) < 1e-9,
+        f"techo={ceiling['pr_auc']:.4f} = {ceiling['n_positive']}/{ceiling['n_failed_rows']}",
+    )
+    check(
+        "cohorte: el techo está por encima de la tasa base (identificar cohorte ya paga)",
+        ceiling["pr_auc"] > ceiling["base_rate"] and ceiling["lift"] > 1.0,
+        f"techo={ceiling['pr_auc']:.4f} vs tasa base={ceiling['base_rate']:.4f} "
+        f"(lift {ceiling['lift']:.2f}x)",
+    )
+    check(
+        "cohorte: puntuar por tasa del vehículo es una cota más laxa que el indicador",
+        ceiling["pr_auc_rate"] >= ceiling["pr_auc"] - 1e-9,
+        f"por tasa={ceiling['pr_auc_rate']:.4f} >= indicador={ceiling['pr_auc']:.4f}",
+    )
+    # El propio indicador de cohorte, puntuado por `pr_auc_within_failed`, no puede
+    # ordenar nada: dentro de los fallados es constante. Ese es el sentido de la métrica.
+    cohort_score = (
+        predictions.groupby("vehicle_id", observed=True)["label"].transform("max").astype(float)
+    )
+    within_cohort = pr_auc_within_failed(
+        predictions["label"], cohort_score, predictions["vehicle_id"]
+    )
+    check(
+        "entre fallados: el identificador de cohorte perfecto no ordena (lift ≈ 1)",
+        abs(within_cohort["lift"] - 1.0) < 1e-9,
+        f"PR-AUC={within_cohort['pr_auc']:.4f} sobre tasa {within_cohort['base_rate']:.4f}",
+    )
+    check(
+        "entre fallados: el azar de referencia es la tasa del subconjunto, no la global",
+        within_cohort["base_rate"] > float(predictions["label"].mean()),
+        f"{within_cohort['base_rate']:.4f} vs {float(predictions['label'].mean()):.4f}",
+    )
+    # (a') sobre un oráculo del *cuándo* (score = -time_to_event_km) tiene que dar
+    # positivo: es un modelo que ordena los cortes dentro del auto y nada más.
+    when_oracle = predictions.copy()
+    when_oracle["score"] = -when_oracle["time_to_event_km"].fillna(
+        when_oracle["time_to_event_km"].max() + 1.0
+    )
+    oracle_when = when_contribution(when_oracle)
+    check(
+        "(a'): un oráculo del cuándo pierde PR-AUC al colapsarse por vehículo",
+        oracle_when["delta"] > 0,
+        f"{oracle_when['pr_auc']:.4f} → {oracle_when['pr_auc_vehicle_mean']:.4f} "
+        f"({oracle_when['delta']:+.4f})",
+    )
+    # Y sobre un score que ya es constante por vehículo tiene que dar exactamente 0:
+    # no había nada del *cuándo* que borrar.
+    flat_when = predictions.copy()
+    flat_when["score"] = cohort_score
+    check(
+        "(a'): un score constante por vehículo no pierde nada (no sabía el cuándo)",
+        abs(when_contribution(flat_when)["delta"]) < 1e-12,
+        f"delta={when_contribution(flat_when)['delta']:+.2e}",
     )
 
     failed = [name for name, ok, _ in _checks if not ok]

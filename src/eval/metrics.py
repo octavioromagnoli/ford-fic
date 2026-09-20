@@ -68,6 +68,149 @@ def classification_metrics(y_true: Sequence[int], y_score: Sequence[float]) -> d
     }
 
 
+
+# --------------------------------------------------------------------------- #
+# Descomposición: cuánto del PR-AUC es "qué auto" y cuánto es "cuándo"
+# --------------------------------------------------------------------------- #
+def _vehicle_groups(vehicle_ids: Sequence[Any]) -> np.ndarray:
+    """Los ids como array de strings, que es como se agrupa en todo el módulo."""
+    return np.asarray(pd.Series(list(vehicle_ids)).astype(str))
+
+
+def cohort_ceiling(
+    y_true: Sequence[int], vehicle_ids: Sequence[Any]
+) -> dict[str, float]:
+    """El techo de un modelo que sabe **qué** vehículos fallan y nada del *cuándo*.
+
+    Puntúa cada fila con 1 si su vehículo tiene al menos un corte positivo y 0 si no:
+    el identificador de cohorte perfecto, con timing nulo. Como el score es constante
+    dentro de cada grupo, el PR-AUC que sale es exactamente la precisión de marcar a
+    todos los cortes de los vehículos fallados — en el dev del panel v1, 254/967.
+
+    **Es el piso contra el que se lee un PR-AUC por fila, no la tasa base.** En este
+    panel las 254 filas positivas están todas dentro de los 967 cortes de vehículos
+    fallados, así que 0,263 de PR-AUC (lift 2,10×) se consigue sin anticipar nunca, y
+    la meta de 1,6–2× de lift del plan cae **por debajo** de ese techo. Un modelo que
+    no lo supera no demostró timing: demostró que reconoce la cohorte.
+
+    No confundir con puntuar por la *tasa* de positivos del vehículo (`pr_auc_rate`):
+    también es constante por vehículo, pero ordena a los fallados entre sí por cuánta
+    de su historia cae en la ventana de riesgo, que ya es información del *cuándo*.
+    Va como referencia secundaria —una cota superior laxa—, nunca como el techo.
+
+    Devuelve `pr_auc`/`lift` (el indicador binario, el techo) más `base_rate`,
+    `n_failed_rows` y la variante por tasa. NaN si hay una sola clase.
+    """
+    y = np.asarray(y_true, dtype=int)
+    groups = _vehicle_groups(vehicle_ids)
+    if len(y) != len(groups):
+        raise ValueError(f"y_true tiene {len(y)} filas y vehicle_ids {len(groups)}")
+
+    labels = pd.Series(y, index=pd.Index(groups, name="vehicle_id"))
+    by_vehicle = labels.groupby(level=0, observed=True)
+    indicator = by_vehicle.transform("max").to_numpy(dtype=float)
+    rate = by_vehicle.transform("mean").to_numpy(dtype=float)
+
+    base_rate = float(y.mean()) if len(y) else float("nan")
+    ap = pr_auc(y, indicator)
+    ap_rate = pr_auc(y, rate)
+    return {
+        "pr_auc": ap,
+        "lift": float(ap / base_rate) if base_rate else float("nan"),
+        "pr_auc_rate": ap_rate,
+        "lift_rate": float(ap_rate / base_rate) if base_rate else float("nan"),
+        "base_rate": base_rate,
+        "n": int(len(y)),
+        "n_positive": int(y.sum()),
+        "n_failed_rows": int(indicator.sum()),
+        "n_failed_vehicles": int(by_vehicle.max().sum()),
+    }
+
+
+def pr_auc_within_failed(
+    y_true: Sequence[int], y_score: Sequence[float], vehicle_ids: Sequence[Any]
+) -> dict[str, float]:
+    """PR-AUC sobre las filas de vehículos que **sí** fallan: la pregunta del *cuándo*.
+
+    Restringe la medición a los cortes de los vehículos con al menos un positivo, que
+    es donde la pregunta "¿falla en los próximos H km?" tiene sentido. Ahí el nivel del
+    vehículo ya no ordena nada —todas las filas son del mismo lado de la cohorte—, así
+    que lo único que puede subir el PR-AUC es el orden de los cortes dentro del auto.
+
+    El azar acá no es la tasa base del panel (0,125) sino la tasa dentro del subconjunto
+    (0,263 en dev): `base_rate` y `lift` salen de esa tasa, no de la global. Por eso el
+    PR-AUC de acá **no se compara** contra el PR-AUC por fila de la tabla; lo comparable
+    es el lift, igual que con el eje de vehículo.
+
+    Complementa a `cohort_ceiling()`: aquel dice cuánto se saca sin timing, este mide
+    lo que queda cuando el timing es lo único que hay.
+    """
+    y = np.asarray(y_true, dtype=int)
+    score = np.asarray(y_score, dtype=float)
+    groups = _vehicle_groups(vehicle_ids)
+    if not (len(y) == len(score) == len(groups)):
+        raise ValueError(
+            f"Longitudes distintas: y_true={len(y)}, y_score={len(score)}, "
+            f"vehicle_ids={len(groups)}"
+        )
+
+    labels = pd.Series(y, index=pd.Index(groups, name="vehicle_id"))
+    failed = labels.groupby(level=0, observed=True).transform("max").to_numpy() == 1
+    y_f, score_f = y[failed], score[failed]
+    base_rate = float(y_f.mean()) if len(y_f) else float("nan")
+    ap = pr_auc(y_f, score_f)
+    return {
+        "pr_auc": ap,
+        "base_rate": base_rate,
+        "lift": float(ap / base_rate) if base_rate else float("nan"),
+        "roc_auc": roc_auc(y_f, score_f),
+        "n": int(len(y_f)),
+        "n_positive": int(y_f.sum()),
+        "n_vehicles": int(pd.unique(groups[failed]).size),
+    }
+
+
+def when_contribution(
+    predictions: pd.DataFrame,
+    *,
+    score_column: str = "score",
+    label_column: str = "label",
+) -> dict[str, float]:
+    """(a') El aporte del *cuándo*: cuánto PR-AUC se pierde al borrar el orden interno.
+
+    Reemplaza el score de cada fila por el promedio de su vehículo —sin reentrenar, con
+    todo lo demás fijo— y devuelve la caída de PR-AUC. Lo que se pierde es exactamente
+    lo que el modelo sabía del *cuándo*: el colapso conserva intacto el orden **entre**
+    vehículos y destruye el orden **dentro** de cada uno.
+
+    Es la única de las auditorías que aísla el timing. La permutación intra-vehículo de
+    `scripts/audit_model.py` no puede: deja en pie *qué* vehículos fallan, que es de
+    donde sale casi todo el PR-AUC de este panel, así que no tiene nulo contra el cual
+    leerse (ver `docs/memoria/decisiones.md`).
+
+    `delta` positivo = el orden dentro del vehículo suma; negativo = el modelo ordena
+    los cortes al revés y colapsarlo lo mejoraría.
+    """
+    for column in (score_column, label_column, "vehicle_id"):
+        if column not in predictions:
+            raise KeyError(f"Las predicciones no traen `{column}`")
+
+    y = predictions[label_column].to_numpy(dtype=int)
+    score = predictions[score_column].to_numpy(dtype=float)
+    collapsed = (
+        predictions.groupby("vehicle_id", observed=True)[score_column]
+        .transform("mean")
+        .to_numpy(dtype=float)
+    )
+    full, flat = pr_auc(y, score), pr_auc(y, collapsed)
+    return {
+        "pr_auc": full,
+        "pr_auc_vehicle_mean": flat,
+        "delta": float(full - flat),
+        "n": int(len(y)),
+        "n_positive": int(y.sum()),
+    }
+
 # --------------------------------------------------------------------------- #
 # Métricas de anticipación
 # --------------------------------------------------------------------------- #
