@@ -1,0 +1,56 @@
+run: f0-dummy-baserate
+logged_on: '2026-09-19'
+note: ''
+source:
+  config_path: configs/exp_dummy.yaml
+  config_versioned: true
+  branch: feat/model-cnn-lstm
+  commit: 36dad79
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: baserate
+  pr_auc: 0.02091234614198431
+  pr_auc_lo: 0.020859085089830847
+  pr_auc_hi: 0.021270946321480508
+  base_rate: 0.021090489299351745
+  lift: 0.9915533890732013
+  roc_auc: 0.4968893727037692
+  brier: 0.020645715333801957
+  detection_rate: 0.0
+  median_lead_km: .nan
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_dummy.parquet
+  splits: ${DATA_DIR}/processed/splits_dummy.json
+  n_positive: 475
+config:
+  name: f0-dummy-baserate
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_dummy.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_dummy.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: true
+    strict: true
+  model:
+    name: baserate
+    params: {}
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f0-infra
+    job_type: train
+    tags:
+    - f0
+    - dummy
+    - smoke-test
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs/exp_dummy.yaml

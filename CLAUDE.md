@@ -204,9 +204,15 @@ regeneración (`Stopped Cleaning Automatically` es 1 mensaje de cada 100.000).
 ## Flujo de trabajo
 
 - Una rama por feature o experimento (`feat/...`, `exp/...`), `main` siempre
-  funcional, merge solo por PR con revisión de otro.
+  funcional. El merge no espera revisión de otro: se mergea cuando la rama pasa el
+  checklist, y lo que hay que entender queda escrito en `docs/memoria/decisiones.md`,
+  no en un hilo de PR.
 - Nunca dos personas editan el mismo archivo: Track A datos (`src/data`,
   `src/features`), Track B modelos (`src/models`, `src/training`), Track C
   evaluación (`src/eval`, dashboard).
-- Antes de cada PR, pasar el checklist de trampas técnicas del plan §9 y correr
-  `python scripts/check_setup.py`.
+- Antes de cada merge a `main`, pasar el checklist de trampas técnicas del plan §9 y
+  correr `python scripts/check_setup.py`.
+- Toda corrida que valga la pena se anota en `results/` (`python scripts/results.py
+  log <corrida> --note "..."`) y se commitea con su `configs/exp_*.yaml`: `experiments/`
+  y wandb no se versionan. La config del modelo final sale de ahí (`results.py show`).
+  Detalle en `results/README.md`.

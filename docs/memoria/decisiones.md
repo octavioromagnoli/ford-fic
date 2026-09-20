@@ -5,10 +5,29 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-20 · Los resultados de cada corrida se anotan en `results/`, versionados
+
+**Código:** `scripts/results.py`. **Cómo se usa:** `results/README.md`.
+
+**Qué.** Un `results/<corrida>.yaml` por corrida con las métricas resumen, la config
+resuelta **completa** y la procedencia (rama, commit, si el YAML estaba versionado),
+más una nota libre. La tabla se genera; los registros no se editan salvo la nota.
+
+**Por qué.** `experiments/` y wandb no se versionan (regla 8), y varios YAML de
+experimento vivían solo en otras ramas, en stashes o en `data/v364/cfg/`. Sin un
+registro, la config del mejor modelo —la que hay que entregar— se pierde con la
+máquina. Un archivo por corrida y no una tabla única: los tres tracks anotan en
+paralelo y una tabla compartida se pisaría en cada merge.
+
+**Ojo.** Comparar solo corridas con la misma tasa base (mismas filas): `tfm-full` y
+`tfm-window` muestran lift ~3,8× con PR-AUC ~0,09 porque usan otras filas.
+
+---
+
 ## 2026-09-19 · Los modelos secuenciales entran por un panel secuencial, no por un entrypoint aparte
 
-**Decidió:** Octavio (pedido: la solución de la tutora como baseline); a revisión en el
-PR. **Código:** `src/features/sequences.py`, `scripts/build_seq_panel.py`,
+**Decidió:** Octavio (pedido: la solución de la tutora como baseline).
+**Código:** `src/features/sequences.py`, `scripts/build_seq_panel.py`,
 `src/models/cnn_lstm.py`. **Config:** `configs/data/panel_seq_v1.yaml`,
 `configs/exp_cnn_lstm.yaml`.
 
