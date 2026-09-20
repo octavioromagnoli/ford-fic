@@ -12,7 +12,7 @@ un PR-AUC más bajo con otra tasa base puede ser un lift mayor. Las corridas `ti
 | `f3-lgbm-panel-v1-r3` | lgbm | panel.parquet | 0.125 | 0.161 [0.169, 0.200] | 1.29× | 9% | 11,802 km | `data/v364/cfg/exp_lgbm_panel_v1_r3.yaml` ⚠ |  |
 | `f3-lgbm-thermal-debt` | lgbm | panel_thermal_debt.parquet | 0.125 | 0.157 [0.158, 0.207] | 1.26× | 9% | 9,908 km | `configs/exp_lgbm_thermal_debt.yaml` ⚠ |  |
 | `f3-lgbm-thermal-debt-r3` | lgbm | panel_thermal_debt.parquet | 0.125 | 0.154 [0.157, 0.187] | 1.23× | 11% | 11,855 km | `data/v364/cfg/exp_lgbm_thermal_debt_r3.yaml` ⚠ |  |
-| `f3-cnn-lstm-tutora` | cnn_lstm | panel_seq_v1.parquet | 0.125 | 0.153 [0.144, 0.213] | 1.23× | 19% | 7,740 km | `configs/exp_cnn_lstm.yaml` ⚠ |  |
+| `f3-cnn-lstm-tutora` | cnn_lstm | panel_seq_v1.parquet | 0.125 | 0.153 [0.144, 0.213] | 1.23× | 19% | 7,740 km | `configs/exp_cnn_lstm.yaml` | Baseline de la tutora (Conv1D+LSTM, ~3.000 parámetros) sobre panel_seq_v1: mismas filas y folds que el panel v1. Queda 0,012 de PR-AUC por debajo del LightGBM con la misma tasa base; detecta más (19% vs 9%) pero con menos anticipación. No lo reemplaza: 53 eventos no alcanzan para una red. |
 | `f3-baserate-panel-v1` | baserate | panel.parquet | 0.125 | 0.121 [0.120, 0.130] | 0.97× | 0% | — | `configs/exp_baserate.yaml` |  |
 | `f3-lgbm-tfm-full` | lgbm | panel_tfm_full.parquet | 0.025 | 0.098 [0.080, 0.161] | 3.89× | 38% | 6,704 km | `configs/exp_lgbm_tfm_full.yaml` ⚠ |  |
 | `f3-lgbm-tfm-window` | lgbm | panel_tfm_window.parquet | 0.025 | 0.093 [0.091, 0.167] | 3.69× | 37% | 9,182 km | `configs/exp_lgbm_tfm_window.yaml` ⚠ |  |

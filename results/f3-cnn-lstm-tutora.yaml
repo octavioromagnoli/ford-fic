@@ -1,11 +1,14 @@
 run: f3-cnn-lstm-tutora
-logged_on: '2026-09-19'
-note: ''
+logged_on: '2026-09-20'
+note: 'Baseline de la tutora (Conv1D+LSTM, ~3.000 parámetros) sobre panel_seq_v1:
+  mismas filas y folds que el panel v1. Queda 0,012 de PR-AUC por debajo del LightGBM
+  con la misma tasa base; detecta más (19% vs 9%) pero con menos anticipación. No
+  lo reemplaza: 53 eventos no alcanzan para una red.'
 source:
   config_path: configs/exp_cnn_lstm.yaml
-  config_versioned: false
+  config_versioned: true
   branch: feat/model-cnn-lstm
-  commit: 36dad79
+  commit: bf999ab
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: cnn_lstm
