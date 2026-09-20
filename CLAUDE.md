@@ -50,13 +50,22 @@ que las reproduce. Nueve que cambian cómo se escribe el código:
   contra el 30% de las sanas, y **eso no se arregla emparejando**: odómetro, mes y
   posición son estructuralmente incompatibles (un sano no puede estar en el mismo
   odómetro, el mismo mes y el final de su serie). Cerrar posición abre calendario, y el
-  calendario es explotable: la ablación `extra_prefixes: [aux_]` da ROC 0,92 en el panel
-  emparejado por posición y 0,72 en el v1. **Todo panel nuevo pasa esa ablación**
-  (`configs/exp_l1_v1_auxcal.yaml`) antes de que se le crea un número. La salida de
-  diseño es el evento ficticio para los sanos:
-  `docs/memoria/f3-emparejado-posicion-vs-calendario.md`. La posición viaja en el panel
+  **eso ya está resuelto** (19-09): con `pseudo_event.enabled` (a cada sano se le sortea
+  un evento ficticio y se le corta la serie ahí) **más** `label.window_only` (de todos
+  los vehículos se conservan solo los `H/Δ` cortes previos al evento real o ficticio), la
+  posición cae a **P = 0,49** y el modelo sube a **ROC 0,703** contra 0,617 del v1. Las
+  dos claves hacen falta: la primera sola deja el atajo en 0,88, porque dentro de un
+  vehículo la etiqueta *es* la posición. Vienen apagadas por default; el detalle está en
+  `docs/memoria/f3-evento-ficticio-y-ventana-de-riesgo.md`. La posición viaja en el panel
   como `aux_cut_position`, calculada antes de muestrear: las auditorías usan esa columna,
   porque recalcularla sobre el panel ya muestreado la distorsiona.
+- **Todo panel nuevo pasa la ablación de `aux_`** antes de que se le crea un número, y
+  **se corre por familia, no en bloque**: la gruesa (`extra_prefixes: [aux_]`) detecta que
+  hay un atajo, la fina dice cuál. Medido en los tres paneles, el que filtra es
+  `aux_static_` (el sesgo de `Engine` de F1): +0,09 a +0,16 de ROC. La temperatura
+  ambiente aporta +0,007 y el marcador `Regenerations` 0,000 — salvo donde el mes no se
+  empareja, ahí el marcador sí se vuelve un reloj (+0,072). Configs:
+  `configs/exp_l1_*_abl_*.yaml`.
 - Hay **13 vehículos duplicados bajo dos códigos**: se colapsan con
   `src/data/dedupe.py` antes de cualquier split, o la regla 2 se viola en silencio.
 - **`Engine` está excluido** del set base: `ENG_3` es el 36% de los sanos y el 0%
