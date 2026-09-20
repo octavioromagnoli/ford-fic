@@ -35,7 +35,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import ensure_dir, load_config, repo_root, resolve_path, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
+    bootstrap_by_vehicle,
     classification_metrics,
+    concordance_index_oof,
     dispersion,
     lead_time_curve,
     operating_point,
@@ -210,6 +212,9 @@ def main() -> None:
         splits,
         model_name=model_cfg["name"],
         model_params=model_cfg.get("params", {}),
+        # Con qué objetivo se entrena (src/training/targets.py). Sin la clave, `label`.
+        # Lo que se mide no cambia: la etiqueta dura, con los mismos folds.
+        target=cfg.get("target"),
         strict_splits=bool(cfg.get("splits", {}).get("strict", True)),
         min_valid_positives=options["min_valid_positives"],
     )
@@ -244,6 +249,20 @@ def main() -> None:
     budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
     point = operating_point(curve, max_false_alarms_per_1000=budget)
 
+    # Secundarias. El C-index mide el orden usando a los sanos como censurados, no como
+    # ceros; el bootstrap por vehículo es el intervalo que corresponde a un panel con ~5
+    # filas correlacionadas por auto (el de folds mide otra cosa: el sorteo de folds).
+    concordance = concordance_index_oof(predictions) if "aux_km_observed_after_cut" in predictions else None
+    by_vehicle = (
+        bootstrap_by_vehicle(
+            predictions,
+            n_boot=int(eval_cfg.get("bootstrap_n_boot", 1000)),
+            seed=seed,
+        )
+        if eval_cfg.get("bootstrap_by_vehicle", False)
+        else None
+    )
+
     metrics = {
         "oof": oof,
         "n_repeats": n_repeats,
@@ -251,15 +270,25 @@ def main() -> None:
         "repeats_spread": repeats_spread,
         "folds": fold_metrics,
         "folds_summary": summary,
+        "concordance": concordance,
+        "bootstrap_by_vehicle": by_vehicle,
         "operating_point": point,
         "operating_point_budget_per_1000": budget,
         "k_consecutive": k_consecutive,
+        "target": cfg.get("target"),
         "stratify": splits.get("stratify"),
         "min_valid_positives": splits.get("min_valid_positives"),
     }
 
     logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
                 oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
+    if concordance and np.isfinite(concordance["c_index"]):
+        logger.info("OOF | C-index=%.4f sobre %d filas (%d con evento)",
+                    concordance["c_index"], concordance["n"], concordance["n_events"])
+    if by_vehicle:
+        for name, ci in by_vehicle.items():
+            logger.info("Bootstrap por vehículo (%d vehículos) | %s=%.4f [%.4f, %.4f]",
+                        ci["n_vehicles"], name, ci["point"], ci["lo"], ci["hi"])
     if n_repeats > 1:
         spread = repeats_spread["pr_auc"]
         logger.info(
@@ -291,6 +320,12 @@ def main() -> None:
         flat.update({f"repeats/{k}_{stat}": v
                      for k, stats in repeats_spread.items()
                      for stat, v in stats.items()})
+        if concordance:
+            flat["oof/c_index"] = concordance["c_index"]
+        if by_vehicle:
+            flat.update({f"vehicle_boot/{k}_{stat}": v
+                         for k, ci in by_vehicle.items()
+                         for stat, v in ci.items()})
         if point:
             flat.update(
                 {

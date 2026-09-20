@@ -172,6 +172,9 @@ def build_dummy_panel(cfg: dict) -> pd.DataFrame:
                     "window_km": window_km,
                     "label": label,
                     "time_to_event_km": time_to_event,
+                    # Seguimiento observado después del corte: mismo contrato que el
+                    # panel real (`src/data/panel.py::FOLLOWUP_COLUMN`).
+                    "aux_km_observed_after_cut": float(last_odo - cut_odo),
                     "event_observed": int(has_event[i]),
                     "static_SalesCountry_cd": statics["static_SalesCountry_cd"][i],
                     "static_daysUntilSale": float(days_until_sale[i]),

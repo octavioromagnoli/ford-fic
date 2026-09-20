@@ -1,0 +1,7 @@
+# Dependencia OPCIONAL: solo para el builder `gpboost_survival` (efecto aleatorio por
+# vehículo en el apilado de supervivencia, src/models/survival_stacking.py). No entra a
+# requirements.txt (pinneado y compartido) hasta que se discuta en PR; el registry la
+# importa recién al construir el modelo, así que sin GPBoost todo lo demás corre —
+# incluido `survival_stacking`, que es el mismo apilado sobre LightGBM.
+#   uv pip install -r requirements-gpboost.txt
+gpboost==1.7.4

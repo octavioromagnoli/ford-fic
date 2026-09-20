@@ -1,0 +1,81 @@
+run: f3-gpboost-survival
+logged_on: '2026-09-20'
+note: 'El mismo apilado con intercept aleatorio por vehiculo (GPBoost). NO mejora:
+  0.143 de PR-AUC contra 0.161 sin efecto aleatorio. El motivo esta medido: la varianza
+  del intercept se estima en 9.4-10.3 (sd ~3.1 en logit) porque ~100 de los ~137 vehiculos
+  de cada train no tienen ni un hazard positivo y su intercept se va a -inf (cuasi-separacion).
+  El efecto aleatorio se come la senal en vez de regularizarla, y en validacion no
+  sirve porque el vehiculo nunca fue visto (split agrupado). Fijando sigma2 en 0.1-2
+  recupera hasta 0.154, sigue por debajo. Ver docs/memoria/f3-survival-stacking.md.'
+source:
+  config_path: configs/exp_gpboost_survival.yaml
+  config_versioned: false
+  branch: exp/survival-stacking
+  commit: 1eab4a1
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: gpboost_survival
+  pr_auc: 0.14309835345668726
+  pr_auc_lo: 0.1386983463640418
+  pr_auc_hi: 0.19560110596759417
+  base_rate: 0.1251848201084278
+  lift: 1.143096689620545
+  roc_auc: 0.5524420538981922
+  brier: 0.11203252748667777
+  detection_rate: 0.03773584905660377
+  median_lead_km: 19058.217292725283
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_survival.parquet
+  splits: ${DATA_DIR}/processed/splits.json
+  n_positive: 254
+config:
+  name: f3-gpboost-survival
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_survival.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  target:
+    name: discrete_survival
+    params: {}
+  model:
+    name: gpboost_survival
+    params:
+      horizon_km: 3000
+      bin_km: 500
+      max_horizon_km: 6000
+      random_state: 42
+      gp_params:
+        likelihood: bernoulli_logit
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-survival
+    job_type: train
+    tags:
+    - f3
+    - survival
+    - stacking
+    - gpboost
+    - panel-v1
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs/exp_gpboost_survival.yaml

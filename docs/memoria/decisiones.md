@@ -5,6 +5,71 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-20 · Con qué se entrena se declara en el YAML (`target:`), separado de con qué se mide
+
+**Código:** `src/training/targets.py`, hook en `src/training/cv.py`.
+
+**Qué.** Un bloque `target: {name, params}` en el YAML del experimento elige el objetivo
+de entrenamiento entre los modos registrados en `src/training/targets.py`. Sin la clave
+se entrena con `label`, que es lo que hacía siempre. **La evaluación no cambia nunca**:
+etiqueta dura y mismos folds, pase lo que pase.
+
+**Por qué.** Media docena de ideas de F3 (supervivencia, etiquetas blandas, horizonte
+ordinal, ranking dentro de celdas) quieren entrenar contra algo que no es el 0/1 de la
+ventana, y todas empiezan igual: tocando `cv.py`. Con un registro por nombre, agregar un
+modo es una función en un archivo y una línea en un YAML; `cv.py` no sabe qué modos
+existen. Dos ramas pueden agregar el suyo sin pisarse, que es el motivo concreto: esto
+salió junto con `exp/ordinal-horizon`.
+
+**Lo que no se negoció:** que la métrica de selección siga siendo el PR-AUC sobre `label`
+con los folds congelados. Si cada modo midiera contra su propio objetivo, la tabla de
+`results/` dejaría de significar algo.
+
+---
+
+## 2026-09-20 · El panel emite `aux_km_observed_after_cut`
+
+**Código:** `src/data/panel.py::vehicle_cuts`.
+
+**Qué.** Una columna más, `last_odo − c`: los km que el vehículo se observó después del
+corte. `aux_`, porque es información posterior al corte y no entra a ninguna ventana.
+
+**Por qué.** `time_to_event_km` es NaN en los sanos, así que un censurado no se
+distinguía de un negativo: el panel decía "no falló" cuando el dato es "llegó hasta acá
+sin fallar". Cualquier modelo de supervivencia necesita esa segunda frase. Sale gratis de
+lo que `vehicle_cuts` ya tenía.
+
+**Costo.** Hay que regenerar el panel, pero es estrictamente aditivo: mismas filas, mismo
+orden, misma huella, mismos folds (verificado). Los `splits.json` congelados siguen
+sirviendo.
+
+---
+
+## 2026-09-20 · La permutación dentro del vehículo no es un null: se lee con (a0) y (a')
+
+**Código:** `scripts/audit_model.py`.
+
+**Qué.** La auditoría (a) de [f3-modelos-candidatos.md](../f3-modelos-candidatos.md) §0.4
+—permutar dentro de cada vehículo y esperar que el PR-AUC caiga a la tasa base— **sube**
+en este panel, con los dos modelos probados y con tres semillas. Se agregan dos
+auditorías al lado: **(a0)** permutar entre *todas* las filas, que sí es el null y sí cae
+a la tasa base; y **(a')** colapsar el score al promedio de cada vehículo sin reentrenar,
+que es la cuenta de cuánto aporta el *cuándo*. Además se permutan las **features** y no
+la etiqueta, para que las dos corridas se midan contra exactamente el mismo `label`.
+
+**Por qué.** La permutación intra-vehículo deja intacto *qué* vehículos fallan —de donde
+sale casi todo el PR-AUC de este panel— y de paso le saca a cada vehículo el ruido de qué
+ventana le tocó. O sea que entrena un ordenador de vehículos **mejor**, no un modelo sin
+información. Leída sola, la auditoría dice lo contrario de lo que pasa.
+
+**Alcance.** Vale para todo F3, no solo para la supervivencia. La ficha de
+[f3-cnn-lstm-tutora.md](f3-cnn-lstm-tutora.md) lee su 0,143-contra-0,153 con el criterio
+viejo; hay que rehacerlo con `scripts/audit_model.py`.
+
+**Detalle:** [f3-survival-stacking.md](f3-survival-stacking.md).
+
+---
+
 ## 2026-09-20 · Una regeneración exige una caída mínima de 15 puntos
 
 **Qué.** `regen_drop_points` pasa de 5 a 15 en la fuente de verdad

@@ -35,6 +35,7 @@ from src.eval.metrics import classification_metrics, lead_time_curve, operating_
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
+from src.training.targets import build_target  # noqa: E402
 
 CONTRACT_COLUMNS = {
     "vehicle_id": "object",
@@ -66,6 +67,16 @@ _checks: list[tuple[str, bool, str]] = []
 def check(name: str, condition: bool, detail: str = "") -> None:
     _checks.append((name, bool(condition), detail))
     print(f"{'PASS' if condition else 'FAIL'} | {name}" + (f" — {detail}" if detail else ""))
+
+
+def _raises(call, exception: type[Exception]) -> bool:
+    try:
+        call()
+    except exception:
+        return True
+    except Exception:
+        return False
+    return False
 
 
 def main() -> int:
@@ -106,6 +117,42 @@ def main() -> int:
     check(
         "panel: ningún label positivo dentro del gap de blanking",
         bool((panel.loc[panel["label"] == 1, "time_to_event_km"] >= panel.loc[panel["label"] == 1, "gap_km"]).all()),
+    )
+    check(
+        "panel: aux_km_observed_after_cut está en toda fila",
+        "aux_km_observed_after_cut" in panel.columns
+        and bool(panel["aux_km_observed_after_cut"].notna().all()),
+    )
+
+    # 1b · el objetivo de supervivencia es la misma etiqueta escrita sobre el eje de km.
+    # Si esto se rompe, el modelo entrena contra algo que no es lo que se mide.
+    all_rows = np.ones(len(panel), dtype=bool)
+    spec = build_target("discrete_survival", panel, all_rows)
+    duration, event, at_risk = spec.y["duration_km"], spec.y["event"], spec.y["at_risk"]
+    horizon = panel["horizon_km"].to_numpy()
+    derived = (at_risk & (event == 1) & (duration <= horizon)).astype(int)
+    check(
+        "target: `discrete_survival` reconstruye exactamente `label`",
+        bool((derived == panel["label"].to_numpy()).all()),
+        f"{int((derived != panel['label'].to_numpy()).sum())} filas discrepan",
+    )
+    # El dummy genera cortes hasta el evento, así que sí tiene filas dentro del gap:
+    # el chequeo verifica que queden fuera de riesgo y no que no existan.
+    inside_gap = panel["time_to_event_km"].lt(panel["gap_km"]).fillna(False).to_numpy()
+    check(
+        "target: los cortes dentro del gap quedan fuera de riesgo (regla 1)",
+        bool((~at_risk[inside_gap]).all()) and bool((duration[at_risk] >= 0).all())
+        and spec.params["gap_km"] == float(panel["gap_km"].iloc[0]),
+        f"{int(inside_gap.sum())} filas del dummy caen dentro del gap",
+    )
+    check(
+        "target: el `y` está alineado con las filas de train, no con el panel",
+        len(build_target("discrete_survival", panel, panel["label"].eq(0).to_numpy()).y)
+        == int(panel["label"].eq(0).sum()),
+    )
+    check(
+        "target: un modo que no existe falla en vez de entrenar con `label`",
+        _raises(lambda: build_target("no_existe", panel, all_rows), KeyError),
     )
 
     # 2 · splits antileakage

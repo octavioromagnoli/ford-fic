@@ -12,6 +12,12 @@ Dos garantías que el loop impone y que ningún experimento puede saltearse:
 Los folds no se arman acá: se piden a `src/eval/splits.py` (CLAUDE.md, regla 2).
 Este loop solo los recorre —incluidas las repeticiones de la CV repetida, que son
 R juegos de folds y no R modelos distintos—.
+
+Con qué objetivo se entrena es cosa de `src/training/targets.py`: el `target:` del
+YAML nombra un modo y este loop le pide el `y` de train. Lo que se **evalúa** no
+cambia nunca —la etiqueta dura `label`, con los mismos folds— porque si cada modo
+midiera contra su propio objetivo, ninguna comparación de la tabla de resultados
+significaría nada.
 """
 
 from __future__ import annotations
@@ -29,12 +35,17 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from src.eval.metrics import classification_metrics
 from src.eval.splits import iter_repeats
 from src.models.registry import get_model
+from src.training.targets import build_target
 
 logger = logging.getLogger(__name__)
 
 FEATURE_PREFIXES = ("feat_", "static_")
 ID_COLUMNS = ("vehicle_id", "cut_odo", "cut_date", "horizon_km", "gap_km")
 TARGET_COLUMN = "label"
+# Columnas que las predicciones arrastran para que F4 y las métricas de
+# supervivencia no tengan que volver a abrir el panel. `aux_km_observed_after_cut`
+# completa la terna censurada (duración + evento) que necesita el C-index.
+CARRY_COLUMNS = ("event_observed", "time_to_event_km", "aux_km_observed_after_cut")
 
 
 def select_feature_columns(
@@ -85,6 +96,7 @@ def run_cv(
     *,
     model_name: str,
     model_params: dict[str, Any] | None = None,
+    target: dict[str, Any] | None = None,
     target_column: str = TARGET_COLUMN,
     feature_prefixes: tuple[str, ...] = FEATURE_PREFIXES,
     strict_splits: bool = True,
@@ -116,6 +128,12 @@ def run_cv(
     Las predicciones traen las columnas que necesitan las métricas de anticipación
     (`vehicle_id`, `cut_odo`, `score`, `event_observed`, `time_to_event_km`), así
     F4 consume el parquet sin volver a tocar el panel.
+
+    **`target`** elige con qué se entrena: `{"name": ..., "params": {...}}` despacha a
+    `src/training/targets.py`, que devuelve el `y` de train del fold; sin `target` se
+    entrena con `label`, que es lo que hacía siempre. Este loop no sabe qué modos hay
+    ni qué devuelven: solo que el `y` está alineado con las filas de train. La
+    evaluación usa `label` pase lo que pase.
     """
     if target_column not in panel.columns:
         raise KeyError(f"El panel no tiene la columna objetivo `{target_column}`")
@@ -125,6 +143,14 @@ def run_cv(
 
     X = panel[feature_columns]
     y = panel[target_column].astype(int).to_numpy()
+
+    target_name = (target or {}).get("name")
+    target_params = dict((target or {}).get("params") or {})
+    if target_name:
+        logger.info(
+            "Objetivo de entrenamiento: `%s` %s (se evalúa igual contra `%s`)",
+            target_name, target_params or "", target_column,
+        )
 
     repeat_scores: list[np.ndarray] = []
     repeat_folds: list[np.ndarray] = []
@@ -143,7 +169,12 @@ def run_cv(
                     ("model", get_model(model_name, model_params)),
                 ]
             )
-            pipeline.fit(X.loc[train_mask], y[train_mask])
+            y_train = (
+                build_target(target_name, panel, train_mask, **target_params).y
+                if target_name
+                else y[train_mask]
+            )
+            pipeline.fit(X.loc[train_mask], y_train)
             scores = _predict_scores(pipeline, X.loc[valid_mask])
 
             oof_score[valid_mask] = scores
@@ -176,7 +207,7 @@ def run_cv(
         raise RuntimeError("Los splits no tienen ninguna repetición: no se entrenó nada")
 
     predictions = panel[
-        [c for c in (*ID_COLUMNS, "event_observed", "time_to_event_km", target_column) if c in panel]
+        [c for c in (*ID_COLUMNS, *CARRY_COLUMNS, target_column) if c in panel]
     ].copy()
     stacked = np.vstack(repeat_scores)
     predictions["score"] = stacked.mean(axis=0)

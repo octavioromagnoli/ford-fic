@@ -1,0 +1,21 @@
+# Variante del panel v1 con `feat_cut_odo`: el odómetro del corte como covariable.
+#
+#   python scripts/build_survival_panel.py --config configs/data/panel_survival.yaml
+#
+# `cut_odo` está en el panel desde F2, pero como identificador de la fila: `cv.py`
+# selecciona por prefijo (`feat_`/`static_`), así que ningún modelo lo ve. Para el
+# hazard de un modelo de supervivencia es justo lo que falta —el riesgo base crece con
+# los km del vehículo—, y el emparejado de sanos por (bin de odómetro × mes) es lo que
+# hace que no sea un atajo: positivos y sanos tienen la misma distribución de odómetro
+# por construcción (`sampling` en panel_v1.yaml).
+#
+# Mismas filas que el panel v1 ⇒ misma huella ⇒ el `splits.json` congelado sirve tal
+# cual, y la comparación contra `configs/exp_lgbm_panel_v1.yaml` es limpia.
+panel_config: configs/data/panel_v1.yaml
+
+columns:
+  # nombre de la columna nueva: columna del panel de la que se copia
+  feat_cut_odo: cut_odo
+
+output:
+  panel: ${DATA_DIR}/processed/panel_survival.parquet

@@ -296,3 +296,141 @@ def summarize_folds(fold_metrics: list[dict[str, float]], *, seed: int = 42) -> 
         summary[f"{key}_lo"] = ci["lo"]
         summary[f"{key}_hi"] = ci["hi"]
     return summary
+
+
+# --------------------------------------------------------------------------- #
+# Supervivencia: el orden, y el intervalo que corresponde al diseño
+# --------------------------------------------------------------------------- #
+FOLLOWUP_COLUMN = "aux_km_observed_after_cut"
+
+
+def survival_durations(
+    predictions: pd.DataFrame, *, gap_km: float | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """`(duración, evento)` por fila, con el origen corrido al final del gap.
+
+    Misma definición que `src/training/targets.py`: con evento, `time_to_event_km − G`;
+    censurado, `aux_km_observed_after_cut − G`. Se calcula acá otra vez —y no se importa
+    del target— para que la métrica no dependa de con qué objetivo se entrenó: así el
+    C-index de un LightGBM sobre `label` y el de un modelo de supervivencia miden lo
+    mismo y son comparables.
+
+    Las filas que no estuvieron en riesgo en ningún km visible (duración negativa: el
+    evento cayó dentro del gap) salen con duración NaN, para que quien mida las filtre
+    en vez de contarlas como una supervivencia de 0 km.
+    """
+    missing = [c for c in ("time_to_event_km", "event_observed") if c not in predictions]
+    if missing:
+        raise KeyError(f"Las predicciones no traen {missing}")
+    if FOLLOWUP_COLUMN not in predictions:
+        raise KeyError(
+            f"Las predicciones no traen `{FOLLOWUP_COLUMN}`: el panel es anterior a la "
+            "columna de seguimiento. Reconstruilo con scripts/build_dataset.py."
+        )
+    if gap_km is None:
+        if "gap_km" not in predictions:
+            raise KeyError("Pasá `gap_km`: las predicciones no lo traen")
+        gap = float(predictions["gap_km"].iloc[0])
+    else:
+        gap = float(gap_km)
+
+    event = predictions["event_observed"].to_numpy().astype(int)
+    duration = (
+        np.where(
+            event == 1,
+            predictions["time_to_event_km"].to_numpy(dtype=float),
+            predictions[FOLLOWUP_COLUMN].to_numpy(dtype=float),
+        )
+        - gap
+    )
+    at_risk = np.isfinite(duration) & (duration >= 0)
+    return np.where(at_risk, duration, np.nan), np.where(at_risk, event, 0)
+
+
+def concordance_index_oof(
+    predictions: pd.DataFrame, *, gap_km: float | None = None
+) -> dict[str, float]:
+    """C-index out-of-fold sobre la duración censurada. Métrica secundaria.
+
+    Contesta algo que el PR-AUC no: de dos cortes, ¿el modelo pone más arriba al que
+    está más cerca del evento? Usa a los sanos como censurados en vez de como ceros, así
+    que dos modelos pueden empatar en PR-AUC y ordenar distinto.
+
+    **No es independiente entre filas**: los ~5 cortes de un mismo vehículo entran como
+    pares comparables aunque compartan el auto. Sirve para comparar modelos sobre los
+    mismos folds; no para un test de hipótesis. Devuelve NaN si lifelines no está.
+    """
+    try:
+        from lifelines.utils import concordance_index
+    except ImportError:  # pragma: no cover - lifelines está en requirements.txt
+        return {"c_index": float("nan"), "n": 0, "n_events": 0}
+
+    duration, event = survival_durations(predictions, gap_km=gap_km)
+    score = predictions["score"].to_numpy(dtype=float)
+    usable = np.isfinite(score) & np.isfinite(duration)
+    if int(event[usable].sum()) == 0:
+        return {"c_index": float("nan"), "n": int(usable.sum()), "n_events": 0}
+    # `concordance_index` espera que un valor más alto sea "sobrevive más": el score es
+    # riesgo, así que va con el signo cambiado.
+    value = concordance_index(duration[usable], -score[usable], event[usable])
+    return {
+        "c_index": float(value),
+        "n": int(usable.sum()),
+        "n_events": int(event[usable].sum()),
+    }
+
+
+def bootstrap_by_vehicle(
+    predictions: pd.DataFrame,
+    *,
+    metrics: tuple[str, ...] = ("pr_auc", "roc_auc"),
+    n_boot: int = 1000,
+    alpha: float = 0.05,
+    seed: int = 42,
+    score_column: str = "score",
+    label_column: str = "label",
+) -> dict[str, dict[str, float]]:
+    """Intervalo remuestreando **vehículos**, no filas.
+
+    Las filas de un mismo vehículo no son independientes (mismo auto, misma ruta, ~5
+    cortes correlacionados): un bootstrap por fila trata cada corte como una
+    observación nueva y devuelve un intervalo mucho más angosto de lo que corresponde.
+    La unidad de muestreo del estudio es el vehículo, así que el remuestreo también.
+
+    Complementa `bootstrap_ci` sobre los folds: aquel mide la variabilidad del sorteo de
+    folds (5 valores), este la de la muestra de vehículos.
+    """
+    for column in (score_column, label_column, "vehicle_id"):
+        if column not in predictions:
+            raise KeyError(f"Las predicciones no traen `{column}`")
+    functions = {"pr_auc": pr_auc, "roc_auc": roc_auc, "brier": brier}
+    unknown = [m for m in metrics if m not in functions]
+    if unknown:
+        raise KeyError(f"Métricas desconocidas para el bootstrap: {unknown}")
+
+    y = predictions[label_column].to_numpy(dtype=int)
+    score = predictions[score_column].to_numpy(dtype=float)
+    groups = predictions["vehicle_id"].astype(str).to_numpy()
+    order = np.argsort(groups, kind="stable")
+    _, starts = np.unique(groups[order], return_index=True)
+    per_vehicle = np.split(order, starts[1:])
+
+    rng = np.random.default_rng(seed)
+    draws: dict[str, list[float]] = {name: [] for name in metrics}
+    for _ in range(n_boot):
+        picked = rng.integers(0, len(per_vehicle), size=len(per_vehicle))
+        idx = np.concatenate([per_vehicle[i] for i in picked])
+        for name in metrics:
+            draws[name].append(functions[name](y[idx], score[idx]))
+
+    out: dict[str, dict[str, float]] = {}
+    for name in metrics:
+        values = np.asarray([v for v in draws[name] if np.isfinite(v)], dtype=float)
+        out[name] = {
+            "point": float(functions[name](y, score)),
+            "lo": float(np.quantile(values, alpha / 2)) if values.size else float("nan"),
+            "hi": float(np.quantile(values, 1 - alpha / 2)) if values.size else float("nan"),
+            "n_boot": int(values.size),
+            "n_vehicles": int(len(per_vehicle)),
+        }
+    return out

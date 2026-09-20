@@ -13,6 +13,18 @@ Una fila por `(vehículo, punto de corte)`. Para cada vehículo:
   no sabemos si el evento habría caído dentro del horizonte (`censored_policy:
   drop`). Con `keep_as_negative` se conservan como 0, asumiendo que no hubo evento.
 
+**Seguimiento observado (`aux_km_observed_after_cut`).** `time_to_event_km` solo
+existe para los vehículos con evento; en los sanos es NaN y la fila queda como un
+cero limpio. Pero un sano no es un negativo: es un censurado que *llegó* hasta
+`last_odo` sin fallar. La columna guarda exactamente eso —`last_odo − c`, los km que
+el vehículo se observó después del corte— para toda fila, con evento o sin él. Es
+`aux_` porque no entra a ningún modelo por la ventana (es información posterior al
+corte); la usa el objetivo de supervivencia en tiempo discreto
+(`src/training/targets.py`), que necesita saber hasta dónde cada fila estuvo en
+riesgo. Con `censored_policy: drop` toda fila sana tiene `aux_km_observed_after_cut
+>= G + H`, así que dentro del horizonte no hay censura: la censura aparece recién si
+el objetivo mira más allá de H.
+
 **Muestreo de los sanos.** Los eventos de dev caen entre sep-2025 y mar-2026 y a
 odómetros de 1.000–13.000 km; la exposición de los sanos se concentra en 2026 y va
 hasta 80.000 km. Sin emparejar, el modelo aprende "odómetro alto o ventana en 2026
@@ -44,6 +56,9 @@ logger = logging.getLogger(__name__)
 ID_COL = "vehicle_id"
 HEAD_COLUMNS = ["vehicle_id", "cut_odo", "cut_date", "window_km", "horizon_km", "gap_km",
                 "label", "time_to_event_km", "event_observed"]
+# Km observados después del corte: el seguimiento de la fila. En los censurados es la
+# única forma de saber hasta dónde estuvo en riesgo (ver docstring del módulo).
+FOLLOWUP_COLUMN = f"{AUX_PREFIX}km_observed_after_cut"
 
 
 @dataclass(frozen=True)
@@ -77,7 +92,7 @@ def vehicle_cuts(first_odo: float, last_odo: float, event_odo: float | None, cfg
     else:
         end = last_odo
     if end < start:
-        return pd.DataFrame(columns=["cut_odo", "label", "time_to_event_km"])
+        return pd.DataFrame(columns=["cut_odo", "label", "time_to_event_km", FOLLOWUP_COLUMN])
     cuts = np.arange(start, end + 1e-6, step)
     if has_event:
         tte = event_odo - cuts
@@ -85,7 +100,14 @@ def vehicle_cuts(first_odo: float, last_odo: float, event_odo: float | None, cfg
     else:
         tte = np.full(cuts.shape, np.nan)
         label = np.zeros(cuts.shape, dtype=int)
-    return pd.DataFrame({"cut_odo": cuts, "label": label, "time_to_event_km": tte})
+    return pd.DataFrame({
+        "cut_odo": cuts,
+        "label": label,
+        "time_to_event_km": tte,
+        # Seguimiento observado. En los censurados es hasta dónde llegó sin fallar; en
+        # los que fallan, hasta dónde hay historial (el evento está en `time_to_event_km`).
+        FOLLOWUP_COLUMN: last_odo - cuts,
+    })
 
 
 def build_panel(
