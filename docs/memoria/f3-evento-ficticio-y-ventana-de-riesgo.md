@@ -114,8 +114,18 @@ Vale correrla por familia y no en bloque.
 
 ## 6 · Qué falta
 
-- **Más negativos.** 246 filas sanas de 107 vehículos es poco. El paso natural es sortear
-  **varios** eventos ficticios por vehículo sano (*risk-set sampling* con k controles): cada
-  sano aportaría k ventanas en vez de una, sin tocar el balance de posición.
+- ~~Más negativos~~ **hecho, y con un resultado que no esperaba** (`draws_per_vehicle`):
+  sortear k eventos ficticios por sano sí recupera negativos, pero **degrada el balance de
+  posición**, porque el emparejado por odómetro se queda con las ventanas *tempranas* de
+  cada sano mientras las positivas siguen en la suya. Y el ROC no mejora:
+
+  | k | negativos | vehículos | P(posición) | ROC |
+  |---|---|---|---|---|
+  | **1** | **246** | **107** | **0,489** | **0,703** |
+  | 2 | 408 | 155 | 0,577 | 0,691 |
+  | 5 | 985 | 143 | 0,654 | 0,657 |
+
+  Queda en **k = 1**: pagar desbalance por filas que no mejoran el número es exactamente el
+  trueque que esta fase viene evitando. La clave queda como knob, con la curva medida.
 - **Re-medir todo con los eventos corregidos**, que es lo que va a cambiar el diagnóstico.
 - Decidir si el panel canónico pasa a ser este. No se toca hasta que la etiqueta esté bien.

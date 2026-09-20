@@ -159,6 +159,7 @@ def main() -> int:
         pseudo, pseudo_summary = assign_pseudo_events(
             vehicles, spans, label_cfg, reference_vehicles=dev,
             seed=int(pseudo_cfg.get("seed", seed)),
+            draws_per_vehicle=int(pseudo_cfg.get("draws_per_vehicle", 1)),
         )
         vehicles[PSEUDO_EVENT_COL] = pseudo
 

@@ -95,6 +95,22 @@ pseudo_event:
   # Semilla propia: cambiar el sorteo de los eventos ficticios no tiene por qué
   # mover los folds ni el muestreo de sanos.
   seed: 42
+  # k controles por vehículo sano (risk-set sampling). Cada sorteo define su propia
+  # ventana de riesgo y el sano aporta la unión de todas, sin repetir cortes. Es la
+  # forma de recuperar negativos —con k=1 quedaban 246 filas sanas de 107 vehículos—
+  # sin tocar el balance de posición: cada ventana sigue siendo "los H/Δ cortes previos
+  # a un evento". Los k controles comparten `vehicle_id`, así que el split agrupado los
+  # mantiene juntos y no inventan vehículos nuevos.
+  #
+  # MEDIDO (19-09), y por eso queda en 1: subir k recupera negativos pero **degrada el
+  # balance de posición**, porque el emparejado por odómetro se queda con las ventanas
+  # tempranas de cada sano. El ROC del modelo es el mismo en los tres, así que no hay
+  # motivo para pagar el desbalance:
+  #
+  #   k=1 → 246 negativos (107 veh) · P(posición) 0,489 · ROC 0,703
+  #   k=2 → 408 negativos (155 veh) · P(posición) 0,577 · ROC 0,691
+  #   k=5 → 985 negativos (143 veh) · P(posición) 0,654 · ROC 0,657
+  draws_per_vehicle: 1
 
 sampling:
   # Los cortes de vehículos sanos se muestrean con la MISMA distribución que los

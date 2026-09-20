@@ -24,6 +24,10 @@ Cada uno con su config; los resultados salen de `python scripts/compare.py` y to
 | `logistic`, `logistic_l1`, `gbm` | los mismos, Δ=250 + posición | `exp_*_d250pos.yaml` | delta250-posmatch | 0,212 / 0,209 / 0,198 (0,128) | 0,669 / 0,670 / 0,636 | ⚠️ **no atribuible**: el calendario quedó abierto |
 | `logistic_l1` | **ablación de calendario** (`extra_prefixes: [aux_]`) | `exp_l1_v1_auxcal.yaml`, `exp_l1_d250pos_auxcal.yaml` | v1 / d250pos | 0,222 / **0,617** | 0,719 / **0,922** | 🔍 auditoría, no candidato |
 
+**La tabla final —piso contra los dos mejores— está en**
+[`f3-resultados-modelos.md`](f3-resultados-modelos.md), sobre el panel del evento
+ficticio: `logistic` ROC 0,703 y `gbm` con 30% de detección a ≤50 falsas alarmas.
+
 **La lectura que importa:** el mejor modelo honesto da ROC 0,617 y la mejor **columna
 sola** daba 0,60. Combinar 54 features suma 0,02, y duplicar el panel a 118 no suma nada:
 el panel tiene una sola dimensión de señal

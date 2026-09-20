@@ -141,6 +141,7 @@ def assign_pseudo_events(
     *,
     reference_vehicles: set[str],
     seed: int = 42,
+    draws_per_vehicle: int = 1,
 ) -> tuple[pd.Series, dict[str, Any]]:
     """Un **evento ficticio** para cada vehículo sano: dónde se le corta la serie.
 
@@ -168,9 +169,17 @@ def assign_pseudo_events(
       hasta `c + G + H` para afirmar que no hubo evento; es la misma exigencia que hoy
       impone `censored_policy: drop`, solo que ahora la ancla el punto sorteado).
 
-    Se sortea **con reemplazo entre los valores de referencia que caen en ese rango**. Un
-    vehículo sin ningún valor factible se descarta y se cuenta: preferimos perderlo antes
-    que recortar la distribución a un borde, que es justamente el sesgo que se quiere sacar.
+    Se sortea entre los valores de referencia que caen en ese rango. Un vehículo sin ningún
+    valor factible se descarta y se cuenta: preferimos perderlo antes que recortar la
+    distribución a un borde, que es justamente el sesgo que se quiere sacar.
+
+    `draws_per_vehicle` (los **k controles** del *risk-set sampling*) sortea varios puntos
+    por vehículo sano, **sin reemplazo** entre los factibles: cada uno define su propia
+    ventana de riesgo y el sano aporta la unión de todas. Es la forma de recuperar negativos
+    sin tocar el balance de posición —cada ventana sigue siendo "los `H/Δ` cortes previos a
+    un evento"—, y sin inventar vehículos: los k controles del mismo vehículo comparten
+    `vehicle_id`, así que el split agrupado los mantiene juntos (regla 2). Si dos ventanas se
+    superponen, los cortes repetidos se cuentan una sola vez.
 
     La referencia se toma **solo de `reference_vehicles` (dev)**: el test no se mira ni
     para esto, igual que en `match_healthy_cuts` y en el anclaje del calendario.
@@ -185,9 +194,10 @@ def assign_pseudo_events(
     rng = np.random.default_rng(seed)
     pool = np.sort(reference.to_numpy(dtype="float64"))
     healthy = vehicles.index[~is_event]
-    out = pd.Series(np.nan, index=vehicles.index, dtype="float64")
+    out = pd.Series([() for _ in range(len(vehicles))], index=vehicles.index, dtype="object")
     n_infeasible_range = 0
     n_no_reference = 0
+    k = max(1, int(draws_per_vehicle))
     for vehicle_id in healthy:
         if vehicle_id not in spans.index:
             continue
@@ -198,13 +208,15 @@ def assign_pseudo_events(
         if hi < lo:
             n_infeasible_range += 1
             continue
-        feasible = pool[(pool >= lo) & (pool <= hi)]
+        feasible = np.unique(pool[(pool >= lo) & (pool <= hi)])
         if feasible.size == 0:
             n_no_reference += 1
             continue
-        out.at[vehicle_id] = float(rng.choice(feasible))
+        take = rng.choice(feasible, size=min(k, feasible.size), replace=False)
+        out.at[vehicle_id] = tuple(sorted(float(v) for v in take))
 
-    assigned = out.notna()
+    assigned = out.map(len).gt(0)
+    drawn = [v for values in out[assigned] for v in values]
     summary = {
         "enabled": True,
         "seed": seed,
@@ -213,13 +225,17 @@ def assign_pseudo_events(
         "reference_odo_km_median": float(np.median(pool)),
         "n_healthy": int((~is_event).sum()),
         "n_assigned": int(assigned.sum()),
+        "draws_per_vehicle": k,
+        "n_draws_total": len(drawn),
+        "draws_per_vehicle_mean": float(np.mean([len(v) for v in out[assigned]])) if assigned.any() else 0.0,
         "n_dropped_infeasible_range": n_infeasible_range,
         "n_dropped_no_reference_in_range": n_no_reference,
-        "pseudo_odo_km_median": float(out[assigned].median()) if assigned.any() else None,
+        "pseudo_odo_km_median": float(np.median(drawn)) if drawn else None,
     }
-    logger.info("Eventos ficticios: %d de %d sanos (%d sin rango factible, %d sin referencia en rango) "
-                "· odómetro mediano %s km",
-                summary["n_assigned"], summary["n_healthy"], n_infeasible_range, n_no_reference,
+    logger.info("Eventos ficticios: %d de %d sanos, %d sorteos (k=%d, %.1f por vehículo) "
+                "· %d sin rango factible, %d sin referencia · odómetro mediano %s km",
+                summary["n_assigned"], summary["n_healthy"], summary["n_draws_total"], k,
+                summary["draws_per_vehicle_mean"], n_infeasible_range, n_no_reference,
                 f"{summary['pseudo_odo_km_median']:.0f}" if summary["pseudo_odo_km_median"] else "-")
     return out, summary
 
@@ -268,15 +284,25 @@ def build_panel(
         # Evento ficticio: solo en sanos, y solo si `vehicles` lo trae (lo asigna
         # `assign_pseudo_events`). Corta la serie como si fuera un evento; la etiqueta
         # sigue siendo 0.
-        pseudo = info.get(PSEUDO_EVENT_COL) if PSEUDO_EVENT_COL in vehicles.columns else None
-        pseudo_odo = float(pseudo) if pseudo is not None and pd.notna(pseudo) else None
-        if pseudo_odo is not None and int(info["event_observed"]) == 1:
-            pseudo_odo = None
-        if PSEUDO_EVENT_COL in vehicles.columns and int(info["event_observed"]) == 0 and pseudo_odo is None:
-            # Sano sin punto de corte factible: no entra al panel, y se cuenta aparte.
-            dropped["sin_evento_ficticio"].append(str(vehicle_id))
-            continue
-        cuts = vehicle_cuts(first_odo, last_odo, event_odo, cfg, pseudo_event_odo=pseudo_odo)
+        # Eventos ficticios: una tupla por vehículo sano (k controles). Cada uno define su
+        # propia ventana; el vehículo aporta la UNIÓN, y un corte que cae en dos ventanas
+        # se cuenta una sola vez.
+        pseudo_odos: tuple[float, ...] = ()
+        if PSEUDO_EVENT_COL in vehicles.columns and int(info["event_observed"]) == 0:
+            raw = info.get(PSEUDO_EVENT_COL)
+            pseudo_odos = tuple(raw) if isinstance(raw, (tuple, list, np.ndarray)) else (
+                (float(raw),) if raw is not None and pd.notna(raw) else ())
+            if not pseudo_odos:
+                # Sano sin punto de corte factible: no entra al panel, y se cuenta aparte.
+                dropped["sin_evento_ficticio"].append(str(vehicle_id))
+                continue
+        if pseudo_odos:
+            cuts = pd.concat(
+                [vehicle_cuts(first_odo, last_odo, None, cfg, pseudo_event_odo=p) for p in pseudo_odos],
+                ignore_index=True,
+            ).drop_duplicates(subset="cut_odo").sort_values("cut_odo", ignore_index=True)
+        else:
+            cuts = vehicle_cuts(first_odo, last_odo, event_odo, cfg)
         if cuts.empty:
             key = "sin_ventana_completa" if (last_odo - first_odo) < cfg.window_km else "sin_corte_verificable"
             dropped[key].append(str(vehicle_id))

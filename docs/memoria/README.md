@@ -43,6 +43,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-barrido-de-relaciones.md](f3-barrido-de-relaciones.md) | **El barrido de los 7.310 cocientes y su nulo: nada pasa la barra del azar.** Las rarezas (reloj, viaje anterior, forma del reparto) tampoco. Por qué la ingeniería de features tocó techo |
 | [f3-relaciones-y-literatura-dpf.md](f3-relaciones-y-literatura-dpf.md) | **Las relaciones entre features (`derived:`): el idle improductivo separa más que todo lo anterior.** Y los cinco mecanismos de la literatura de DPF, medidos y planos |
 | [f3-esfuerzo-de-control-y-dosis.md](f3-esfuerzo-de-control-y-dosis.md) | **Las 16 candidatas físicas del menú, medidas: ninguna gana.** Y la contradicción del catalizador resuelta: el DPF no anticipa, y probablemente el evento no es obstrucción |
+| [../f3-resultados-modelos.md](../f3-resultados-modelos.md) | **La tabla**: el piso contra los dos mejores modelos, sobre el panel sin atajo de posición |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 | [../f3-features-candidatas-fisica.md](../f3-features-candidatas-fisica.md) | **Lo que sigue**: candidatas por mecanismo físico, empezando por la contradicción del catalizador |

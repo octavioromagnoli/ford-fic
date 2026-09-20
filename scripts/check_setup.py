@@ -379,13 +379,25 @@ def main() -> int:
     )
     pseudo, pseudo_summary = assign_pseudo_events(
         vehicles, spans, label_cfg, reference_vehicles={"E1", "E2"}, seed=7)
-    check("evento ficticio: solo a los sanos", bool(pseudo[["E1", "E2"]].isna().all()))
+    check("evento ficticio: solo a los sanos", bool(all(len(pseudo[v]) == 0 for v in ("E1", "E2"))))
+    drawn = [v for values in pseudo for v in values]
     check("evento ficticio: sale de la distribución de los positivos",
-          bool(pseudo.dropna().isin([6000.0, 9000.0]).all()),
-          f"valores: {sorted(pseudo.dropna().unique())}")
+          bool(drawn) and all(v in (6000.0, 9000.0) for v in drawn),
+          f"valores: {sorted(set(drawn))}")
     # H3 solo llega a 2.000 km: no hay P que cumpla P <= last_odo - H. Se descarta.
     check("evento ficticio: el sano sin rango factible se descarta y se cuenta",
-          bool(np.isnan(pseudo["H3"])) and pseudo_summary["n_dropped_infeasible_range"] == 1)
+          len(pseudo["H3"]) == 0 and pseudo_summary["n_dropped_infeasible_range"] == 1)
+    # k controles: varios sorteos por sano, sin repetir, y nunca más que los factibles.
+    multi, multi_summary = assign_pseudo_events(
+        vehicles, spans, label_cfg, reference_vehicles={"E1", "E2"}, seed=7, draws_per_vehicle=3)
+    check("evento ficticio: k controles sortean sin repetir",
+          all(len(set(v)) == len(v) for v in multi),
+          f"máximo por vehículo: {max((len(v) for v in multi), default=0)}")
+    check("evento ficticio: k nunca supera los puntos factibles del vehículo",
+          len(multi["H1"]) <= 2 and multi_summary["draws_per_vehicle"] == 3,
+          f"H1 tiene {len(multi['H1'])} de 2 factibles")
+    check("evento ficticio: k>1 aporta al menos tantos sorteos como k=1",
+          multi_summary["n_draws_total"] >= pseudo_summary["n_draws_total"])
     check("evento ficticio: es determinístico con la misma semilla",
           bool(assign_pseudo_events(vehicles, spans, label_cfg,
                                     reference_vehicles={"E1", "E2"}, seed=7)[0].equals(pseudo)))
