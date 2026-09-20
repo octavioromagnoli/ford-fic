@@ -1,0 +1,49 @@
+# F3 · Δ=250 con los sanos emparejados por odómetro Y posición en la serie.
+# El doble de cortes por vehículo (507 positivas) y la asimetría de posición casi
+# cerrada (distancia TV 0,28 contra 0,70). El calendario queda abierto a propósito:
+# se audita con la corrida `exp_l1_d250pos_auxcal`, que le mete las `aux_`.
+name: f3-baserate-d250pos
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel_delta250_posmatch.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_delta250_posmatch.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false    # los folds los deja scripts/build_dataset.py, sobre dev
+  strict: true
+  # Tiene que decir lo mismo que el splits.json congelado: los folds salen del
+  # archivo, así que si esto no coincide, train.py falla en vez de entrenar una
+  # corrida distinta de la que el YAML describe. Se regenera con
+  # `python scripts/make_splits.py --config configs/data/panel_v1.yaml`.
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5     # guarda dura: filas label=1 por fold en validación
+  n_repeats: 1               # CV repetida: R pasadas con semillas distintas
+  # Holdout dev/test congelado (regla 2): la CV corre solo sobre dev.
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+model:
+  name: baserate
+  params: {}
+
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-modelos
+  job_type: train
+  tags: [f3, modelo, delta250-posmatch]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

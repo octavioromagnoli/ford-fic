@@ -1,10 +1,43 @@
-# Modelos candidatos para F3/F5 · ideas detalladas, nada implementado
+# Modelos candidatos para F3/F5 · catálogo, con lo ya probado marcado
 
-**Fecha:** 2026-09-18 · **Estado: ninguna de estas ideas está implementada.** Es el
-menú para elegir, con el porqué de cada una anclado en lo que el EDA y el panel v1
-mostraron. Cuando una se implemente, va por `/mlmodel` (builder en
-`src/models/registry.py` + un YAML de experimento) y su resultado a
-`docs/memoria/decisiones.md`.
+**Fecha:** 2026-09-18, actualizado el 19-09. Es el menú para elegir, con el porqué de
+cada idea anclado en lo que el EDA y el panel v1 mostraron. Cuando una se implementa, va
+por `/mlmodel` (builder en `src/models/registry.py` + un YAML de experimento) y su
+resultado a `docs/memoria/decisiones.md`.
+
+## Lo que ya está en el registry (19-09)
+
+**Base disponible: `baserate`, `random`, `logistic`, `logistic_l1`, `gbm`, `lgbm`.**
+Cada uno con su config; los resultados salen de `python scripts/compare.py` y todos son
+**provisorios** (los eventos tienen una falla conocida que la mentora va a corregir).
+
+| modelo | idea | config | panel | PR-AUC (tasa base) | ROC | estado |
+|---|---|---|---|---|---|---|
+| `baserate` | piso absoluto | `exp_baserate.yaml` | v1 | 0,121 (0,125) | 0,486 | ✅ piso |
+| `random` | control de métricas | — (solo en `check_setup`) | — | — | — | ✅ control |
+| `logistic` | §1.2, versión cruda | `exp_logistic.yaml` | v1 | 0,159 (0,125) | 0,577 | ✅ medido |
+| **`logistic_l1`** | §1.2 + selección de features | `exp_logistic_l1.yaml` | v1 | **0,181 (0,125)** | **0,617** | ✅ **mejor en v1** |
+| `gbm` | §1.3 sin restricciones monótonas | `exp_gbm.yaml` | v1 | 0,166 (0,125) | 0,603 | ✅ medido |
+| `lgbm` | §1.3 sin restricciones monótonas | `exp_lgbm.yaml` | v1 | 0,155 (0,125) | 0,571 | ✅ medido |
+| `logistic` / `lgbm` | los mismos, panel de 118 features | `exp_logistic_v5.yaml`, `exp_lgbm_v5.yaml` | v5 | 0,170 / 0,179 | 0,605 / 0,608 | ✅ las features extra no aportan |
+| `logistic`, `logistic_l1`, `gbm` | los mismos, sanos emparejados por posición | `exp_*_pos.yaml` | posmatch | 0,313 / 0,325 / 0,273 (0,228) | 0,607 / 0,587 / 0,590 | ✅ la señal sobrevive |
+| `logistic`, `logistic_l1`, `gbm` | los mismos, Δ=250 + posición | `exp_*_d250pos.yaml` | delta250-posmatch | 0,212 / 0,209 / 0,198 (0,128) | 0,669 / 0,670 / 0,636 | ⚠️ **no atribuible**: el calendario quedó abierto |
+| `logistic_l1` | **ablación de calendario** (`extra_prefixes: [aux_]`) | `exp_l1_v1_auxcal.yaml`, `exp_l1_d250pos_auxcal.yaml` | v1 / d250pos | 0,222 / **0,617** | 0,719 / **0,922** | 🔍 auditoría, no candidato |
+
+**La lectura que importa:** el mejor modelo honesto da ROC 0,617 y la mejor **columna
+sola** daba 0,60. Combinar 54 features suma 0,02, y duplicar el panel a 118 no suma nada:
+el panel tiene una sola dimensión de señal
+([f3-primer-modelo-y-emparejado-por-posicion.md](memoria/f3-primer-modelo-y-emparejado-por-posicion.md)).
+Gana la regularización fuerte; el boosting no le gana a la lineal. Antes de escribir otro
+builder, conviene tener presente que **el cuello de botella no es el modelo**.
+
+**Y la alarma:** la ablación de calendario muestra ROC 0,719 en el panel v1 y **0,922** en
+el Δ=250 emparejado por posición. Las `aux_` están fuera del modelo justamente por eso, y
+ahora está cuantificado: cualquier panel nuevo pasa esa ablación antes de que se le crea
+un número.
+
+---
+
 
 ## 0 · Lo que condiciona todo (leer antes de elegir)
 
@@ -51,7 +84,13 @@ auditoría, no es obvio que lo supere: saberlo temprano cambia el pitch.
 `predict_proba` (sigmoide del índice). Pesos ±1 fijos o, variante, pesos aprendidos con
 una logística de 4 features. Cero hiperparámetros que barrer.
 
-### 1.2 · Logística regularizada bien hecha
+### 1.2 · Logística regularizada bien hecha — **IMPLEMENTADA PARCIALMENTE (19-09)**
+
+> Están `logistic` (L2, C = 0,1) y `logistic_l1` (L1, C = 0,05), con `class_weight`
+> balanceado y el preprocesado del `Pipeline` de `cv.py`. `logistic_l1` es el mejor
+> modelo del repo: ROC 0,617. **Falta** lo que esta sección pide de más: elastic net,
+> normalización por mercado y `log1p` en las features de cola larga.
+
 
 **Qué es.** `LogisticRegression` con elastic-net (`saga`, `l1_ratio` ≈ 0,5) y
 `class_weight="balanced"`, sobre un preprocesamiento que hoy no existe en `cv.py`:
@@ -73,7 +112,13 @@ recibir la lista de columnas a loguear y la columna de grupo desde el YAML
 (`preprocessing:` nueva en el config de experimento). Es el único cambio a Track B
 que casi todas las ideas de abajo reusan.
 
-### 1.3 · LightGBM con restricciones monótonas
+### 1.3 · LightGBM con restricciones monótonas — **SIN LAS RESTRICCIONES (19-09)**
+
+> Están `gbm` (HistGradientBoosting) y `lgbm`, los dos con regularización fuerte y
+> **sin** restricciones monótonas: ROC 0,603 y 0,571, por debajo de la logística L1.
+> Con 53 vehículos con evento, más capacidad es más varianza. El mapa de monotonías
+> sigue sin escribirse, y es lo que podría dar vuelta ese resultado.
+
 
 **Qué es.** `LGBMClassifier` chico (`num_leaves` 4–7, `min_child_samples` ≥ 40,
 `n_estimators` 200–400 con `learning_rate` 0,03, `colsample_bytree` 0,7,
@@ -152,6 +197,13 @@ tiene que construir el target blando desde `time_to_event_km` del train del fold
 evaluar con `label`. Cambio de ~30 líneas en `cv.py`. Barrer τ ∈ {250, 500, 1.000}.
 
 ### 2.3 · Ranking dentro de celdas emparejadas (el modelo que no puede aprender el atajo)
+
+> **Más relevante que el 18-09.** El emparejado ya no puede cerrar odómetro, mes y
+> posición a la vez (son estructuralmente incompatibles, ver
+> [f3-emparejado-posicion-vs-calendario.md](memoria/f3-emparejado-posicion-vs-calendario.md)),
+> y la ablación de calendario da ROC 0,92 en el panel emparejado por posición. Un
+> ranker que solo compara dentro de la celda no necesita que el emparejado cierre.
+
 
 **Qué es.** `LGBMRanker` con `objective="lambdarank"` donde cada *query* es una celda
 (bin de odómetro × mes) y dentro de la celda hay filas positivas y sanas. El modelo

@@ -47,10 +47,16 @@ que las reproduce. Nueve que cambian cómo se escribe el código:
   criterio vive en `src/data/usable.py` y se declara en `universe` de
   `configs/data/test_split.yaml`. **El panel se construye con los 364.**
 - **El 77% de las filas positivas cae en el último cuarto de la serie de su vehículo**,
-  contra el 30% de las sanas. `match_healthy_cuts` puede emparejar por `cut_position`
-  (la posición viaja en el panel como `aux_cut_position`, calculada antes de muestrear),
-  pero a Δ = 500 el pool sano no alcanza: hay que ir a Δ = 250. Las auditorías usan esa
-  columna; recalcular la posición sobre el panel ya muestreado la distorsiona.
+  contra el 30% de las sanas, y **eso no se arregla emparejando**: odómetro, mes y
+  posición son estructuralmente incompatibles (un sano no puede estar en el mismo
+  odómetro, el mismo mes y el final de su serie). Cerrar posición abre calendario, y el
+  calendario es explotable: la ablación `extra_prefixes: [aux_]` da ROC 0,92 en el panel
+  emparejado por posición y 0,72 en el v1. **Todo panel nuevo pasa esa ablación**
+  (`configs/exp_l1_v1_auxcal.yaml`) antes de que se le crea un número. La salida de
+  diseño es el evento ficticio para los sanos:
+  `docs/memoria/f3-emparejado-posicion-vs-calendario.md`. La posición viaja en el panel
+  como `aux_cut_position`, calculada antes de muestrear: las auditorías usan esa columna,
+  porque recalcularla sobre el panel ya muestreado la distorsiona.
 - Hay **13 vehículos duplicados bajo dos códigos**: se colapsan con
   `src/data/dedupe.py` antes de cualquier split, o la regla 2 se viola en silencio.
 - **`Engine` está excluido** del set base: `ENG_3` es el 36% de los sanos y el 0%

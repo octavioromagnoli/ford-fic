@@ -5,6 +5,42 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-19 · El emparejado no puede cerrar posición y calendario a la vez; la ablación de calendario pasa a ser obligatoria
+
+**Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:**
+`configs/data/panel_delta250_{nomatch,posmatch}.yaml`, `configs/exp_*_d250pos.yaml`,
+`configs/exp_l1_{v1,d250pos}_auxcal.yaml`.
+
+**Qué cambia.** El panel canónico sigue siendo el v1. Lo que se agrega es un chequeo:
+**todo panel nuevo pasa la ablación de calendario** (`features.extra_prefixes: [aux_]`)
+antes de que se le crea un número.
+
+**Por qué.** Se probó Δ = 250 con emparejado por posición, que era la hipótesis anterior
+para cerrar el atajo. Dos resultados:
+
+1. **Δ no era el problema.** A Δ = 250 el emparejado por (odómetro × mes × posición) sigue
+   dejando 0 filas sanas en todas las grillas. De las 70 celdas de positivas solo 36 tienen
+   algún sano, y apenas el 56% de la masa positiva cae en una celda poblada. Es
+   estructural: un sano no puede estar a la vez en el mismo odómetro, el mismo mes y el
+   final de su serie, porque su serie termina tarde y con más km por construcción.
+2. **El trade-off es real**: emparejando `odo + posición` la distancia TV de posición baja
+   de 0,70 a 0,28 y la del mes sube de 0,18 a 0,62. Ese panel da ROC 0,670 (mejor que el
+   0,617 del v1) **pero no es atribuible**: con las `aux_` de calendario adentro llega a
+   **ROC 0,922**. Regla 6: se audita antes de celebrarse, y no pasa.
+
+**De paso, sobre el panel canónico:** la misma ablación sobre el v1 da 0,719 contra 0,617.
+El emparejado por mes reduce el atajo de calendario pero no lo cierra. Primera vez medido.
+
+**Qué hacer en cambio.** Asignarle a cada vehículo sano un **evento ficticio** sorteado de
+la distribución de los positivos y cortarle la serie ahí, para que "final de la serie"
+signifique lo mismo en los dos grupos por construcción (asignación de fecha índice, la
+solución estándar del sesgo de tiempo inmortal). Ataca la causa; el emparejado por celdas
+corrige el síntoma y no alcanza.
+
+**Detalle:** [f3-emparejado-posicion-vs-calendario.md](f3-emparejado-posicion-vs-calendario.md)
+
+---
+
 ## 2026-09-19 · Hay modelos, y el multivariado confirma que el panel tiene una sola dimensión
 
 **Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:** cuatro builders en
