@@ -34,6 +34,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f2-universo-fecha-usable.md](f2-universo-fecha-usable.md) | Por qué el estudio son 364 vehículos y no 1081, y cómo se recortó sin re-sortear |
 | [f2-calidad-columnas-dev.md](f2-calidad-columnas-dev.md) | Tres defectos de columna que la tabla de nulos no muestra |
 | [f2-eda-revision-y-features.md](f2-eda-revision-y-features.md) | **Revisión del EDA (18-09) y panel v1**: el marcador `Regenerations` cortado, el confusor calendario, los idle de 0 km, la terna, el emparejado y cuánta señal hay de verdad |
+| [f3-cadencia-y-ventana.md](f3-cadencia-y-ventana.md) | Por qué la ventana es de km y la cadencia puede ser quincenal (no son lo mismo) |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 
@@ -43,7 +44,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 python scripts/eda_raw.py          # deja los CSV en experiments/eda/
 python scripts/make_test_split.py  # auditoría del join + holdout dev/test congelado
 python scripts/build_eda_cache.py  # cache dev-only del EDA (experiments/eda/dev/)
-python scripts/eda_gaps.py         # complemento del EDA: factibilidad, perfil alineado al evento, calendario (experiments/eda/dev/gaps/)
+python scripts/eda_gaps.py         # complemento del EDA: factibilidad, perfil alineado al evento, calendario, monotonía del odómetro y cadencia (experiments/eda/dev/gaps/)
 python scripts/build_dataset.py --config configs/data/panel_v1.yaml   # panel real + splits sobre dev + panel_meta.json
 python scripts/log_panel_artifact.py --config configs/data/panel_v1.yaml  # publica panel-v1 y test-split como wandb Artifacts
 python scripts/train.py --config configs/exp_baserate.yaml            # piso contra el panel real

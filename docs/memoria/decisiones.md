@@ -5,6 +5,44 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-19 · Los viajes se recorren por `TripNumber`, y la cadencia se separa de la ventana
+
+**Decidió:** Gonzalo (a partir de la auditoría del eje de odómetro sobre dev).
+**Código:** `scripts/eda_gaps.py` (bloques 8 y 10).
+
+**Qué cambia.** Dos cosas que hasta ahora estaban implícitas quedan escritas:
+
+1. **El orden canónico de los viajes de un vehículo es `TripNumber`**, no
+   `TripDatetimeStart`. Cualquier cosa que recorra viajes en secuencia —forzar monotonía
+   del odómetro, calcular reposo entre viajes, encadenamiento, tendencias— lo hace con
+   ese orden.
+2. **La ventana de agregación se queda en km y la cadencia de emisión puede ser
+   quincenal.** Son decisiones independientes; el panel no cambia.
+
+**Por qué el orden.** Ordenando por fecha, el odómetro parece roto en **231 de 290
+vehículos** y forzar monotonía les mueve una mediana de 2.596 km. Ordenando por
+`TripNumber` quedan **8 vehículos** con algún retroceso (2,8%) y la corrección es de 265
+km. La causa es que el 0,67% de los viajes comparte `TripDatetimeStart` con otro del
+mismo vehículo y el desempate los baraja. Con `TripNumber` hay **0 saltos de reloj hacia
+atrás y 0 viajes solapados**, y la velocidad implícita entre viajes no pasa de 134 km/h:
+el odómetro no está corrupto, lo estaba la forma de leerlo. Esto corrige §3.7 de
+[f2-eda-revision-y-features.md](f2-eda-revision-y-features.md).
+
+**Por qué no una ventana de calendario.** 15 días son 621 km de mediana con una
+dispersión de 7,5× entre p10 y p90, y el 28% de esas ventanas no pasaría el QC del panel.
+Peor: una grilla de fechas reimporta el confusor calendario (§3.4), que el emparejado por
+mes existe para cerrar. La cadencia quincenal sí es viable —cobertura 0,94, 25 quincenas
+por vehículo—, y es la unidad natural de una alarma con persistencia.
+
+**Qué queda abierto.** `VEH_0572` (223 retrocesos, 8,5% de sus viajes con km negativo) es
+telemetría rota, no un odómetro adulterado: hoy lo absorbe el máximo acumulado. Si alguna
+feature de secuencia resulta sensible, se evalúa excluirlo —es 1 vehículo de 290—.
+
+**Detalle:** [f1-calidad-odometro.md](f1-calidad-odometro.md) ·
+[f3-cadencia-y-ventana.md](f3-cadencia-y-ventana.md)
+
+---
+
 ## 2026-09-18 · La CV estratifica por `label` a nivel vehículo, con guarda de positivos y CV repetida
 
 **Decidió:** Santino (auditoría de la CV sobre el universo de 364). **Código:**

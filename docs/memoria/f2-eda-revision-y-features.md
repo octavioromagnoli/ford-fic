@@ -157,11 +157,15 @@ tiene sentido. Las de mensajes raros son ruido puro por ventana.
 
 ### 3.7 · Chequeos de dato
 
-- `TripNumber` es único por vehículo y consecutivo (99,4% de saltos = 1) pero no
-  monótono en el tiempo en el 80% de los vehículos: hay viajes fuera de orden temporal.
-  El panel ordena por odómetro, no por fecha.
-- 395 viajes (224 vehículos) empiezan más de 1 km antes del fin del viaje anterior en
-  orden temporal; 137 viajes en 8 vehículos tienen km negativo y se descartan.
+- `TripNumber` es único por vehículo y consecutivo (99,4% de saltos = 1). *Corregido
+  el 19-09:* la lectura anterior ("no monótono en el tiempo en el 80% de los vehículos")
+  era un artefacto de ordenar por `TripDatetimeStart` con empates. `TripNumber` **es** el
+  orden temporal: recorriendo por `TripNumber` hay 0 saltos de reloj hacia atrás y 0
+  viajes solapados. El panel ordena por odómetro, que con ese orden es equivalente.
+- Los "395 viajes en 224 vehículos que empiezan antes del fin del anterior" son el mismo
+  artefacto: con el orden por `TripNumber` quedan 245 filas en **8 vehículos**. 137
+  viajes en 8 vehículos tienen km negativo y se descartan. Ver
+  [f1-calidad-odometro.md](f1-calidad-odometro.md).
 - `signals` termina 25 km / 1 día antes que `trips` en la mediana; 2 vehículos con más
   de 30 días de diferencia. Con ventanas de 1.000 km no importa.
 - `daysUntilSale` tiene 6 nulos en dev; `ProductionDay` ninguno.

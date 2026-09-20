@@ -28,13 +28,16 @@ de `notebooks/eda-exhaustivo-dev.ipynb` dejó abierta o no formuló:
 7. **Estabilidad intra-vehículo** de los agregados en ventanas de 2.000 km: cuánta
    varianza es del vehículo (rasgo) y cuánta de la ventana (estado). Una feature
    100% rasgo no cambia con el corte; una 100% estado es ruido.
-8. Chequeos de dato que faltaban: `TripNumber`, monotonía del odómetro por tiempo,
-   cobertura `signals` vs `trips`, nulos de `KilometerPerHour` según el viaje,
-   hora del día y fin de semana.
+8. Chequeos de dato que faltaban: `TripNumber`, monotonía del odómetro con los tres
+   órdenes posibles (fecha / `TripNumber` / odómetro), cobertura `signals` vs `trips`,
+   nulos de `KilometerPerHour` según el viaje, hora del día y fin de semana.
 9. **Calendario**: qué registra cada canal por mes (el marcador `Regenerations` se
    corta el 25-05-2026 para toda la flota), en qué meses caen los eventos y en cuáles
    la exposición de los sanos. Es la evidencia del confusor calendario que obliga a
    emparejar los cortes de los sanos también por mes.
+10. **Cadencia**: cuántos km y cuántos viajes junta un vehículo en 7/15/30 días, y qué
+   fracción de esas ventanas no pasaría el QC. Separa la *ventana de agregación* (km,
+   que es el eje del panel) de la *cadencia de emisión* (calendario).
 
 Deja además `trips_dev_full.parquet` / `signals_dev_full.parquet` en `gaps/` (dev
 completo, ya canonizado y deduplicado) para no releer 1,2 GB en cada iteración.
@@ -525,12 +528,55 @@ def data_checks(veh: pd.DataFrame, trips: pd.DataFrame, signals: pd.DataFrame) -
     out["tripnumber_gap_gt_1_frac"] = float(diffs.gt(1).mean())
     out["tripnumber_null_frac"] = float(trips["TripNumber"].isna().mean())
 
-    # Monotonía del odómetro en orden temporal
-    prev_end = by_time.groupby(ID, observed=True)["OdometerTripEnd"].shift()
-    back = (by_time["OdometerTripStart"] - prev_end)
-    out["odo_backwards_gt_1km_trips"] = int((back < -1).sum())
-    out["odo_backwards_gt_1km_vehicles"] = int(by_time.loc[back < -1, ID].nunique())
-    out["odo_backwards_gt_100km_trips"] = int((back < -100).sum())
+    # Monotonía del odómetro: DEPENDE del orden con que se recorran los viajes. El 0,7%
+    # de los viajes comparte `TripDatetimeStart` con otro del mismo vehículo, y ordenar
+    # por fecha deja esos empates barajados: el "retroceso" que aparece es el desempate,
+    # no el odómetro. Se miden los tres órdenes para que la diferencia quede a la vista.
+    for label, keys in (("by_time", [ID, "TripDatetimeStart"]),
+                        ("by_tripnumber", [ID, "TripNumber"]),
+                        ("by_odo", [ID, "OdometerTripStart", "OdometerTripEnd"])):
+        d = trips.sort_values(keys)
+        back = d["OdometerTripStart"] - d.groupby(ID, observed=True)["OdometerTripEnd"].shift()
+        out[f"odo_backwards_gt_1km_trips__{label}"] = int((back < -1).sum())
+        out[f"odo_backwards_gt_1km_vehicles__{label}"] = int(d.loc[back < -1, ID].nunique())
+        out[f"odo_backwards_gt_500km_trips__{label}"] = int((back < -500).sum())
+        out[f"odo_backwards_gt_500km_vehicles__{label}"] = int(d.loc[back < -500, ID].nunique())
+        # Costo de forzar monotonía con un máximo acumulado sobre ese mismo orden.
+        delta = d.groupby(ID, observed=True)["OdometerTripEnd"].cummax() - d["OdometerTripEnd"]
+        out[f"cummax_rows_fixed__{label}"] = int((delta > 0.5).sum())
+        out[f"cummax_vehicles_fixed__{label}"] = int(d.loc[delta > 0.5, ID].nunique())
+        out[f"cummax_km_fixed_median__{label}"] = (
+            float(delta[delta > 0.5].median()) if (delta > 0.5).any() else 0.0)
+
+    # Empates de timestamp: la causa del desorden aparente.
+    dup_ts = trips.duplicated([ID, "TripDatetimeStart"], keep=False)
+    out["trips_sharing_timestamp_frac"] = float(dup_ts.mean())
+    out["vehicles_with_timestamp_tie"] = int(trips.loc[dup_ts, ID].nunique())
+
+    # Con orden por TripNumber, ¿el reloj retrocede alguna vez? ¿se solapan los viajes?
+    by_tn = trips.sort_values([ID, "TripNumber"])
+    dt_h = (by_tn["TripDatetimeStart"] - by_tn.groupby(ID, observed=True)["TripDatetimeStart"].shift()
+            ).dt.total_seconds() / 3600.0
+    out["time_backwards_trips__by_tripnumber"] = int((dt_h < 0).sum())
+    gap_h = (by_tn["TripDatetimeStart"] - by_tn.groupby(ID, observed=True)["TripDatetimeEnd"].shift()
+             ).dt.total_seconds() / 3600.0
+    out["overlapping_trips__by_tripnumber"] = int((gap_h < 0).sum())
+
+    # Coherencia odómetro <-> reloj: velocidad implícita entre viajes consecutivos.
+    step_km = by_tn["OdometerTripStart"] - by_tn.groupby(ID, observed=True)["OdometerTripEnd"].shift()
+    ok_pair = step_km.gt(1) & gap_h.gt(0.05)
+    implied = step_km[ok_pair] / gap_h[ok_pair]
+    out["implied_speed_between_trips_max"] = float(implied.max())
+    out["implied_speed_between_trips_p999"] = float(implied.quantile(0.999))
+    out["implied_speed_between_trips_gt200_trips"] = int((implied > 200).sum())
+
+    # Vehículos con el odómetro realmente corrupto: los que retroceden con el orden bueno.
+    bad = sorted(by_tn.loc[step_km < -1, ID].unique().tolist())
+    out["odo_corrupt_vehicles"] = bad
+    out["odo_corrupt_vehicles_frac"] = float(len(bad) / trips[ID].nunique())
+    out["odo_backwards_gt_1km_trips"] = int((step_km < -1).sum())
+    out["odo_backwards_gt_1km_vehicles"] = len(bad)
+    out["odo_backwards_gt_100km_trips"] = int((step_km < -100).sum())
     out["trip_km_negative_trips"] = int((trips["trip_km"] < 0).sum())
     out["trip_km_negative_vehicles"] = int(trips.loc[trips["trip_km"] < 0, ID].nunique())
     out["trip_km_zero_frac"] = float(trips["trip_km"].eq(0).mean())
@@ -631,6 +677,66 @@ def calendar_checks(veh: pd.DataFrame, trips: pd.DataFrame, signals: pd.DataFram
 
 
 # ======================================================================================
+# 10 · Cadencia: qué trae una ventana de calendario frente a la ventana de km
+# ======================================================================================
+def cadence_feasibility(trips: pd.DataFrame, *, day_windows: tuple[int, ...] = (7, 15, 30),
+                        min_trips: int = 5, min_km: float = 500.0) -> dict[str, pd.DataFrame]:
+    """Cuánto historial junta un vehículo en N días, y cuántas de esas ventanas pasan el QC.
+
+    El panel corta sobre odómetro (regla 4) y el QC pide `min_trips_in_window` viajes y
+    una fracción de W en km recorridos. Emitir predicciones cada N días es una decisión
+    de **cadencia**, distinta de la **ventana de agregación**: esta función mide si una
+    ventana de calendario podría además reemplazar a la de km, y la respuesta depende de
+    cuán disparejo sea el uso entre vehículos.
+    """
+    tr = trips.dropna(subset=["TripDatetimeStart"]).copy()
+    tr["_moving"] = tr["trip_km"].gt(0)
+
+    per_v = tr.groupby(ID, observed=True).agg(
+        odo_min=("OdometerTripStart", "min"), odo_max=("OdometerTripEnd", "max"),
+        d0=("TripDatetimeStart", "min"), d1=("TripDatetimeEnd", "max"), n_trips=("trip_km", "size"))
+    per_v["span_km"] = per_v["odo_max"] - per_v["odo_min"]
+    per_v["days"] = (per_v["d1"] - per_v["d0"]).dt.total_seconds() / 86400.0
+    per_v["km_per_day"] = per_v["span_km"] / per_v["days"].clip(lower=1)
+
+    rows = []
+    for n_days in day_windows:
+        bucket = tr.groupby(ID, observed=True)["TripDatetimeStart"].transform(
+            lambda s: (s - s.min()).dt.days // n_days)
+        w = tr.assign(_b=bucket).groupby([ID, "_b"]).agg(
+            n_trips=("trip_km", "size"), n_moving=("_moving", "sum"),
+            km_hi=("OdometerTripEnd", "max"), km_lo=("OdometerTripStart", "min"))
+        w["km"] = w["km_hi"] - w["km_lo"]
+        # Cobertura: ventanas con datos sobre ventanas que abarca la vida del vehículo.
+        span_windows = (per_v["days"] / n_days).apply(lambda v: max(1.0, np.ceil(v)))
+        cov = w.groupby(ID).size() / span_windows
+        km = per_v["km_per_day"] * n_days
+        rows.append({
+            "dias": n_days,
+            "km_p10": km.quantile(0.10), "km_p50": km.quantile(0.50), "km_p90": km.quantile(0.90),
+            "ratio_km_p90_p10": km.quantile(0.90) / max(km.quantile(0.10), 1e-9),
+            "ventanas": float(len(w)),
+            "ventanas_por_vehiculo_p50": float(w.groupby(ID).size().median()),
+            "frac_sin_min_viajes_moviles": float(w["n_moving"].lt(min_trips).mean()),
+            "frac_bajo_min_km": float(w["km"].lt(min_km).mean()),
+            "cobertura_p10": float(cov.quantile(0.10)), "cobertura_p50": float(cov.quantile(0.50)),
+        })
+    resumen = pd.DataFrame(rows).set_index("dias")
+    # Referencia: cuántos cortes deja la grilla de km del panel v1.
+    resumen.loc["grilla_500km", "ventanas_por_vehiculo_p50"] = float((per_v["span_km"] / 500).median())
+
+    # Huecos de registro, en días (un hueco no es un vehículo detenido: es dato que falta).
+    by_tn = tr.sort_values([ID, "TripNumber"])
+    gap_d = by_tn.groupby(ID, observed=True)["TripDatetimeStart"].diff().dt.days
+    per_gap = by_tn.assign(_g=gap_d).groupby(ID, observed=True)["_g"].max()
+    huecos = per_gap.describe(percentiles=[0.5, 0.75, 0.9, 0.99]).to_frame("hueco_max_dias")
+    huecos.loc["veh_con_hueco_gt_15d", "hueco_max_dias"] = float((per_gap > 15).sum())
+    huecos.loc["veh_con_hueco_gt_30d", "hueco_max_dias"] = float((per_gap > 30).sum())
+
+    return {"resumen": resumen, "huecos": huecos, "por_vehiculo": per_v}
+
+
+# ======================================================================================
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -710,6 +816,15 @@ def main() -> int:
     _print("9 · eventos por mes vs. exposición (km) de sanos y de eventos pre-evento", cal["eventos_y_exposicion_por_mes"])
     for name, frame in cal.items():
         frame.to_csv(out_dir / f"calendar_{name}.csv")
+
+    # 10
+    cad = cadence_feasibility(trips)
+    _print("10 · cadencia: qué junta una ventana de calendario (dev) vs. la grilla de 500 km",
+           cad["resumen"], float_format=lambda v: f"{v:.3f}")
+    _print("10 · huecos de registro por vehículo (días sin ningún viaje)", cad["huecos"],
+           float_format=lambda v: f"{v:.1f}")
+    for name in ("resumen", "huecos"):
+        cad[name].to_csv(out_dir / f"cadence_{name}.csv")
 
     # 8
     checks = data_checks(veh, trips, signals)
