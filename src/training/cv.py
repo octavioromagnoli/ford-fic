@@ -38,13 +38,43 @@ TARGET_COLUMN = "label"
 
 
 def select_feature_columns(
-    panel: pd.DataFrame, *, prefixes: tuple[str, ...] = FEATURE_PREFIXES
+    panel: pd.DataFrame,
+    *,
+    prefixes: tuple[str, ...] = FEATURE_PREFIXES,
+    extra_prefixes: tuple[str, ...] = (),
+    exclude_prefixes: tuple[str, ...] = (),
 ) -> list[str]:
-    """Columnas que entran al modelo, por prefijo. Nunca por lista hardcodeada."""
-    columns = [c for c in panel.columns if c.startswith(prefixes)]
+    """Columnas que entran al modelo, por prefijo. Nunca por lista hardcodeada.
+
+    Las ablaciones son parte del protocolo de F3, no una excepción: para saber si un
+    modelo aprende física o aprende el calendario hay que poder **sacar** un grupo de
+    columnas y **meter** otro sin reconstruir el panel ni editar código.
+
+    - `extra_prefixes` suma prefijos a los de base: típicamente `aux_`, para medir
+      cuánto aportaría una familia que hoy está fuera del modelo a propósito
+      (temperatura ambiente, `ProductionDay`, el marcador `Regenerations`). Si el
+      número sube mucho, eso **confirma** que esas columnas eran un atajo, no que
+      haya que incluirlas.
+    - `exclude_prefixes` gana siempre sobre los otros dos: es la ablación negativa
+      (`feat_idle` para sacar el idle entero, `feat_regen` para la familia B).
+
+    Los dos salen del YAML del experimento (`features:` en `scripts/train.py`), así
+    que una ablación es otro config, no otra rama de código (regla 7).
+    """
+    keep = tuple(prefixes) + tuple(extra_prefixes)
+    columns = [c for c in panel.columns if c.startswith(keep)]
+    if exclude_prefixes:
+        excluded = [c for c in columns if c.startswith(tuple(exclude_prefixes))]
+        columns = [c for c in columns if c not in set(excluded)]
+        logger.info("Ablación: %d columna(s) fuera por %s", len(excluded), list(exclude_prefixes))
+        if not columns:
+            raise ValueError(
+                f"La ablación `exclude_prefixes={list(exclude_prefixes)}` dejó al modelo "
+                "sin ninguna feature."
+            )
     if not columns:
         raise ValueError(
-            f"El panel no tiene ninguna columna con prefijo {prefixes}. "
+            f"El panel no tiene ninguna columna con prefijo {keep}. "
             "Revisá el contrato de datos (CLAUDE.md)."
         )
     return columns
@@ -89,6 +119,8 @@ def run_cv(
     feature_prefixes: tuple[str, ...] = FEATURE_PREFIXES,
     strict_splits: bool = True,
     min_valid_positives: int | None = None,
+    extra_prefixes: tuple[str, ...] = (),
+    exclude_prefixes: tuple[str, ...] = (),
 ) -> tuple[pd.DataFrame, list[dict[str, float]]]:
     """Corre la CV agrupada y devuelve `(predicciones out-of-fold, métricas por fold)`.
 
@@ -120,7 +152,10 @@ def run_cv(
     if target_column not in panel.columns:
         raise KeyError(f"El panel no tiene la columna objetivo `{target_column}`")
 
-    feature_columns = select_feature_columns(panel, prefixes=feature_prefixes)
+    feature_columns = select_feature_columns(
+        panel, prefixes=feature_prefixes,
+        extra_prefixes=extra_prefixes, exclude_prefixes=exclude_prefixes,
+    )
     logger.info("Features seleccionadas por prefijo: %d", len(feature_columns))
 
     X = panel[feature_columns]

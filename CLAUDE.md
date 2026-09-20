@@ -15,7 +15,12 @@ construye `data/processed/panel.parquet` (W=1000, G=500, H=3000, Δ=500) con 53
 features declaradas en `configs/data/features_v1.yaml`; el panel, los splits y el
 holdout están publicados como wandb Artifacts (`panel-v1`, `test-split`; se suben con
 `scripts/log_panel_artifact.py`) y `configs/exp_baserate.yaml` es el piso contra el
-panel real. **Lo siguiente es F3 y F4 (dashboard contra el panel real)**, y dentro de F3 la decisión
+panel real. **Hay modelos desde el 19-09**: `logistic`, `logistic_l1`, `gbm` y `lgbm` en el registry,
+con sus `configs/exp_*.yaml`. El mejor da PR-AUC 0,181 contra 0,125 de tasa base (1,44×) y
+ROC 0,617 — apenas por encima de la mejor columna sola (0,60), que es la confirmación
+multivariada de que **el panel tiene una sola dimensión de señal**
+(`docs/memoria/f3-primer-modelo-y-emparejado-por-posicion.md`).
+**Lo siguiente es F4 (dashboard contra el panel real)**, y dentro de F3 la decisión
 del 19-09 es **features antes que modelos**: con ROC ≈ 0,58–0,60, un modelo mejor no
 rescata un panel que no mide el mecanismo. El menú de features está en
 `docs/f3-features-candidatas-fisica.md` (arranca por la contradicción del catalizador) y
@@ -41,6 +46,11 @@ que las reproduce. Nueve que cambian cómo se escribe el código:
   utilizable *y* los sanos de los mercados donde ningún evento es observable. El
   criterio vive en `src/data/usable.py` y se declara en `universe` de
   `configs/data/test_split.yaml`. **El panel se construye con los 364.**
+- **El 77% de las filas positivas cae en el último cuarto de la serie de su vehículo**,
+  contra el 30% de las sanas. `match_healthy_cuts` puede emparejar por `cut_position`
+  (la posición viaja en el panel como `aux_cut_position`, calculada antes de muestrear),
+  pero a Δ = 500 el pool sano no alcanza: hay que ir a Δ = 250. Las auditorías usan esa
+  columna; recalcular la posición sobre el panel ya muestreado la distorsiona.
 - Hay **13 vehículos duplicados bajo dos códigos**: se colapsan con
   `src/data/dedupe.py` antes de cualquier split, o la regla 2 se viola en silencio.
 - **`Engine` está excluido** del set base: `ENG_3` es el 36% de los sanos y el 0%

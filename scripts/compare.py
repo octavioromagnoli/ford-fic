@@ -26,6 +26,12 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# La consola de Windows es cp1252 y la tabla lleva "≤": sin esto, `compare.py`
+# muere con UnicodeEncodeError en vez de imprimir. Mismo arreglo que el resto de
+# los scripts del repo.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from src.config import resolve_path  # noqa: E402
 
 

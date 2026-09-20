@@ -5,6 +5,37 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-19 · Hay modelos, y el multivariado confirma que el panel tiene una sola dimensión
+
+**Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:** cuatro builders en
+`src/models/registry.py`, `exclude_prefixes`/`extra_prefixes` en `cv.py`,
+`add_cut_position()` + `cut_position` en `match_healthy_cuts()`,
+`configs/exp_{logistic,logistic_l1,gbm,lgbm}*.yaml`.
+
+**Qué cambia.** El registry deja de tener solo `baserate`: hay logística L2/L1, GBM de
+sklearn y LightGBM, todos con regularización fuerte por default. Y el YAML de experimento
+puede sacar o meter grupos de columnas por prefijo, que era lo que el protocolo de
+ablación de F3 necesitaba.
+
+**Los números (provisorios).** El mejor es `logistic_l1`: PR-AUC OOF 0,181 contra 0,125 de
+tasa base (**1,44×**), ROC 0,617. Pero **la mejor columna sola daba ROC 0,60**: combinar
+54 features suma 0,02. Y las 64 features extra del panel v5 no mueven nada (0,605–0,608).
+Es la confirmación multivariada de las cuatro vueltas de feature engineering: el panel
+tiene **una** dimensión de señal. La regularización fuerte gana y el boosting no le gana
+a la lineal — con 53 vehículos con evento, más capacidad es más varianza.
+
+**Emparejado por posición.** El 77% de las filas positivas cae en el último cuarto de la
+serie de su vehículo contra el 30% de las sanas. Emparejar por eso **no se puede a
+Δ = 500**: con la grilla del v1 quedan 0 filas sanas, y aflojando a mitades de serie
+quedan 175 (contra 1.241) sin cerrar el atajo (la posición sigue separando con 0,915).
+**Lo que sí se aprendió: la señal no es el artefacto.** ROC 0,587–0,607 contra
+0,577–0,617 del v1, así que balancear la posición no la voltea. El camino para cerrarlo
+es Δ = 250, que duplica la serie por vehículo: `panel_delta250.yaml` ya existe.
+
+**Detalle:** [f3-primer-modelo-y-emparejado-por-posicion.md](f3-primer-modelo-y-emparejado-por-posicion.md)
+
+---
+
 ## 2026-09-19 · Se deja de agregar features hasta que lleguen los eventos corregidos
 
 **Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:** familia H en

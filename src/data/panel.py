@@ -183,6 +183,32 @@ def build_panel(
     return panel, report
 
 
+AUX_POSITION = f"{AUX_PREFIX}cut_position"
+
+
+def add_cut_position(panel: pd.DataFrame) -> pd.DataFrame:
+    """Posición relativa del corte dentro de la serie **completa** de su vehículo, en (0, 1].
+
+    Se calcula una vez, **antes** de muestrear los sanos, y viaja en el panel como
+    `aux_cut_position`. Las dos razones son la misma:
+
+    - **Emparejar.** Es la tercera dimensión de `match_healthy_cuts`.
+    - **Auditar.** `scripts/audit_sequence.py` venía recalculando la posición sobre el
+      panel ya muestreado, y ahí está distorsionada: de un vehículo con evento se
+      conservan todos los cortes, pero de un sano sobrevive un subconjunto, así que su
+      rango se comprime y dos filas con el mismo `_frac` no están en el mismo punto de
+      sus historias. La columna guarda la posición real.
+
+    No entra al modelo (prefijo `aux_`), y no podría: la posición del corte en la serie
+    separa sola con P = 0,83 y es la etiqueta por construcción
+    (`docs/memoria/f3-posicion-en-la-serie.md`).
+    """
+    grouped = panel.groupby(ID_COL, observed=True)["cut_odo"]
+    out = panel.copy()
+    out[AUX_POSITION] = grouped.rank(method="first") / grouped.transform("size")
+    return out
+
+
 def match_healthy_cuts(
     panel: pd.DataFrame,
     reference_vehicles: set[str],
@@ -190,6 +216,7 @@ def match_healthy_cuts(
     match_on: tuple[str, ...] = ("cut_odo", "cut_date"),
     odo_bin_km: float = 2000.0,
     date_freq: str = "M",
+    position_bins: int = 4,
     max_shortfall: float = 0.1,
     seed: int = 42,
 ) -> tuple[np.ndarray, dict[str, Any]]:
@@ -198,6 +225,20 @@ def match_healthy_cuts(
     El subconjunto sano es el más grande cuya distribución sobre las celdas de
     `match_on` reproduce la de las filas positivas de `reference_vehicles` (dev),
     tolerando un `max_shortfall` global en celdas donde no hay sanos suficientes.
+
+    **`cut_position` como tercera dimensión de emparejado (F3).** Las filas positivas de
+    un vehículo son, por construcción, sus ÚLTIMOS cortes: su serie termina en `E − G` y
+    las positivas son las últimas `H/Δ`. Así que emparejar solo por odómetro y mes deja
+    una asimetría abierta —las positivas se apilan al final de su serie y los sanos que
+    las acompañan vienen de series largas, que son otra población— y la medición se
+    diluye: auditando por estratos de posición, la señal térmica separa con 0,74 en los
+    cortes tempranos y con 0,56 en los últimos, contra 0,59 agrupado
+    (`docs/memoria/f3-esfuerzo-de-control-y-dosis.md` §2b). Agregar `cut_position` a
+    `match_on` empareja cada positiva con sanos que están **en el mismo punto de su
+    propia serie**, que es la comparación que la auditoría venía exigiendo a mano.
+
+    La posición se calcula sobre el panel COMPLETO (antes de muestrear), porque es la
+    posición dentro de la serie real del vehículo, no dentro de lo que sobrevivió.
     """
     if "cut_odo" not in match_on and "cut_date" not in match_on:
         raise ValueError("match_on tiene que incluir `cut_odo` y/o `cut_date`")
@@ -207,6 +248,18 @@ def match_healthy_cuts(
     if "cut_date" in match_on:
         period = pd.to_datetime(panel["cut_date"]).dt.to_period(date_freq).astype(str).fillna("NaT")
         cells = cells + "|date=" + period
+    if "cut_position" in match_on:
+        if AUX_POSITION not in panel.columns:
+            raise KeyError(
+                f"Emparejar por `cut_position` necesita `{AUX_POSITION}` en el panel. "
+                "Lo agrega `add_cut_position()` justo después de `build_panel()`."
+            )
+        rank_frac = panel[AUX_POSITION]
+        # Bins fijos en [0, 1], no cuantiles: los cuantiles se calcularían sobre la
+        # mezcla de positivas y sanas y moverían el corte según la composición.
+        edges = np.linspace(0.0, 1.0, int(position_bins) + 1)
+        binned = pd.cut(rank_frac, bins=edges, labels=False, include_lowest=True)
+        cells = cells + "|pos=" + binned.astype("Int64").astype(str)
 
     is_ref_positive = panel["label"].eq(1) & panel[ID_COL].astype(str).isin(reference_vehicles)
     is_healthy = panel["event_observed"].eq(0)
@@ -240,6 +293,7 @@ def match_healthy_cuts(
     kept_healthy = int(keep[is_healthy.to_numpy()].sum())
     summary = {
         "match_on": list(match_on), "odo_bin_km": odo_bin_km, "date_freq": date_freq,
+        "position_bins": int(position_bins) if "cut_position" in match_on else None,
         "n_reference_positive_rows": int(is_ref_positive.sum()),
         "n_cells": int(len(target)),
         "cells_without_healthy": int((avail == 0).sum()),

@@ -95,12 +95,24 @@ def select_columns(dev: pd.DataFrame, spec: str, seq_cols: list[str]) -> list[st
 
 
 def with_position(dev: pd.DataFrame) -> pd.DataFrame:
-    """Agrega la posición del corte dentro de la serie de su vehículo."""
+    """Agrega la posición del corte dentro de la serie de su vehículo.
+
+    Si el panel trae `aux_cut_position` (calculado antes de muestrear los sanos), esa es
+    la posición buena y se usa esa. Recalcularla acá sobre el panel ya muestreado la
+    distorsiona: de un vehículo con evento se conservan todos los cortes y de un sano
+    solo un subconjunto, así que el rango del sano se comprime y dos filas con el mismo
+    `_frac` no están en el mismo punto de sus historias. Los paneles viejos no tienen la
+    columna y caen al cálculo de antes, que es aproximado y conservador.
+    """
     out = dev.copy()
     grouped = out.groupby("vehicle_id")["cut_odo"]
-    out["_rank"] = grouped.rank(method="first")
     out["_n"] = grouped.transform("size")
-    out["_frac"] = out["_rank"] / out["_n"]
+    if "aux_cut_position" in out.columns:
+        out["_frac"] = out["aux_cut_position"]
+        out["_rank"] = out["_frac"] * out["_n"]
+    else:
+        out["_rank"] = grouped.rank(method="first")
+        out["_frac"] = out["_rank"] / out["_n"]
     return out
 
 

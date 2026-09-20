@@ -49,7 +49,7 @@ if hasattr(sys.stdout, "reconfigure"):
 from src.config import ensure_dir, load_config, repo_root, resolve_path, set_seed  # noqa: E402
 from src.data.anchor import estimate_origin_day, event_dates, project_dates_to_odometer  # noqa: E402
 from src.data.join import load_vehicle_static  # noqa: E402
-from src.data.panel import LabelConfig, build_panel, match_healthy_cuts  # noqa: E402
+from src.data.panel import LabelConfig, add_cut_position, build_panel, match_healthy_cuts  # noqa: E402
 from src.features.derived import add_derived_features, load_derived_specs  # noqa: E402
 from src.features.sequence import add_sequence_features  # noqa: E402
 from src.data.subset import read_table_for_vehicles  # noqa: E402
@@ -143,6 +143,11 @@ def main() -> int:
     panel, report = build_panel(trips, signals, vehicles, specs, label_cfg,
                                 static_columns=static_columns, static_excluded=static_excluded)
 
+    # 4a-bis · posición del corte en la serie COMPLETA, antes de muestrear nada.
+    # Viaja como `aux_cut_position`: es la tercera dimensión del emparejado y la que
+    # usan las auditorías (recalcularla después del muestreo la distorsiona).
+    panel = add_cut_position(panel)
+
     # 4a · derivadas: relaciones entre dos features de la MISMA fila -----------------
     # Van acá, sobre el panel recién agregado, porque necesitan las dos features de
     # ventana ya calculadas. Es aritmética fila a fila: no hay nada que fitear por fold
@@ -163,6 +168,7 @@ def main() -> int:
         keep, sampling_summary = match_healthy_cuts(
             panel, dev, match_on=tuple(sampling.get("match_on", ["cut_odo", "cut_date"])),
             odo_bin_km=float(sampling.get("odo_bin_km", 2000)), date_freq=str(sampling.get("date_freq", "M")),
+            position_bins=int(sampling.get("position_bins", 4)),
             max_shortfall=float(sampling.get("max_shortfall", 0.1)), seed=seed,
         )
         panel = panel.loc[keep].reset_index(drop=True)

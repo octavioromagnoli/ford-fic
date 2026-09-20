@@ -200,6 +200,7 @@ def main() -> None:
     panel = select_dev(panel, cfg)
     splits = load_or_make_splits(panel, cfg)
 
+    features_cfg = cfg.get("features") or {}
     model_cfg = cfg["model"]
     run_name = args.run_name or cfg.get("name") or f"{model_cfg['name']}-{datetime.now():%Y%m%d-%H%M%S}"
     run = init_wandb(cfg, run_name)
@@ -212,6 +213,10 @@ def main() -> None:
         model_params=model_cfg.get("params", {}),
         strict_splits=bool(cfg.get("splits", {}).get("strict", True)),
         min_valid_positives=options["min_valid_positives"],
+        # Ablaciones desde el YAML (`features.extra_prefixes` / `features.exclude_prefixes`):
+        # sacar o meter un grupo de columnas es otro config, no otra rama de código.
+        extra_prefixes=tuple(features_cfg.get("extra_prefixes") or ()),
+        exclude_prefixes=tuple(features_cfg.get("exclude_prefixes") or ()),
     )
 
     eval_cfg = cfg.get("eval", {})
