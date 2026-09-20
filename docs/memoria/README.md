@@ -37,6 +37,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-cadencia-y-ventana.md](f3-cadencia-y-ventana.md) | Por qué la ventana es de km y la cadencia puede ser quincenal (no son lo mismo) |
 | [f3-posicion-en-la-serie.md](f3-posicion-en-la-serie.md) | **La posición del corte en su serie separa con P = 0,83**: el atajo que hereda cualquier feature acumulativa |
 | [f3-secuencia-zself-cusum.md](f3-secuencia-zself-cusum.md) | `_zself` + CUSUM: se construyó, se midió y no da. Qué quedó y qué no queda descartado |
+| [f3-barrido-de-relaciones.md](f3-barrido-de-relaciones.md) | **El barrido de los 7.310 cocientes y su nulo: nada pasa la barra del azar.** Las rarezas (reloj, viaje anterior, forma del reparto) tampoco. Por qué la ingeniería de features tocó techo |
 | [f3-relaciones-y-literatura-dpf.md](f3-relaciones-y-literatura-dpf.md) | **Las relaciones entre features (`derived:`): el idle improductivo separa más que todo lo anterior.** Y los cinco mecanismos de la literatura de DPF, medidos y planos |
 | [f3-esfuerzo-de-control-y-dosis.md](f3-esfuerzo-de-control-y-dosis.md) | **Las 16 candidatas físicas del menú, medidas: ninguna gana.** Y la contradicción del catalizador resuelta: el DPF no anticipa, y probablemente el evento no es obstrucción |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
@@ -56,6 +57,7 @@ python scripts/train.py --config configs/exp_baserate.yaml            # piso con
 python scripts/build_dataset.py --config configs/data/panel_v2.yaml   # el mismo panel + las 16 candidatas físicas de F3 (medidas, negativas)
 python scripts/audit_sequence.py --panel data/processed/panel.parquet  # atajo de posición + features de secuencia
 python scripts/build_dataset.py --config configs/data/panel_v4.yaml   # + relaciones (`derived:`) y literatura de DPF
+python scripts/build_dataset.py --config configs/data/panel_v5.yaml   # + rarezas: reloj, viaje anterior, forma del reparto
 python scripts/audit_sequence.py --panel data/processed/panel_v4.parquet --columns all  # la misma auditoría, sobre cualquier feature
 python scripts/check_setup.py      # 41 chequeos del harness
 ```

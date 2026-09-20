@@ -157,6 +157,43 @@ def _half_count_delta_per_1000km(x: np.ndarray, ctx: WindowContext) -> float:
     return float((x[second].sum() - x[~second].sum()) / half_km * 1000.0)
 
 
+def _top_share(x: np.ndarray, ctx: WindowContext) -> float:
+    """Qué fracción del total se la lleva la fila más grande de la ventana.
+
+    Mide la FORMA de la distribución, no su nivel: dos vehículos con los mismos 1.000 km
+    de ventana pueden haberlos hecho en un viaje o en cien. Ninguna media, mediana ni
+    tendencia distingue eso, y para un filtro que necesita corridas largas la diferencia
+    es todo.
+    """
+    clean = _clean(x)
+    total = float(np.sum(np.abs(clean)))
+    return float(np.max(clean) / total) if clean.size and total > 0 else np.nan
+
+
+def _gini(x: np.ndarray, ctx: WindowContext) -> float:
+    """Desigualdad del reparto (0 = todos los viajes iguales, 1 = uno se lleva todo).
+
+    La versión continua de `top_share`: ¿este vehículo tiene una rutina, o mezcla
+    corridas largas con un montón de saltos cortos?
+    """
+    clean = np.sort(_clean(x))
+    n = clean.size
+    total = float(clean.sum())
+    if n < 2 or total <= 0 or clean[0] < 0:
+        return np.nan
+    index = np.arange(1, n + 1)
+    return float((2.0 * np.sum(index * clean)) / (n * total) - (n + 1.0) / n)
+
+
+def _cv(x: np.ndarray, ctx: WindowContext) -> float:
+    """Desvío relativo a la media: dispersión comparable entre vehículos de distinto nivel."""
+    clean = _clean(x)
+    if clean.size < 2:
+        return np.nan
+    mean = float(clean.mean())
+    return float(np.std(clean, ddof=1) / mean) if abs(mean) > 1e-9 else np.nan
+
+
 def _event_positions(x: np.ndarray, ctx: WindowContext) -> np.ndarray:
     x = np.nan_to_num(np.asarray(x, dtype="float64"))
     return ctx.positions[x > 0]
@@ -208,6 +245,9 @@ AGGREGATORS: dict[str, Callable[[np.ndarray, WindowContext], float]] = {
     "half_mean_delta": _half_mean_delta,
     "half_slope_per_1000km": _half_slope_per_1000km,
     "slope_per_1000km": _slope_per_1000km,
+    "top_share": _top_share,
+    "gini": _gini,
+    "cv": _cv,
     "half_count_delta_per_1000km": _half_count_delta_per_1000km,
     "gap_mean_km": _gap_mean_km,
     "gap_median_km": _gap_median_km,

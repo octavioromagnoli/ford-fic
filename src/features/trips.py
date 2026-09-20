@@ -237,6 +237,7 @@ def derive_trip_columns(
     out["regen_trip_km"] = out["trip_km"].where(out["regen_drop"])
     out["regen_trip_min"] = out["trip_duration_min"].where(out["regen_drop"])
 
+
     # Consumo: caída del nivel de combustible por 100 km, solo en viajes sin recarga y con distancia.
     fuel_drop = out["FuelLvlStartPc"] - out["FuelLvlEndPc"]
     valid = fuel_drop.ge(0) & out["trip_km"].ge(thr["fuel_min_trip_km"])
@@ -256,6 +257,47 @@ def derive_trip_columns(
     # separado; la combinación no, y un modelo lineal no la puede construir.
     out["cold_soak_short_trip"] = (out["short_trip"] & out["cold_start"]
                                    & out["soak_min"].ge(thr["long_soak_min"]))
+
+    # ----------------------------------------------------------------------------------
+    # F3 · familia H: rarezas. Cosas que el panel no puede ver porque no miran una
+    # columna sino el RELOJ, el viaje ANTERIOR o la FORMA de la distribución.
+    # El barrido exhaustivo de cocientes entre las features que ya existían no produjo
+    # nada por encima del azar (ver `docs/memoria/f3-barrido-de-relaciones.md`), así que
+    # lo que falta no es otra combinación: es información que no está en el panel.
+    # ----------------------------------------------------------------------------------
+    # 1) **El reloj.** Un idle a las 3 de la mañana no es el mismo fenómeno que uno en
+    #    hora pico: es motor encendido para climatizar, para un equipo auxiliar o para
+    #    dormir. Nadie lo mira, y es exactamente el uso que carga el filtro sin mover el
+    #    vehículo ni un metro.
+    hour = out["TripDatetimeStart"].dt.hour
+    out["night"] = hour.ge(22) | hour.lt(5)
+    out["night_idle_min"] = out["trip_duration_min"].where(out["idle"] & out["night"], 0.0)
+    out["weekend_km"] = out["trip_km"].where(out["TripDatetimeStart"].dt.dayofweek.ge(5), 0.0)
+
+    # 2) **El viaje anterior.** Cuánto se enfrió el motor mientras estuvo parado, por
+    #    minuto de reposo. Es la constante térmica del vehículo —la pieza, no el
+    #    conductor—: dos autos con el mismo uso se enfrían distinto si el circuito de
+    #    refrigeración o el sensor no están bien. Solo tiene sentido con reposos cortos
+    #    (con 8 horas parado todos llegan a ambiente y el cociente no dice nada).
+    order = [ID_COL, "TripNumber"] if "TripNumber" in out.columns else [ID_COL, "TripDatetimeStart"]
+    by_seq = out.sort_values(order)
+    prev_end_temp = by_seq.groupby(ID_COL, observed=True)["CoolantTemperatureEnd"].shift()
+    prev_end_temp = prev_end_temp.reindex(out.index)
+    drop_c = prev_end_temp - out["CoolantTemperatureStart"]
+    short_soak = out["soak_min"].between(5, 240) & drop_c.gt(0)
+    out["cooling_rate_c_per_min"] = (drop_c / out["soak_min"]).where(short_soak)
+    # Rearranque en caliente: el motor todavía estaba caliente y se lo volvió a arrancar.
+    # Es el uso de reparto —muchos arranques, poco enfriamiento— que no se parece ni al
+    # urbano ni al de ruta.
+    out["hot_restart"] = out["soak_min"].lt(thr["chained_trip_min"]) & out["CoolantTemperatureStart"].ge(thr["regime_temp_c"])
+    # Calor disponible y desperdiciado: arrancó caliente y aun así fue un viaje corto.
+    out["warm_start_short_trip"] = out["short_trip"] & out["CoolantTemperatureStart"].ge(thr["regime_temp_c"])
+
+    # 3) **Contra el ambiente, no contra cero.** Que el motor llegue a 80 °C significa
+    #    cosas distintas con 5 °C afuera que con 35. El salto sobre el ambiente controla
+    #    la estación sin meter la temperatura ambiente como feature (que mide calendario,
+    #    y el calendario mide la etiqueta).
+    out["temp_over_ambient"] = (out["EngineTemperatureMax"] - out["AirTemperatureAvg"]).where(out["moving"])
 
     # Las fracciones "solo entre viajes con desplazamiento" se materializan como
     # columnas con NaN en los idle: así el agregador `mean` las ignora sin filtros ad hoc.

@@ -243,6 +243,13 @@ revisar el YAML para no duplicar con otro nombre. Resumen:
   contra 0,597 de `idle_frac`, que aguanta las tres auditorías—, y de la familia G, nada
   (los cinco mecanismos publicados de degradación de DPF dan planos). Detalle en
   `docs/memoria/f3-relaciones-y-literatura-dpf.md`.
+- **F3 rarezas (familia H), `features_v5.yaml` — MEDIDAS Y PLANAS.** El reloj (idle
+  nocturno), el viaje anterior (constante de enfriamiento, rearranque en caliente) y la
+  forma del reparto (Gini de km, CV térmico), con los agregadores `top_share`/`gini`/`cv`.
+  **Antes de proponer una feature nueva, leer `docs/memoria/f3-barrido-de-relaciones.md`:**
+  el barrido de los 7.310 cocientes posibles ya se corrió con su nulo y no pasa nada la
+  barra del azar. Toda feature nueva se testea por permutación a nivel vehículo, no por
+  su P a secas.
 
 Lo que **no** se construye y por qué: elevación y presión de neumáticos (no hay
 columna), `accumulation_*` desde `signals` (es la misma variable que `AirRegeneration`),

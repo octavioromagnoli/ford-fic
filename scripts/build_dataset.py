@@ -68,7 +68,10 @@ logger = logging.getLogger("build_dataset")
 
 ID = "vehicle_id"
 TRIP_COLUMNS = [
-    "VehicleCode", "TripDatetimeStart", "TripDatetimeEnd", "OdometerTripStart", "OdometerTripEnd",
+    # `TripNumber` es el orden canónico de los viajes de un vehículo (docs/memoria/
+    # f3-cadencia-y-ventana.md): ordenar por fecha baraja el 0,67% que comparte
+    # `TripDatetimeStart`. Lo usan las features que miran el viaje ANTERIOR.
+    "VehicleCode", "TripNumber", "TripDatetimeStart", "TripDatetimeEnd", "OdometerTripStart", "OdometerTripEnd",
     "FuelLvlStartPc", "FuelLvlEndPc", "EngineOilLifePCStart", "EngineTemperatureMin", "EngineTemperatureMax",
     "EngineTemperatureAvg", "AirFilterStart", "AirFilterEnd", "AirRegenerationStart", "AirRegenerationEnd",
     "CoolantTemperatureStart", "CoolantTemperatureEnd", "AirTemperatureMin", "AirTemperatureAvg",

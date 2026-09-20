@@ -5,6 +5,42 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-19 · Se deja de agregar features hasta que lleguen los eventos corregidos
+
+**Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:** familia H en
+`features_v5.yaml`, agregadores `top_share`/`gini`/`cv`, `TripNumber` entre las columnas
+que carga `build_dataset.py`.
+
+**Qué cambia.** Nada del panel canónico. Se cierra la línea de trabajo "buscar más
+features" y se pasa a esperar la corrección de la etiqueta.
+
+**Por qué.** Tres resultados en la misma dirección:
+
+1. **El barrido de los 7.310 cocientes posibles entre las features del panel no produce
+   nada.** El mejor cociente real separa con |0,5−P| = 0,125; el mejor con la etiqueta
+   permutada a nivel vehículo, con 0,213 (p95 = 0,278). Cero candidatos pasan la barra.
+2. **Las 17 rarezas de la familia H tampoco** (el reloj: idle nocturno; el viaje anterior:
+   constante de enfriamiento, rearranque en caliente; la forma del reparto: Gini de km,
+   CV térmico). La mejor da p de permutación 0,16 sobre 17 tests.
+3. Sumando las cuatro vueltas de F3, **más de 60 features por seis mecanismos**: todo lo
+   que separa es una sola dimensión, tiempo de motor encendido improductivo y frío.
+
+Seguir agregando features es comprar comparaciones múltiples contra los mismos 53
+vehículos con evento. **Y la etiqueta contra la que se mide todo esto está mal** (error de
+SQL, la mentora la corrige), así que el orden correcto es esperarla.
+
+**Corrección de la entrada anterior:** `regen_per_idle_min` se sostiene como hipótesis
+previa (permutación p = 0,0005), pero correlaciona ρ = −0,88 con `idle_min_per_1000km`:
+es el idle afilado, no un mecanismo nuevo, y su ventaja sobre el idle solo es chica
+(0,130 contra 0,097).
+
+**Qué preguntar antes de reconstruir.** Si la corrección rehabilita positivos hoy
+excluidos, el universo de 364 crece y el holdout congelado hay que re-sortearlo.
+
+**Detalle:** [f3-barrido-de-relaciones.md](f3-barrido-de-relaciones.md)
+
+---
+
 ## 2026-09-19 · Las features pueden ser relaciones entre features (`derived:`), y aparece la primera que gana
 
 **Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:** `src/features/derived.py`,
