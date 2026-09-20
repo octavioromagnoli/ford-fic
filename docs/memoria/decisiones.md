@@ -186,6 +186,39 @@ información. Leída sola, la auditoría dice lo contrario de lo que pasa.
 viejo; hay que rehacerlo con `scripts/audit_model.py`.
 
 **Detalle:** [f3-survival-stacking.md](f3-survival-stacking.md).
+
+---
+
+## 2026-09-20 · El proceso gamma de degradación no se implementa
+
+**Código:** `scripts/audit_gamma_monotonia.py` + `configs/data/gamma_monotonia.yaml`
+(la auditoría queda; el modelo no se escribió). **Rama:** `exp/gamma-degradation`.
+
+**Qué.** Se descarta modelar la degradación como un proceso gamma con covariables
+(Lawless & Crowder 2004): daño latente monótono, incrementos gamma, falla = primer
+cruce de un umbral. El paso previo —verificar el proxy de carga— dice que no hay
+premisa, y la rama se cierra ahí.
+
+**Por qué.** Las dos condiciones que el modelo necesita fallan sobre dev. (1) La
+**monotonía** existe solo hasta el km ~1.000: fuera del asentamiento, el 45–47% de los
+vehículos tiene ρ(nivel, odómetro) > 0, que es lo que da una moneda. El residuo con el
+que termina la regeneración —la ceniza, según la física— no muestra tendencia ni
+siquiera sin recortar (ρ mediano +0,013), y la mitad de las 14.695 regeneraciones
+termina en 0 exacto: el piso cae debajo de la resolución de la escala. (2) La
+**separación** de la tasa no se sostiene: con la exposición igualada ningún proxy pasa
+de 0,52 de AUC en la dirección de la hipótesis. El único efecto fuerte —la distancia
+entre regeneraciones, AUC 0,694— apunta al revés que la hipótesis y se derrumba a 0,564
+al igualar la ventana de odómetro: medía cuánto duró el registro. La causa de fondo es
+de escala de tiempo: la ceniza es un fenómeno de >100.000 km y acá el evento cae a una
+mediana de 7.987 km, con 7 vehículos de 290 arriba de los 50.000.
+
+**Qué queda abierto:** la auditoría es ejecutable y su criterio de veredicto está
+declarado en el YAML, así que una extracción con vehículos más viejos —o con
+contrapresión diferencial del filtro, que mide la capacidad perdida directo— vuelve a
+contestar la pregunta sin rehacer nada.
+
+**Detalle:** [f3-proceso-gamma.md](f3-proceso-gamma.md)
+
 ---
 
 ## 2026-09-20 · La decisión se mide por vehículo con `mean`, y siempre como lift
