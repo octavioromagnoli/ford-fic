@@ -50,6 +50,9 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
     config = yaml.safe_load(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
     point = metrics.get("operating_point") or {}
     target = metrics.get("target_report") or {}
+    # El barrido de C_FN/C_FP reemplaza a la matriz única: el costo de una matriz no
+    # se compara entre corridas (depende de la matriz), el ahorro relativo sí.
+    cost = metrics.get("cost_ratio_sweep") or {}
     summary = metrics.get("folds_summary") or {}
     oof = metrics.get("oof", {})
     return {
@@ -69,6 +72,8 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
         "splits": (config.get("splits") or {}).get("path"),
         "n_positive": oof.get("n_positive"),
         "cost_per_1000": target.get("cost_per_1000"),
+        "cost_best_ratio": cost.get("best_ratio"),
+        "cost_best_savings_frac": cost.get("best_savings_frac"),
         "cost_matrix": (
             json.dumps((config.get("eval") or {})["cost_matrix"], sort_keys=True)
             if "cost_matrix" in (config.get("eval") or {})
@@ -92,6 +97,19 @@ def comparability_warnings(runs: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
+def _fmt_savings(run: dict[str, Any]) -> str:
+    """Pico del barrido de costo: cuánto ahorra el modelo y a qué `C_FN / C_FP`.
+
+    Es el número que sí se compara entre corridas. El costo absoluto de una matriz
+    depende de la matriz, y a esta tasa base una matriz con falsos negativos 20–50
+    veces más caros hace óptimo revisar todo gane quien gane (`cost_ratio_sweep`).
+    """
+    frac, ratio = run.get("cost_best_savings_frac"), run.get("cost_best_ratio")
+    if frac is None or ratio is None or not frac:
+        return "—"
+    return f"{100 * float(frac):.1f}% @{float(ratio):g}×"
+
+
 def render_table(runs: list[dict[str, Any]]) -> str:
     """Markdown: una fila por corrida, ordenadas por PR-AUC descendente."""
     ranked = sorted(
@@ -100,7 +118,7 @@ def render_table(runs: list[dict[str, Any]]) -> str:
     )
     budget = next((r["budget"] for r in ranked if r["budget"] is not None), None)
     lines = [
-        f"| Corrida | Modelo | PR-AUC (oof) | Lift vs. base | ROC-AUC | Brier | Costo/1000 | Detección | Anticip. mediana |",
+        f"| Corrida | Modelo | PR-AUC (oof) | Lift vs. base | ROC-AUC | Brier | Ahorro máx. | Detección | Anticip. mediana |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in ranked:
@@ -109,7 +127,7 @@ def render_table(runs: list[dict[str, Any]]) -> str:
             else f"{float(r['median_lead_km']):,.0f} km"
         lines.append(
             f"| `{r['run']}` | {r['model']} | {_fmt(r['pr_auc'])} | {_fmt(r['lift'], 2)}× | "
-            f"{_fmt(r['roc_auc'])} | {_fmt(r['brier'])} | {_fmt(r['cost_per_1000'], 0)} | "
+            f"{_fmt(r['roc_auc'])} | {_fmt(r['brier'])} | {_fmt_savings(r)} | "
             f"{detection} | {lead} |"
         )
     base = next((r["base_rate"] for r in ranked if r["base_rate"] is not None), None)

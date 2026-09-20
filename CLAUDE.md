@@ -148,9 +148,13 @@ src/models/registry.py   get_model(name, params); agregar un modelo = registrar 
 src/models/timesfm_zeroshot.py  series por km + TimesFM 3.0 zero-shot sobre los cortes del panel (no es del registry)
 src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia + rama estática (torch, opcional)
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo
+src/training/targets.py  con qué objetivo se ajusta el modelo y cómo su salida vuelve a un score
+                         comparable, registrado por nombre (ordinal_horizon…); cv.py no sabe de modos
 src/eval/splits.py       splits antileakage + serialización a splits.json
                          estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
+                         vehicle_scores()/vehicle_metrics() (la decisión por vehículo, MIL) y
+                         cost_ratio_sweep() (barrido de C_FN/C_FP: reporte, nunca selección)
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
@@ -166,10 +170,13 @@ scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambia
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/train.py         entrypoint único de entrenamiento
+scripts/audit_mil_bagsize.py  ¿el lift por vehículo es señal o tamaño de bolsa? (nulo de permutación)
+scripts/audit_ordinal_horizon.py  las tres auditorías obligatorias de cualquier corrida: permutación
+                         (nulo global y nulo intra-vehículo), aux_ de calendario como feat_, importancias
 scripts/compare.py       tabla comparativa de corridas (markdown)
 scripts/results.py       registro versionado en results/: métricas + config completa por corrida (log/table/show)
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (15 chequeos)
+scripts/check_setup.py   smoke test del harness (50 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

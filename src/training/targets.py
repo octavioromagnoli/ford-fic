@@ -191,6 +191,16 @@ def build_ordinal_target(
     evento dentro del gap de blanking. Dentro del horizonte visible, la clase 1 es
     el bucket más lejano y la clase K el más cercano. Por lo tanto, una clase mayor
     siempre significa un evento más próximo.
+
+    **Dónde cae `bins_km[-1]` respecto de `G + H` decide qué mide el target.** Si el
+    último corte coincide con `G + H`, todas las clases positivas viven adentro de la
+    ventana que ya era `label = 1` y el target es un refinamiento estricto de la clase
+    positiva: no dice nada de las filas negativas, que son el 87% del panel. Si el
+    último corte lo supera, las clases intermedias se llenan con filas `label = 0` de
+    vehículos que sí fallan —información nueva—, a cambio de parecerse más a
+    "identificar la cohorte de muestreo", que en este panel *es* la etiqueta
+    (CLAUDE.md). `info["class_0"]` deja medido ese riesgo: mientras la clase 0
+    conserve filas de vehículos con evento, no es un indicador de cohorte.
     """
     bins = _validated_bins(bins_km)
     mask = np.asarray(train_mask, dtype=bool)
@@ -217,10 +227,23 @@ def build_ordinal_target(
     y[imminent] = len(bins) - np.searchsorted(bins, tte[imminent], side="left")
 
     counts = np.bincount(y, minlength=len(bins) + 1)
+    # Cuánto de cada clase viene de vehículos que fallan. En la clase 0 es la
+    # medida directa del riesgo de cohorte: si llegara a cero, "clase 0" y
+    # "vehículo sano" serían la misma variable y el target dejaría de ser un
+    # horizonte para ser la etiqueta de muestreo.
+    observed_per_class = np.bincount(y[observed], minlength=len(counts))
     info = {
         "n_rows": int(len(train)),
         "n_classes": int(len(counts)),
         "class_counts": {str(i): int(n) for i, n in enumerate(counts)},
+        "class_event_counts": {str(i): int(n) for i, n in enumerate(observed_per_class)},
+        "class_0": {
+            "n_rows": int(counts[0]),
+            "n_from_event_vehicles": int(observed_per_class[0]),
+            "frac_from_event_vehicles": (
+                float(observed_per_class[0] / counts[0]) if counts[0] else float("nan")
+            ),
+        },
     }
     logger.debug("target ordinal_horizon | %s", info)
     return TargetSpec(
@@ -277,64 +300,85 @@ def report_ordinal_predictions(
     cost_matrix: Sequence[Sequence[float]] | None = None,
     **_: Any,
 ) -> dict[str, Any]:
-    """Decisión de costo esperado y costo OOF realizado sobre las clases ordinales."""
+    """Composición de las clases OOF y, si el YAML la declara, la matriz de costos.
+
+    La matriz es **opcional**: a esta tasa base una matriz única con falsos negativos
+    20–50 veces más caros vuelve degenerada la decisión (la política óptima es
+    revisar todo, gane quien gane), así que el reporte de costo que sí discrimina es
+    el barrido de `eval.cost_ratios` —`src/eval/metrics.py::cost_ratio_sweep()`—, que
+    no depende del target y corre para cualquier corrida. La matriz se conserva para
+    reproducir la variante de bins restringidos ya registrada.
+    """
     from src.eval.metrics import cost_matrix_score
 
     bins = _validated_bins(bins_km)
     _score_class_min(bins, score_max_tte_km)  # valida trazabilidad del score binario
-    if cost_matrix is None:
-        raise ValueError("`eval.cost_matrix` es obligatoria para el target ordinal")
-    matrix = np.asarray(cost_matrix, dtype=float)
     n_classes = len(bins) + 1
-    if matrix.shape != (n_classes, n_classes):
-        raise ValueError(
-            f"La matriz de costos mide {matrix.shape}; se esperaba "
-            f"{(n_classes, n_classes)} para {n_classes} clases"
-        )
+    matrix = None
+    if cost_matrix is not None:
+        matrix = np.asarray(cost_matrix, dtype=float)
+        if matrix.shape != (n_classes, n_classes):
+            raise ValueError(
+                f"La matriz de costos mide {matrix.shape}; se esperaba "
+                f"{(n_classes, n_classes)} para {n_classes} clases"
+            )
 
     probability_columns = [f"ordinal_proba_{klass}" for klass in range(n_classes)]
     missing = [column for column in probability_columns if column not in predictions]
     if missing:
         raise KeyError(f"Faltan probabilidades ordinales OOF: {missing}")
     probabilities = predictions[probability_columns].to_numpy(dtype=float)
-    expected_cost = probabilities @ matrix
-    predicted = expected_cost.argmin(axis=1).astype(int)
-    target = build_ordinal_target(
+    spec = build_ordinal_target(
         predictions, np.ones(len(predictions), dtype=bool), bins_km=bins
-    ).y.astype(int)
-
-    predictions["ordinal_target"] = target
-    predictions["ordinal_prediction"] = predicted
-    predictions["ordinal_expected_cost"] = expected_cost.min(axis=1)
-
-    total = cost_matrix_score(target, predicted, matrix)
-    argmax_prediction = probabilities.argmax(axis=1)
-    argmax_total = cost_matrix_score(target, argmax_prediction, matrix)
-    always_class_0 = cost_matrix_score(target, np.zeros(len(target), dtype=int), matrix)
-    always_nearest = cost_matrix_score(
-        target, np.full(len(target), n_classes - 1, dtype=int), matrix
     )
-    return {
+    target = spec.y.astype(int)
+    predictions["ordinal_target"] = target
+
+    report: dict[str, Any] = {
         "name": "ordinal_horizon",
         "n_classes": n_classes,
+        "bins_km": bins.tolist(),
         "score_max_tte_km": float(score_max_tte_km),
-        "decision_rule": "minimum_expected_cost",
-        "cost_total": total,
-        "cost_mean": float(total / len(predictions)) if len(predictions) else float("nan"),
-        "cost_per_1000": (
-            float(1000.0 * total / len(predictions)) if len(predictions) else float("nan")
-        ),
-        "argmax_cost_total": argmax_total,
-        "always_class_0_cost_total": always_class_0,
-        "always_nearest_cost_total": always_nearest,
-        "savings_vs_always_class_0": float(always_class_0 - total),
-        "savings_vs_always_nearest": float(always_nearest - total),
+        "extends_beyond_horizon": bool(bins[-1] > float(score_max_tte_km)),
         "true_class_counts": {
             str(i): int(n)
             for i, n in enumerate(np.bincount(target, minlength=n_classes))
         },
-        "predicted_class_counts": {
-            str(i): int(n)
-            for i, n in enumerate(np.bincount(predicted, minlength=n_classes))
-        },
+        # El número que decide si el target es un horizonte o la cohorte disfrazada.
+        "class_0": spec.info["class_0"],
+        "class_event_counts": spec.info["class_event_counts"],
     }
+    if matrix is None:
+        return report
+
+    expected_cost = probabilities @ matrix
+    predicted = expected_cost.argmin(axis=1).astype(int)
+    predictions["ordinal_prediction"] = predicted
+    predictions["ordinal_expected_cost"] = expected_cost.min(axis=1)
+
+    total = cost_matrix_score(target, predicted, matrix)
+    argmax_total = cost_matrix_score(target, probabilities.argmax(axis=1), matrix)
+    always_class_0 = cost_matrix_score(target, np.zeros(len(target), dtype=int), matrix)
+    always_nearest = cost_matrix_score(
+        target, np.full(len(target), n_classes - 1, dtype=int), matrix
+    )
+    report.update(
+        {
+            "decision_rule": "minimum_expected_cost",
+            "cost_total": total,
+            "cost_mean": float(total / len(predictions)) if len(predictions) else float("nan"),
+            "cost_per_1000": (
+                float(1000.0 * total / len(predictions)) if len(predictions) else float("nan")
+            ),
+            "argmax_cost_total": argmax_total,
+            "always_class_0_cost_total": always_class_0,
+            "always_nearest_cost_total": always_nearest,
+            "savings_vs_always_class_0": float(always_class_0 - total),
+            "savings_vs_always_nearest": float(always_nearest - total),
+            "predicted_class_counts": {
+                str(i): int(n)
+                for i, n in enumerate(np.bincount(predicted, minlength=n_classes))
+            },
+        }
+    )
+    return report

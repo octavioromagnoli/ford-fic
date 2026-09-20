@@ -41,6 +41,8 @@ from src.eval.metrics import (  # noqa: E402
     VEHICLE_AGGREGATIONS,
     VEHICLE_LABEL_COLUMN,
     classification_metrics,
+    cost_ratio_breakeven,
+    cost_ratio_sweep,
     dispersion,
     lead_time_curve,
     operating_point,
@@ -64,6 +66,25 @@ from src.training.cv import run_cv  # noqa: E402
 from src.training.targets import target_report as build_target_report  # noqa: E402
 
 logger = logging.getLogger("train")
+
+
+def cost_block(predictions: pd.DataFrame, eval_cfg: dict) -> dict | None:
+    """Barrido del ratio `C_FN / C_FP`, si el YAML lo pide. Reporte, no selección.
+
+    Los ratios salen de `eval.cost_ratios`; sin esa clave no se mide nada. La
+    decisión se toma sobre la etiqueta binaria `label` y el score comparable, así
+    que el barrido corre igual para cualquier modelo o target.
+    """
+    ratios = eval_cfg.get("cost_ratios")
+    if not ratios:
+        return None
+    sweep = cost_ratio_sweep(
+        predictions["label"].to_numpy(dtype=int),
+        predictions["score"].to_numpy(dtype=float),
+        ratios,
+        cost_fp=float(eval_cfg.get("cost_fp", 1.0)),
+    )
+    return {"sweep": sweep, **cost_ratio_breakeven(sweep)}
 
 
 def select_dev(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
@@ -348,6 +369,7 @@ def main() -> None:
     budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
     point = operating_point(curve, max_false_alarms_per_1000=budget)
     vehicle = vehicle_block(predictions, eval_cfg, n_repeats)
+    cost = cost_block(predictions, eval_cfg)
 
     metrics = {
         "oof": oof,
@@ -366,6 +388,8 @@ def main() -> None:
     }
     if vehicle is not None:
         metrics["vehicle"] = vehicle
+    if cost is not None:
+        metrics["cost_ratio_sweep"] = cost
 
     logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
                 oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
@@ -390,6 +414,45 @@ def main() -> None:
             target_metrics["cost_mean"],
             target_metrics["cost_per_1000"],
         )
+
+    if cost is not None:
+        logger.info(
+            "Barrido de costo (C_FP=1, umbral oráculo sobre las mismas OOF: cota superior)"
+        )
+        for row in cost["sweep"]:
+            verdict = (
+                f"ahorra {row['savings_vs_trivial']:.0f} ({100 * row['savings_frac']:.1f}%)"
+                if row["beats_trivial"]
+                else f"no le gana a `{row['best_trivial']}`"
+            )
+            logger.info(
+                "  C_FN/C_FP=%-4g | modelo=%.0f | siempre=%.0f | nunca=%.0f | alertas %4.0f%% | %s",
+                row["ratio"], row["model_cost"], row["always_cost"], row["never_cost"],
+                100 * row["alert_rate"], verdict,
+            )
+        logger.info(
+            "  Alertar siempre le gana a no alertar nunca desde C_FN/C_FP = %.1f× "
+            "((1-p)/p): ahí es donde el modelo tiene dónde ahorrar",
+            cost["always_beats_never_above_ratio"],
+        )
+        if cost["min_material_ratio"] is None:
+            logger.info(
+                "  Punto de quiebre: en ningún ratio barrido el modelo ahorra más del "
+                "%.0f%% contra la mejor política trivial. Revisar todo (o nada) es óptimo.",
+                100 * cost["material_frac"],
+            )
+        else:
+            logger.info(
+                "  Punto de quiebre: el modelo paga con C_FN/C_FP entre %g× y %g× "
+                "(pico %g×, %.1f%% de ahorro); fuera de ese tramo el ahorro baja del %.0f%%.",
+                cost["min_material_ratio"], cost["max_material_ratio"], cost["best_ratio"],
+                100 * cost["best_savings_frac"], 100 * cost["material_frac"],
+            )
+        if cost["saturates_at_grid_edge"]:
+            logger.info(
+                "  Ojo: el último ratio de la grilla todavía ahorra; el quiebre superior "
+                "no se puede leer de esta grilla."
+            )
 
     if vehicle is not None and "base_rate" in vehicle:
         logger.info(
@@ -446,6 +509,17 @@ def main() -> None:
                 if isinstance(value, (int, float))
             }
         )
+        if cost is not None:
+            flat.update(
+                {
+                    f"cost/ratio_{row['ratio']:g}/{key}": row[key]
+                    for row in cost["sweep"]
+                    for key in ("model_cost", "trivial_cost", "savings_frac", "alert_rate")
+                }
+            )
+            flat["cost/max_ratio_with_savings"] = cost["max_ratio_with_savings"] or 0.0
+            flat["cost/best_ratio"] = cost["best_ratio"] or 0.0
+            flat["cost/best_savings_frac"] = cost["best_savings_frac"]
         if point:
             flat.update(
                 {
