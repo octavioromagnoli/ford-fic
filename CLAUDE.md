@@ -160,6 +160,7 @@ scripts/log_panel_artifact.py  publica panel.parquet + splits.json + panel_meta.
 scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambiar folds no es reconstruir el panel)
 scripts/train.py         entrypoint único de entrenamiento
 scripts/compare.py       tabla comparativa de corridas (markdown)
+scripts/results.py       registro versionado en results/: métricas + config completa por corrida (log/table/show)
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
 scripts/check_setup.py   smoke test del harness (15 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
@@ -205,3 +206,7 @@ regeneración (`Stopped Cleaning Automatically` es 1 mensaje de cada 100.000).
   evaluación (`src/eval`, dashboard).
 - Antes de cada PR, pasar el checklist de trampas técnicas del plan §9 y correr
   `python scripts/check_setup.py`.
+- Toda corrida que valga la pena se anota en `results/` (`python scripts/results.py
+  log <corrida> --note "..."`) y se commitea con su `configs/exp_*.yaml`: `experiments/`
+  y wandb no se versionan. La config del modelo final sale de ahí (`results.py show`).
+  Detalle en `results/README.md`.
