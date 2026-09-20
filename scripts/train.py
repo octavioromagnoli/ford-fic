@@ -263,8 +263,11 @@ def main() -> None:
         "min_valid_positives": splits.get("min_valid_positives"),
     }
 
-    logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
-                oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
+    logger.info("OOF | PR-AUC=%.4f (tasa base %.4f, norm %.4f) | ROC-AUC=%.4f | "
+                "F1=%.4f (trivial %.4f, umbral %.3f) | Brier=%.4f",
+                oof["pr_auc"], oof["base_rate"], oof.get("pr_auc_norm", float("nan")),
+                oof["roc_auc"], oof.get("f1", float("nan")), oof.get("f1_trivial", float("nan")),
+                oof.get("f1_threshold", float("nan")), oof["brier"])
     if n_repeats > 1:
         spread = repeats_spread["pr_auc"]
         logger.info(

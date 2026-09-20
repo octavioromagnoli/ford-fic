@@ -14,14 +14,22 @@
 Sobre `panel_pseudo` (evento ficticio + ventana de riesgo), que es el único panel donde la
 posición del corte **no** es la etiqueta: P = 0,489 contra 0,836 del v1.
 
-| | modelo | PR-AUC OOF | tasa base | lift | ROC-AUC | detección @ ≤50 FA/1000 | anticipación mediana |
-|---|---|---|---|---|---|---|---|
-| **piso** | `baserate` | 0,557 | 0,558 | 1,00× | 0,496 | 0% | — |
-| **1º** | **`logistic`** | **0,732** | 0,558 | **1,31×** | **0,703** | 19% | 2.079 km |
-| **2º** | `gbm` | 0,721 | 0,558 | 1,29× | 0,692 | **30%** | 2.673 km |
+| | modelo | PR-AUC | PR-AUC norm | F1 | F1 trivial | ROC-AUC | detección @≤50 FA/1000 | anticipación |
+|---|---|---|---|---|---|---|---|---|
+| **piso** | `baserate` | 0,557 | −0,004 | 0,717 | 0,717 | 0,496 | 0% | — |
+| **1º** | **`logistic`** | **0,732** | **0,392** | 0,758 | 0,717 | **0,703** | 19% | 2.079 km |
+| **2º** | `gbm` | 0,721 | 0,369 | 0,755 | 0,717 | 0,692 | **30%** | 2.673 km |
 
-Intervalo bootstrap del PR-AUC por fold: `logistic` [0,671 – 0,801], `gbm` [0,689 – 0,780],
-`baserate` [0,554 – 0,560].
+Tasa base 0,558. Intervalo bootstrap del PR-AUC por fold: `logistic` [0,671 – 0,801],
+`gbm` [0,689 – 0,780], `baserate` [0,554 – 0,560].
+
+**Las columnas de normalización no son decoración.** `PR-AUC norm` es
+`(AP − π) / (1 − π)`: 0 = un modelo al azar, 1 = perfecto, y **no depende de la
+prevalencia**. `F1 trivial` es `2π/(1+π)`, el F1 del que dice "positivo" siempre: con
+π = 0,558 vale **0,717**, así que un F1 de 0,758 es una mejora de 4 puntos sobre no tener
+modelo, no el 76% de acierto que parece. El F1 crudo de esta tabla es el **mejor posible**
+sobre todos los umbrales —una cota optimista, porque el umbral se elige mirando las mismas
+filas que se evalúan—; el umbral de operación real sale del presupuesto de falsas alarmas.
 
 **Cómo leerla.**
 
@@ -37,11 +45,47 @@ Intervalo bootstrap del PR-AUC por fold: `logistic` [0,671 – 0,801], `gbm` [0,
   vehículo solo su ventana de riesgo, así que las positivas pesan mucho más. **El PR-AUC de
   esta tabla no se compara con el de los otros paneles**; lo comparable es el lift y el ROC.
 
+## Por qué el PR-AUC subió tanto (y qué parte es real)
+
+De 0,181 en el v1 a 0,732 acá: ×4. **Casi todo es la prevalencia, no el modelo.**
+
+El PR-AUC de un clasificador que no ordena nada es la tasa base. El panel del evento
+ficticio conserva de cada vehículo solo su ventana de riesgo, así que las positivas pasan
+de ser el 12,5% de las filas a ser el 55,8%: el piso del PR-AUC se movió de 0,125 a 0,558
+**antes de entrenar nada**. Se ve en la propia tabla: el `baserate` saca 0,557 sin mirar
+una sola feature.
+
+| | panel v1 | panel evento ficticio |
+|---|---|---|
+| tasa base (= piso del PR-AUC) | 0,125 | 0,558 |
+| PR-AUC del mejor modelo | 0,181 | 0,732 |
+| **PR-AUC normalizado** | **0,063** | **0,392** |
+| **ROC-AUC** | **0,617** | **0,703** |
+| F1 / F1 trivial | 0,266 / 0,223 | 0,758 / 0,717 |
+
+Las dos métricas que no dependen de la mezcla —ROC y PR-AUC normalizado— dicen que **sí
+hay una mejora real**, pero mucho más chica que el ×4: el ROC sube 0,086 puntos.
+
+Y hay una tercera lectura que es la que más importa, del test de permutación:
+
+| panel | nulo (etiqueta permutada) | real | p |
+|---|---|---|---|
+| v1 canónico | ROC **0,555 ± 0,059** | 0,617 | **0,20** |
+| evento ficticio | ROC **0,501 ± 0,057** | 0,703 | **< 0,001** |
+
+**El nulo del panel v1 no es 0,50: es 0,555.** Con la etiqueta rota, el modelo todavía
+saca 0,555 de ese panel, porque las filas positivas son los últimos cortes de su vehículo
+y varias features siguen la posición. Contra ese nulo, el 0,617 del v1 **no es
+distinguible del ruido**. El panel del evento ficticio devuelve el nulo a 0,50 y ahí el
+0,703 sí significa algo.
+
+O sea: el evento ficticio no subió el número, **hizo que el número quiera decir algo**.
+
 ## Contra el panel anterior
 
 | panel | mejor modelo | ROC | P(posición) | ¿el número se apoya en el atajo? |
 |---|---|---|---|---|
-| v1 canónico | `logistic_l1` | 0,617 | 0,836 | sí, en parte |
+| v1 canónico | `logistic_l1` | 0,617 | 0,836 | **sí**: el nulo permutado ya da 0,555 (p = 0,20) |
 | Δ=250 + emparejado por posición | `logistic_l1` | 0,670 | — | **sí**: la ablación lo lleva a 0,922 |
 | **evento ficticio + ventana de riesgo** | `logistic` | **0,703** | **0,489** | no |
 
@@ -53,6 +97,11 @@ El salto de 0,617 a 0,703 es el único de la fase que sobrevive a la auditoría,
 1. **El panel es chico**: 455 filas, 140 vehículos, 53 con evento, 246 negativos. Los
    intervalos son anchos y la diferencia entre `logistic` (0,703) y `gbm` (0,692) **no es
    significativa**. Son el mismo peldaño.
+
+   Qué tan chico, medido: permutando la etiqueta a nivel vehículo y corriendo la CV
+   entera (`scripts/permutation_test.py`), el nulo de este panel es **ROC 0,50 ± 0,06**.
+   O sea que el ruido de estimación es de ±0,06 y **cualquier ROC por debajo de ~0,60 es
+   indistinguible de nada**. El 0,703 sí lo supera: p < 0,001 sobre 30 permutaciones.
 2. **El multivariado casi no le gana al univariado.** La mejor columna sola del panel
    separa con 0,60; el modelo con 54 columnas llega a 0,70 acá y a 0,62 en el v1. Hay
    señal, y es una sola dimensión: tiempo de motor encendido improductivo y frío.
@@ -77,6 +126,7 @@ python scripts/train.py --config configs/exp_baserate_pseudo.yaml
 python scripts/train.py --config configs/exp_logistic_pseudo.yaml
 python scripts/train.py --config configs/exp_gbm_pseudo.yaml
 python scripts/compare.py
+python scripts/permutation_test.py --config configs/exp_logistic_pseudo.yaml   # el nulo del panel
 ```
 
 El catálogo completo de modelos probados, con su config y su panel, está en

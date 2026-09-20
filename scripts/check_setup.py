@@ -366,6 +366,41 @@ def main() -> int:
           _raises(ValueError, lambda: load_derived_specs(
               {"derived": [{"name": "x", "op": "potencia", "a": "feat_a", "b": "feat_b"}]})))
 
+    # 6b · F1 y las normalizaciones por prevalencia
+    y = np.array([1] * 20 + [0] * 80)
+    oracle = np.array([0.9] * 20 + [0.1] * 80)
+    noise = np.full(100, 0.5)
+    m_oracle = classification_metrics(y, oracle)
+    m_noise = classification_metrics(y, noise)
+    check("F1: el oráculo llega a 1", abs(m_oracle["f1"] - 1.0) < 1e-9, f"{m_oracle['f1']:.3f}")
+    # Un score constante mete a todos como positivos en el mejor umbral: ese ES el F1
+    # trivial, y la métrica tiene que decirlo en vez de parecer un modelo decente.
+    check("F1: un score constante no supera el F1 trivial",
+          m_noise["f1"] <= m_noise["f1_trivial"] + 1e-9,
+          f"{m_noise['f1']:.3f} vs trivial {m_noise['f1_trivial']:.3f}")
+    check("F1: el trivial es 2π/(1+π)",
+          abs(m_noise["f1_trivial"] - 2 * 0.2 / 1.2) < 1e-9)
+    # La normalización del PR-AUC: 0 al azar, 1 perfecto, y NO depende de la mezcla.
+    check("PR-AUC normalizado: el oráculo da 1 y el ruido 0",
+          abs(m_oracle["pr_auc_norm"] - 1.0) < 1e-9 and abs(m_noise["pr_auc_norm"]) < 1e-9,
+          f"oráculo {m_oracle['pr_auc_norm']:.3f}, ruido {m_noise['pr_auc_norm']:.3f}")
+    # Lo que motivó todo esto: con la MISMA calidad de ordenamiento —acá, ninguna— el
+    # PR-AUC crudo sigue a la prevalencia, y el ROC y el normalizado no se mueven. Es
+    # exactamente lo que pasó al comparar el panel v1 (π=0,13) con el del evento
+    # ficticio (π=0,56): el PR-AUC pasó de 0,18 a 0,73 sin que el modelo mejorara tanto.
+    rng = np.random.default_rng(3)
+    y2 = np.array([1] * 60 + [0] * 40)
+    y3 = np.array([1] * 10 + [0] * 90)
+    score2, score3 = rng.random(100), rng.random(100)
+    a, b = classification_metrics(y2, score2), classification_metrics(y3, score3)
+    check("PR-AUC crudo sigue a la prevalencia aunque el modelo no ordene nada",
+          a["pr_auc"] > b["pr_auc"] + 0.3 and abs(a["pr_auc"] - 0.6) < 0.15,
+          f"π=0,60 -> {a['pr_auc']:.3f} · π=0,10 -> {b['pr_auc']:.3f}")
+    check("ROC-AUC y PR-AUC normalizado se quedan en su piso en los dos casos",
+          abs(a["roc_auc"] - 0.5) < 0.15 and abs(b["roc_auc"] - 0.5) < 0.15
+          and abs(a["pr_auc_norm"]) < 0.15 and abs(b["pr_auc_norm"]) < 0.15,
+          f"ROC {a['roc_auc']:.2f}/{b['roc_auc']:.2f} · norm {a['pr_auc_norm']:.2f}/{b['pr_auc_norm']:.2f}")
+
     # 7 · evento ficticio para los sanos: corta la serie, no inventa etiqueta
     label_cfg = LabelConfig(window_km=1000, gap_km=500, horizon_km=3000, cut_step_km=500)
     vehicles = pd.DataFrame(

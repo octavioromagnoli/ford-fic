@@ -65,6 +65,9 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
         "pr_auc_hi": summary.get("pr_auc_hi"),
         "base_rate": oof.get("base_rate"),
         "lift": oof.get("pr_auc_lift"),
+        "pr_auc_norm": oof.get("pr_auc_norm"),
+        "f1": oof.get("f1"),
+        "f1_trivial": oof.get("f1_trivial"),
         "roc_auc": oof.get("roc_auc"),
         "brier": oof.get("brier"),
         "detection_rate": point.get("detection_rate"),
@@ -98,8 +101,10 @@ def render_table(runs: list[dict[str, Any]]) -> str:
     )
     budget = next((r["budget"] for r in ranked if r["budget"] is not None), None)
     lines = [
-        f"| Corrida | Modelo | PR-AUC (oof) | Lift vs. base | ROC-AUC | Brier | Detección | Anticip. mediana |",
-        "|---|---|---|---|---|---|---|---|",
+        # `PR-AUC norm` y `F1 trivial` están porque PR-AUC y F1 dependen de la prevalencia:
+        # entre paneles con tasas base distintas, las columnas crudas no se comparan.
+        f"| Corrida | Modelo | PR-AUC (oof) | Lift vs. base | PR-AUC norm | F1 | F1 trivial | ROC-AUC | Brier | Detección | Anticip. mediana |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in ranked:
         detection = "—" if r["detection_rate"] is None else f"{100 * float(r['detection_rate']):.0f}%"
@@ -107,6 +112,7 @@ def render_table(runs: list[dict[str, Any]]) -> str:
             else f"{float(r['median_lead_km']):,.0f} km"
         lines.append(
             f"| `{r['run']}` | {r['model']} | {_fmt(r['pr_auc'])} | {_fmt(r['lift'], 2)}× | "
+            f"{_fmt(r['pr_auc_norm'])} | {_fmt(r['f1'])} | {_fmt(r['f1_trivial'])} | "
             f"{_fmt(r['roc_auc'])} | {_fmt(r['brier'])} | {detection} | {lead} |"
         )
     base = next((r["base_rate"] for r in ranked if r["base_rate"] is not None), None)

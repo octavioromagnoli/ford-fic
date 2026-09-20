@@ -162,7 +162,17 @@ la deja fuera del modelo).
    7.987 km con el 39% del historial por delante—. Eso no asciende al eje de días:
    sigue siendo reporte secundario, y el origen se estima una vez y se congela.
 5. **Métricas.** PR-AUC out-of-fold para seleccionar modelo, curva de
-   anticipación vs. falsas alarmas para el pitch, accuracy nunca.
+   anticipación vs. falsas alarmas para el pitch, accuracy nunca. **PR-AUC y F1
+   dependen de la prevalencia**, que en este proyecto cambia según cómo se construya el
+   panel (0,125 en el v1, 0,558 en el del evento ficticio): entre paneles distintos se
+   comparan `roc_auc` y `pr_auc_norm` = (AP − π)/(1 − π), nunca el PR-AUC crudo. El F1
+   va con su `f1_trivial` = 2π/(1+π) al lado, que es lo que saca decir "positivo"
+   siempre. Los cinco los devuelve `classification_metrics`.
+5b. **Todo número bueno pasa el test de permutación** (`scripts/permutation_test.py`):
+   la misma CV con la etiqueta permutada a nivel vehículo. El nulo **no es 0,50 por
+   definición** —en el panel v1 es 0,555, porque las positivas son los últimos cortes de
+   su vehículo—, y contra ese nulo el 0,617 del v1 no se distingue del ruido (p = 0,20).
+   En el panel del evento ficticio el nulo vuelve a 0,501 y el 0,703 da p < 0,001.
 6. **Un PR-AUC sospechosamente alto se audita antes de celebrarse.** Variables
    como el nivel del DPF son casi la definición del evento: sin gap, el modelo
    memoriza en vez de predecir.
