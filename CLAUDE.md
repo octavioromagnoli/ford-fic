@@ -71,6 +71,12 @@ que las reproduce. Nueve que cambian cómo se escribe el código:
   comparte `TripDatetimeStart` y ordenar por fecha baraja esos empates: el odómetro parece
   retroceder en 231 vehículos de 290 cuando en realidad son 8.
 
+> ⚠️ **19-09: hay una falla en los eventos y la mentora los va a corregir.** Todo número
+> medido contra `label` —las tres auditorías de F3 incluidas— es provisorio hasta que
+> llegue la corrección, y **no se promueve ninguna feature al set base hasta entonces**.
+> La maquinaria (columnas, `derived:`, agregadores, auditorías) es independiente de la
+> etiqueta: re-medir es reconstruir el panel y volver a correr `audit_sequence.py`.
+
 ## Contrato de datos
 
 Artefacto: `data/processed/panel.parquet` (dummy: `panel_dummy.parquet`).
@@ -230,6 +236,13 @@ revisar el YAML para no duplicar con otro nombre. Resumen:
   en `windows.py`; el panel que las lleva es `panel_v2.yaml`, que **no** reemplaza al v1.
   Antes de proponer una de estas otra vez, leer
   `docs/memoria/f3-esfuerzo-de-control-y-dosis.md`.
+- **F3 relaciones (familia F) y literatura de DPF (familia G), `features_v4.yaml`.** Una
+  feature también puede ser **una relación entre dos features**: el bloque `derived:`
+  (`ratio`/`product`/`diff` sobre columnas de la misma fila, `src/features/derived.py`).
+  De ahí sale lo único que le gana al panel hasta ahora —`regen_per_idle_min`, P = 0,370
+  contra 0,597 de `idle_frac`, que aguanta las tres auditorías—, y de la familia G, nada
+  (los cinco mecanismos publicados de degradación de DPF dan planos). Detalle en
+  `docs/memoria/f3-relaciones-y-literatura-dpf.md`.
 
 Lo que **no** se construye y por qué: elevación y presión de neumáticos (no hay
 columna), `accumulation_*` desde `signals` (es la misma variable que `AirRegeneration`),

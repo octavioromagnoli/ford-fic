@@ -34,6 +34,7 @@ from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from src.config import set_seed  # noqa: E402
 from src.eval.metrics import classification_metrics, lead_time_curve, operating_point  # noqa: E402
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
+from src.features.derived import add_derived_features, load_derived_specs  # noqa: E402
 from src.features.sequence import add_sequence_features  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
 
@@ -67,6 +68,18 @@ _checks: list[tuple[str, bool, str]] = []
 def check(name: str, condition: bool, detail: str = "") -> None:
     _checks.append((name, bool(condition), detail))
     print(f"{'PASS' if condition else 'FAIL'} | {name}" + (f" — {detail}" if detail else ""))
+
+
+def _raises(exc: type[BaseException], fn) -> bool:
+    """True si `fn()` levanta `exc`. Un YAML mal escrito tiene que fallar al construir,
+    no dejar una columna en NaN que nadie mira hasta el entrenamiento."""
+    try:
+        fn()
+    except exc:
+        return True
+    except Exception:
+        return False
+    return False
 
 
 def main() -> int:
@@ -316,6 +329,41 @@ def main() -> int:
         float((seq["feat_degradation_run"] >= 4).mean()) < 0.02,
         f"{(seq['feat_degradation_run'] >= 4).mean():.3%} de las filas con racha >= 4",
     )
+
+    # 6 · derivadas: relaciones entre dos features de la misma fila
+    derived_cfg = {"derived": [
+        {"name": "ratio_test", "op": "ratio", "a": "feat_idle_per_1000km",
+         "b": "feat_window_km_covered", "min_b": 1.0},
+        {"name": "product_test", "op": "product", "a": "feat_idle_per_1000km",
+         "b": "feat_speed_kmh_mean"},
+    ]}
+    der, der_summary = add_derived_features(panel, load_derived_specs(derived_cfg))
+    check("derivadas: agrega una columna por spec", len(der.columns) == len(panel.columns) + 2,
+          f"{len(der.columns) - len(panel.columns)} columnas nuevas")
+    check("derivadas: entran al modelo por prefijo",
+          {"feat_ratio_test", "feat_product_test"} <= set(select_feature_columns(der)))
+    # El piso del denominador es lo único que separa un cociente de un outlier infinito.
+    tiny = panel.copy()
+    tiny["feat_window_km_covered"] = 1e-12
+    guarded, _ = add_derived_features(tiny, load_derived_specs(derived_cfg))
+    check("derivadas: un denominador ~0 da NaN, no infinito",
+          bool(guarded["feat_ratio_test"].isna().all()))
+    check("derivadas: ninguna columna queda con infinitos",
+          bool(np.isfinite(der["feat_ratio_test"].dropna()).all()
+               and np.isfinite(der["feat_product_test"].dropna()).all()))
+    # Fila a fila: barajar el panel no puede cambiar el valor de una derivada (si
+    # cambiara, estaría mirando otras filas, que es exactamente lo que no puede hacer).
+    shuffled = panel.sample(frac=1.0, random_state=7)
+    der_shuffled, _ = add_derived_features(shuffled, load_derived_specs(derived_cfg))
+    check("derivadas: no dependen del orden ni de otras filas",
+          bool(der_shuffled["feat_ratio_test"].sort_index().equals(der["feat_ratio_test"].sort_index())))
+    check("derivadas: un YAML que pide una columna inexistente falla",
+          _raises(KeyError, lambda: add_derived_features(
+              panel, load_derived_specs({"derived": [{"name": "x", "op": "ratio",
+                                                      "a": "feat_no_existe", "b": "feat_idle_per_1000km"}]}))))
+    check("derivadas: una operación desconocida falla",
+          _raises(ValueError, lambda: load_derived_specs(
+              {"derived": [{"name": "x", "op": "potencia", "a": "feat_a", "b": "feat_b"}]})))
 
     failed = [name for name, ok, _ in _checks if not ok]
     print()

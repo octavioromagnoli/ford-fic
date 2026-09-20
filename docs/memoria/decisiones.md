@@ -5,6 +5,36 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-19 · Las features pueden ser relaciones entre features (`derived:`), y aparece la primera que gana
+
+**Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:** `src/features/derived.py`,
+bloque `derived:` en el YAML de features, familias F y G en `features_v4.yaml`.
+
+**Qué cambia.** El YAML de features acepta un bloque `derived:` con `ratio`/`product`/`diff`
+entre dos columnas de la misma fila. Es lo que faltaba para escribir "cuántas
+regeneraciones por minuto de idle", que no es un agregado de una columna sino una
+relación entre dos. 7 chequeos nuevos en `check_setup.py` (41).
+
+**Por qué.** `feat_regen_per_idle_min` separa con P = 0,370 (IC95% [0,316 – 0,423]) contra
+0,597 de `feat_idle_frac`, que era el techo del panel, y aguanta las tres auditorías: poca
+correlación con la posición (0,119), sostiene el signo en los cuatro estratos de posición,
+y a nivel vehículo da p = 0,0074 con 53 contra 118. Ni el numerador ni el denominador
+solos separan así: es la relación.
+
+**Lo que NO se hace todavía.** No se promueve nada a `features_v1.yaml`: el 19-09 se supo
+que **hay una falla en los eventos y la mentora los va a corregir**, así que elegir
+features ahora es elegirlas contra la etiqueta equivocada. La promoción espera a
+reconstruir el panel con los eventos corregidos y re-correr las auditorías.
+
+**De paso:** los cinco mecanismos de la literatura de DPF (ceniza que no se quema,
+contrapresión leída en el consumo, muerte de la regeneración pasiva, dilución del aceite,
+ciclos que necesitan corridas más largas) se construyeron y **ninguno separa** (máximo
+0,049). El subsistema del filtro no anticipa en estos datos; lo que separa es el uso.
+
+**Detalle:** [f3-relaciones-y-literatura-dpf.md](f3-relaciones-y-literatura-dpf.md)
+
+---
+
 ## 2026-09-19 · Las 16 candidatas físicas se miden y no se promueven; la hipótesis del DPF se cae
 
 **Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:** `src/features/trips.py`

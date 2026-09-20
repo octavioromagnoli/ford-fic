@@ -50,6 +50,7 @@ from src.config import ensure_dir, load_config, repo_root, resolve_path, set_see
 from src.data.anchor import estimate_origin_day, event_dates, project_dates_to_odometer  # noqa: E402
 from src.data.join import load_vehicle_static  # noqa: E402
 from src.data.panel import LabelConfig, build_panel, match_healthy_cuts  # noqa: E402
+from src.features.derived import add_derived_features, load_derived_specs  # noqa: E402
 from src.features.sequence import add_sequence_features  # noqa: E402
 from src.data.subset import read_table_for_vehicles  # noqa: E402
 from src.eval.splits import (  # noqa: E402
@@ -139,6 +140,12 @@ def main() -> int:
     panel, report = build_panel(trips, signals, vehicles, specs, label_cfg,
                                 static_columns=static_columns, static_excluded=static_excluded)
 
+    # 4a · derivadas: relaciones entre dos features de la MISMA fila -----------------
+    # Van acá, sobre el panel recién agregado, porque necesitan las dos features de
+    # ventana ya calculadas. Es aritmética fila a fila: no hay nada que fitear por fold
+    # y no puede mirar hacia adelante (sus insumos tampoco pueden).
+    panel, derived_summary = add_derived_features(panel, load_derived_specs(spec_cfg))
+
     # 4b · secuencia: el vehículo contra su propio pasado ---------------------------
     # Va ANTES del emparejado a propósito: el desvío de un corte se calcula contra los
     # cortes anteriores del mismo vehículo, y esa serie tiene que estar completa. Si se
@@ -187,6 +194,7 @@ def main() -> int:
         },
         "raw": {"trips": {**trip_counters, **trip_derive}, "signals": {**signal_counters, **signal_derive}},
         "panel": report,
+        "derived": derived_summary,
         "sequence": sequence_summary,
         "sampling": sampling_summary,
         "dev": _side_summary(panel.loc[dev_mask]),
