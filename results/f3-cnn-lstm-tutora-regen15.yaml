@@ -1,0 +1,95 @@
+run: f3-cnn-lstm-tutora-regen15
+logged_on: '2026-09-20'
+note: 'RE-CORRIDA del CNN-LSTM contra el panel secuencial RECONSTRUIDO despues de
+  1eab4a1 (el canal regen_drops sale de acum_regen_drop, que usa el umbral que ese
+  commit cambio de 5 a 15 puntos). Misma config que f3-cnn-lstm-tutora, solo --run-name:
+  PR-AUC 0,1553 contra 0,1534 del panel viejo. El registro viejo se conserva y NO
+  se compara con este. Re-auditada con los criterios nuevos: (a0) 0,1182 vs tasa base
+  0,1252 PASS, (a'') +0,0036 PASS -> APROBADA. Ojo: docs/memoria/f3-cnn-lstm-tutora.md
+  leia su 0,143-contra-0,153 como que (a) aprobaba; (a) no es un null y no aprueba
+  nada. Aca (a) da 0,1663 contra 0,1553, o sea que SUBE, que es lo que esa permutacion
+  hace siempre en este panel. No llega al techo de cohorte de 0,2627.'
+source:
+  config_path: configs/exp_cnn_lstm.yaml
+  config_versioned: true
+  branch: exp/survival-stacking
+  commit: 02ee0a5
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: cnn_lstm
+  pr_auc: 0.1553187730834681
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.28008981651234477
+  within_failed_lift: 1.0663261912103834
+  when_delta: 0.0036493216057691402
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.4238406757695483
+  vehicle_lift: 1.3674859538979767
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.15073118415039014
+  pr_auc_hi: 0.22735722368117725
+  base_rate: 0.1251848201084278
+  lift: 1.2407157109699085
+  roc_auc: 0.5731396251524897
+  brier: 0.2395218211124811
+  detection_rate: 0.16981132075471697
+  median_lead_km: 10559.59371452705
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  splits: ${DATA_DIR}/processed/splits.json
+  n_positive: 254
+config:
+  name: f3-cnn-lstm-tutora
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: cnn_lstm
+    params:
+      sequence_meta: ${DATA_DIR}/processed/panel_seq_v1_meta.json
+      conv_channels: 16
+      kernel_size: 3
+      lstm_hidden: 16
+      static_hidden: 4
+      head_hidden: 16
+      dropout: 0.3
+      epochs: 40
+      batch_size: 64
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      grad_clip: 1.0
+      class_weight: balanced
+      device: cpu
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-secuenciales
+    job_type: train
+    tags:
+    - f3
+    - cnn-lstm
+    - tutora
+    - panel-seq-v1
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs/exp_cnn_lstm.yaml

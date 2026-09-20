@@ -40,12 +40,17 @@ from src.eval.metrics import (  # noqa: E402
     DEFAULT_TOPK,
     VEHICLE_AGGREGATIONS,
     VEHICLE_LABEL_COLUMN,
+    bootstrap_by_vehicle,
     classification_metrics,
+    cohort_ceiling,
+    concordance_index_oof,
     dispersion,
     lead_time_curve,
     operating_point,
+    pr_auc_within_failed,
     summarize_folds,
     vehicle_metrics,
+    when_contribution,
 )
 from src.eval.splits import (  # noqa: E402
     MIN_VALID_POSITIVES,
@@ -150,6 +155,55 @@ def repeat_metrics(predictions: pd.DataFrame, n_repeats: int) -> list[dict[str, 
         classification_metrics(predictions["label"], predictions[f"score_r{repeat}"])
         for repeat in range(n_repeats)
     ]
+
+
+def when_by_repeat(
+    predictions: pd.DataFrame, n_repeats: int
+) -> list[dict[str, dict[str, float]]]:
+    """(a'), PR-AUC entre fallados y detección de CADA repetición, por separado.
+
+    Mismo criterio que `repeat_metrics`: con R > 1 cada repetición tiene su propia
+    columna `score_r{i}` y se mide sola. Promediar los scores antes de medir sería un
+    ensamble de R pasadas, que da mejor que el modelo que se está evaluando — y acá
+    importa el doble, porque lo que se quiere de la CV repetida es justamente **la
+    dispersión** entre repeticiones: sobre el score promediado esa dispersión es cero
+    por construcción y (a') parecería mucho más estable de lo que es.
+    """
+    columns = ["score"] if n_repeats <= 1 else [f"score_r{r}" for r in range(n_repeats)]
+    out = []
+    for column in columns:
+        frame = predictions.assign(score=predictions[column])
+        out.append(
+            {
+                "when": when_contribution(frame),
+                "within_failed": pr_auc_within_failed(
+                    frame["label"], frame["score"], frame["vehicle_id"]
+                ),
+            }
+        )
+    return out
+
+
+def detection_by_repeat(
+    predictions: pd.DataFrame, n_repeats: int, eval_cfg: dict
+) -> list[dict[str, float] | None]:
+    """El punto de operación de cada repetición: detección y anticipación con su sorteo.
+
+    Es el número del pitch, así que su dispersión entre repeticiones es lo que dice si
+    "detectamos el R%" es una propiedad del modelo o del sorteo de folds.
+    """
+    columns = ["score"] if n_repeats <= 1 else [f"score_r{r}" for r in range(n_repeats)]
+    budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
+    out = []
+    for column in columns:
+        frame = predictions.assign(score=predictions[column])
+        curve = lead_time_curve(
+            frame,
+            n_thresholds=int(eval_cfg.get("n_thresholds", 50)),
+            k_consecutive=int(eval_cfg.get("k_consecutive", 2)),
+        )
+        out.append(operating_point(curve, max_false_alarms_per_1000=budget))
+    return out
 
 
 def vehicle_block(
@@ -305,6 +359,9 @@ def main() -> None:
         splits,
         model_name=model_cfg["name"],
         model_params=model_cfg.get("params", {}),
+        # Con qué objetivo se entrena (src/training/targets.py). Sin la clave, `label`.
+        # Lo que se mide no cambia: la etiqueta dura, con los mismos folds.
+        target=cfg.get("target"),
         strict_splits=bool(cfg.get("splits", {}).get("strict", True)),
         min_valid_positives=options["min_valid_positives"],
     )
@@ -340,6 +397,51 @@ def main() -> None:
     point = operating_point(curve, max_false_alarms_per_1000=budget)
     vehicle = vehicle_block(predictions, eval_cfg, n_repeats)
 
+    # Descomposición cohorte / cuándo. Va en TODA corrida, no solo en `audit_model.py`:
+    # el PR-AUC por fila de este panel está dominado por *qué* vehículo falla (el techo
+    # de cohorte es 0,2627 sobre dev, contra una tasa base de 0,1252), así que un número
+    # suelto no dice si el modelo anticipa. Las tres piezas son baratas —salen de las
+    # predicciones que ya están en memoria, sin reentrenar nada— y se guardan con claves
+    # nuevas para no tocar lo que ya leen las corridas viejas ni wandb.
+    ceiling = cohort_ceiling(predictions["label"], predictions["vehicle_id"])
+    within_failed = pr_auc_within_failed(
+        predictions["label"], predictions["score"], predictions["vehicle_id"]
+    )
+    when = when_contribution(predictions)
+    # Con R > 1, la misma cuenta por repetición: sin la dispersión, declarar que un
+    # modelo aporta +0,015 del *cuándo* no dice si eso supera el ruido del sorteo.
+    when_repeats = when_by_repeat(predictions, n_repeats)
+    detect_repeats = detection_by_repeat(predictions, n_repeats, eval_cfg)
+    when_spread = {
+        "when_delta": dispersion([r["when"]["delta"] for r in when_repeats]),
+        "within_failed_pr_auc": dispersion(
+            [r["within_failed"]["pr_auc"] for r in when_repeats]
+        ),
+        "within_failed_lift": dispersion(
+            [r["within_failed"]["lift"] for r in when_repeats]
+        ),
+        "detection_rate": dispersion(
+            [p["detection_rate"] for p in detect_repeats if p is not None]
+        ),
+        "median_lead_km": dispersion(
+            [p["median_lead_km"] for p in detect_repeats if p is not None]
+        ),
+    }
+
+    # Secundarias. El C-index mide el orden usando a los sanos como censurados, no como
+    # ceros; el bootstrap por vehículo es el intervalo que corresponde a un panel con ~5
+    # filas correlacionadas por auto (el de folds mide otra cosa: el sorteo de folds).
+    concordance = concordance_index_oof(predictions) if "aux_km_observed_after_cut" in predictions else None
+    by_vehicle = (
+        bootstrap_by_vehicle(
+            predictions,
+            n_boot=int(eval_cfg.get("bootstrap_n_boot", 1000)),
+            seed=seed,
+        )
+        if eval_cfg.get("bootstrap_by_vehicle", False)
+        else None
+    )
+
     metrics = {
         "oof": oof,
         "n_repeats": n_repeats,
@@ -347,9 +449,18 @@ def main() -> None:
         "repeats_spread": repeats_spread,
         "folds": fold_metrics,
         "folds_summary": summary,
+        "concordance": concordance,
+        "cohort_ceiling": ceiling,
+        "pr_auc_within_failed": within_failed,
+        "when_contribution": when,
+        "when_by_repeat": when_repeats,
+        "detection_by_repeat": detect_repeats,
+        "when_spread": when_spread,
+        "bootstrap_by_vehicle": by_vehicle,
         "operating_point": point,
         "operating_point_budget_per_1000": budget,
         "k_consecutive": k_consecutive,
+        "target": cfg.get("target"),
         "stratify": splits.get("stratify"),
         "min_valid_positives": splits.get("min_valid_positives"),
     }
@@ -358,12 +469,44 @@ def main() -> None:
 
     logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
                 oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
+    logger.info(
+        "Cohorte | techo %.4f (lift %.2fx) con %d/%d filas de vehículos fallados — "
+        "el PR-AUC de arriba %s",
+        ceiling["pr_auc"], ceiling["lift"], ceiling["n_positive"], ceiling["n_failed_rows"],
+        "lo supera" if oof["pr_auc"] > ceiling["pr_auc"] else
+        "NO lo supera: identificar la cohorte ya daría más, esto no demuestra anticipación",
+    )
+    logger.info(
+        "Cuándo | PR-AUC entre fallados=%.4f (lift %.2fx sobre %.4f, %d filas) | "
+        "(a') aporte del cuándo=%+.4f (%.4f → %.4f al promediar por vehículo)",
+        within_failed["pr_auc"], within_failed["lift"], within_failed["base_rate"],
+        within_failed["n"], when["delta"], when["pr_auc"], when["pr_auc_vehicle_mean"],
+    )
+    if concordance and np.isfinite(concordance["c_index"]):
+        logger.info("OOF | C-index=%.4f sobre %d filas (%d con evento)",
+                    concordance["c_index"], concordance["n"], concordance["n_events"])
+    if by_vehicle:
+        for name, ci in by_vehicle.items():
+            logger.info("Bootstrap por vehículo (%d vehículos) | %s=%.4f [%.4f, %.4f]",
+                        ci["n_vehicles"], name, ci["point"], ci["lo"], ci["hi"])
     if n_repeats > 1:
         spread = repeats_spread["pr_auc"]
         logger.info(
             "CV repetida (%d pasadas) | PR-AUC por repetición: %.4f ± %.4f (min %.4f, max %.4f)",
             n_repeats, spread["mean"], spread["std"], spread["min"], spread["max"],
         )
+        for key, label, scale in (
+            ("when_delta", "(a') aporte del cuándo", 1.0),
+            ("within_failed_lift", "lift entre fallados", 1.0),
+            ("detection_rate", "detección", 100.0),
+            ("median_lead_km", "anticipación mediana (km)", 1.0),
+        ):
+            d = when_spread[key]
+            logger.info(
+                "CV repetida (%d pasadas) | %-26s %.4f ± %.4f (min %.4f, max %.4f)",
+                n_repeats, label + ":", scale * d["mean"], scale * d["std"],
+                scale * d["min"], scale * d["max"],
+            )
     if point:
         logger.info(
             "Punto de operación (<= %.0f falsas alarmas/1000 sanos): detección %.1f%% | "
@@ -405,6 +548,18 @@ def main() -> None:
         flat.update({f"repeats/{k}_{stat}": v
                      for k, stats in repeats_spread.items()
                      for stat, v in stats.items()})
+        if concordance:
+            flat["oof/c_index"] = concordance["c_index"]
+        flat.update({f"cohort/{k}": v for k, v in ceiling.items()})
+        flat.update({f"within_failed/{k}": v for k, v in within_failed.items()})
+        flat.update({f"when/{k}": v for k, v in when.items()})
+        flat.update({f"when_repeats/{k}_{stat}": v
+                     for k, stats in when_spread.items()
+                     for stat, v in stats.items()})
+        if by_vehicle:
+            flat.update({f"vehicle_boot/{k}_{stat}": v
+                         for k, ci in by_vehicle.items()
+                         for stat, v in ci.items()})
         if vehicle is not None:
             flat.update(
                 {

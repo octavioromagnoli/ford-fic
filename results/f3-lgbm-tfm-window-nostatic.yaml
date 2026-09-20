@@ -1,6 +1,41 @@
 run: f3-lgbm-tfm-window-nostatic
 logged_on: '2026-09-19'
-note: ''
+note: '
+
+
+  [NO COMPARABLE · anotado al revisar las auditorias] Esta corrida se midio contra
+  el
+
+  panel ANTERIOR al commit 1eab4a1, que corrigio el umbral de regeneraciones (5 ->
+  15
+
+  puntos) y reconstruyo el panel: mismas filas, mismos vehiculos, mismos folds, otros
+
+  valores en las columnas feat_*regen*. El control se movio de 0,165 a 0,1612 y la
+  tabla
+
+  de results/ separa corridas por ~0,005, o sea menos que ese movimiento: su posicion
+  en
+
+  el ranking puede no sobrevivir. No se compara con las corridas posteriores. Las
+
+  metricas de arriba quedan como estaban, sin tocar.
+
+
+  [AUDITORIA · anotado al revisar los criterios] La auditoria (a) —permutar features
+
+  dentro de cada vehiculo esperando que el PR-AUC cayera a la tasa base— NO es un
+  null en
+
+  este panel: deja intacto que vehiculos fallan, que es de donde sale casi todo el
+  PR-AUC,
+
+  y sube a 0,17-0,21. Cualquier lectura de esta corrida que la haya citado como aprobada
+
+  paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
+  el
+
+  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
 source:
   config_path: configs/exp_lgbm_tfm_window_nostatic.yaml
   config_versioned: false

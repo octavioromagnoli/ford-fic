@@ -72,7 +72,10 @@ def build_record(run_dir: Path, note: str | None, previous: dict[str, Any] | Non
             "commit": _git("rev-parse", "--short", "HEAD"),
             "note": "rama y commit del checkout donde se anotó, no necesariamente donde se entrenó",
         },
-        "summary": {k: v for k, v in summary.items() if k != "run"},
+        # Las claves con guion bajo son internas de `compare.py` (mtimes para el aviso
+        # de panel viejo): no son métricas y no tienen sentido en un registro versionado.
+        "summary": {k: v for k, v in summary.items()
+                    if k != "run" and not k.startswith("_")},
         "config": config,
     }
 
@@ -138,6 +141,9 @@ def cmd_table(args: argparse.Namespace) -> int:
     ]
     for r in sorted(records, key=pr_auc, reverse=True):
         s = r["summary"]
+        # Una nota con saltos de línea (las anotaciones largas los tienen) parte la fila
+        # en dos y rompe la tabla entera; el `|` de una nota abre una columna de más.
+        note = " ".join(str(r.get("note") or "").split()).replace("|", "\\|")
         det = "—" if s.get("detection_rate") is None else f"{100 * float(s['detection_rate']):.0f}%"
         lead = s.get("median_lead_km")
         lead = "—" if lead is None or math.isnan(float(lead)) else f"{float(lead):,.0f} km"
@@ -147,7 +153,7 @@ def cmd_table(args: argparse.Namespace) -> int:
         lines.append(
             f"| `{r['run']}` | {s.get('model', '?')} | {panel} | {_fmt(s.get('base_rate'))} | {_fmt(s.get('pr_auc'))} "
             f"[{_fmt(s.get('pr_auc_lo'))}, {_fmt(s.get('pr_auc_hi'))}] | {_fmt(s.get('lift'), 2)}× | "
-            f"{det} | {lead} | {cfg_cell} | {r.get('note') or ''} |"
+            f"{det} | {lead} | {cfg_cell} | {note} |"
         )
     lines += [
         "",

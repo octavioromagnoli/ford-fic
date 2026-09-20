@@ -13,7 +13,7 @@ Lo que sabemos del panel v1 (`docs/memoria/f2-eda-revision-y-features.md`):
 | hecho | consecuencia para el modelo |
 |---|---|
 | 53 vehículos con positivo en dev, 14 en test; 254 filas positivas | cualquier modelo con más de ~10 parámetros efectivos por feature sobreajusta; **regularización fuerte, pocas comparaciones, intervalos siempre** |
-| la señal honesta es débil: ROC ≈ 0,58–0,60 con logística/LGBM de auditoría | el objetivo realista es **0,65–0,70 de ROC y 1,6–2× de lift**, no 0,9. Todo lo que pase de ahí se audita (regla 6) |
+| la señal honesta es débil: ROC ≈ 0,58–0,60 con logística/LGBM de auditoría | el objetivo realista es **0,65–0,70 de ROC**, no 0,9. Todo lo que pase de ahí se audita (regla 6). **Ojo con el lift**: la meta de 1,6–2× que figuraba acá está *por debajo* del techo de cohorte (2,10×), así que alcanzarla no demuestra anticipación — ver el punto 5 del protocolo |
 | la señal es térmica/de uso y **progresiva** en los últimos ~4.000 km (idle, no llegar a régimen, más lento) | ganan los modelos que ven **el cambio del vehículo respecto de sí mismo** y la **secuencia de cortes**, no solo la foto de una ventana |
 | los sanos son censurados ("no falló todavía"), no negativos limpios | la supervivencia usa esa información; la clasificación la tira |
 | la etiqueta binaria tiene un borde arbitrario (el corte en E−G−H−Δ es 0, el siguiente es 1, con features casi iguales) | **etiquetas blandas** o regresión del tiempo al evento quitan ese ruido |
@@ -27,10 +27,39 @@ Y el protocolo, que no cambia con el modelo:
 2. **Presupuesto de comparaciones**: con ~12 eventos por fold, más de 6–8 candidatos
    garantiza que "el mejor" sea ruido. Preregistrar la lista y no agregar sobre la marcha.
 3. CV repetida (3 semillas de folds) para cualquier diferencia que se quiera declarar.
-4. Tres auditorías obligatorias por modelo: (a) permutar `label` dentro de cada
-   vehículo → PR-AUC tiene que caer a la tasa base; (b) agregar `aux_air_temp_avg`,
+4. **Auditorías obligatorias por modelo** (`scripts/audit_model.py`, que las corre
+   todas sobre el YAML del experimento). Se aprueban dos:
+
+   - **(a0) el null.** Permutar las **features** entre *todas* las filas → el PR-AUC
+     tiene que caer a la tasa base. Si no cae, hay leakage y ningún otro número vale.
+   - **(a') el aporte del *cuándo*.** Reemplazar el score de cada fila por el promedio
+     de su vehículo, sin reentrenar; la caída de PR-AUC es lo que el modelo sabía del
+     *cuándo*. Delta ≤ 0 significa que no anticipa, por más PR-AUC que tenga.
+
+   Y dos informativas: **(b)** agregar `aux_air_temp_avg`,
    `aux_regen_marker_per_1000km`, `aux_static_ProductionDay` como `feat_` → el ROC no
-   tiene que saltar; (c) importancias/SHAP contra la hipótesis física (§3.2 del doc de F2).
+   tiene que saltar; **(c)** importancias/SHAP contra la hipótesis física (§3.2 del doc
+   de F2).
+
+   **(a) permutar dentro del vehículo ya no es criterio, y nunca fue un null.** La
+   versión vieja de este punto pedía permutar dentro de cada vehículo y esperar que el
+   PR-AUC cayera a la tasa base. No cae: **sube**, con los dos modelos probados y con
+   tres semillas (0,17–0,21 contra 0,161 de referencia). Deja intacto *qué* vehículos
+   fallan —de donde sale casi todo el PR-AUC de este panel— y encima le saca a cada auto
+   el ruido de qué ventana le tocó, así que entrena un ordenador de vehículos mejor. No
+   se marca ni como pass ni como falla; se lee junto a (a'). Cualquier informe que la
+   cite como aprobación hay que rehacerlo.
+
+   (Detalle y evidencia: [`docs/memoria/decisiones.md`](memoria/decisiones.md).)
+
+5. **El piso es el techo de cohorte, no la tasa base.** En dev las 254 filas positivas
+   están **todas** dentro de los 967 cortes de vehículos fallados, así que puntuar cada
+   fila con "¿este auto falla?" —sin nada del *cuándo*— da **PR-AUC 0,2627 y lift
+   2,10×** (`src/eval/metrics.py::cohort_ceiling`, lo reporta toda corrida). De ahí
+   salen dos correcciones a la fila de la tabla de arriba: un PR-AUC por fila por debajo
+   de 0,2627 **no demuestra timing**, y **el objetivo de 1,6–2× de lift se alcanza sin
+   anticipar nunca**, porque el techo ya está por encima. Para el *cuándo* se mira
+   `pr_auc_within_failed` (lift sobre 0,2627, no sobre 0,1252) y (a').
 
 ---
 

@@ -13,6 +13,8 @@ fallan, invalidan todo lo que venga después:
    hay leakage o un bug en la evaluación).
 4. Las métricas de anticipación premian a un ranker oráculo y castigan al ruido.
 5. La agregación a nivel vehículo (MIL) colapsa bolsas sin romper el out-of-fold.
+6. La descomposición cohorte/cuándo: el techo de cohorte es el piso real de un
+   PR-AUC por fila, y (a') aísla lo que el modelo sabe del *cuándo*.
 """
 
 from __future__ import annotations
@@ -36,14 +38,18 @@ from src.config import load_config, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
     VEHICLE_AGGREGATIONS,
     classification_metrics,
+    cohort_ceiling,
     lead_time_curve,
     operating_point,
+    pr_auc_within_failed,
     vehicle_metrics,
     vehicle_scores,
+    when_contribution,
 )
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
+from src.training.targets import build_target  # noqa: E402
 
 CONTRACT_COLUMNS = {
     "vehicle_id": "object",
@@ -75,6 +81,16 @@ _checks: list[tuple[str, bool, str]] = []
 def check(name: str, condition: bool, detail: str = "") -> None:
     _checks.append((name, bool(condition), detail))
     print(f"{'PASS' if condition else 'FAIL'} | {name}" + (f" — {detail}" if detail else ""))
+
+
+def _raises(call, exception: type[Exception]) -> bool:
+    try:
+        call()
+    except exception:
+        return True
+    except Exception:
+        return False
+    return False
 
 
 def main() -> int:
@@ -115,6 +131,42 @@ def main() -> int:
     check(
         "panel: ningún label positivo dentro del gap de blanking",
         bool((panel.loc[panel["label"] == 1, "time_to_event_km"] >= panel.loc[panel["label"] == 1, "gap_km"]).all()),
+    )
+    check(
+        "panel: aux_km_observed_after_cut está en toda fila",
+        "aux_km_observed_after_cut" in panel.columns
+        and bool(panel["aux_km_observed_after_cut"].notna().all()),
+    )
+
+    # 1b · el objetivo de supervivencia es la misma etiqueta escrita sobre el eje de km.
+    # Si esto se rompe, el modelo entrena contra algo que no es lo que se mide.
+    all_rows = np.ones(len(panel), dtype=bool)
+    spec = build_target("discrete_survival", panel, all_rows)
+    duration, event, at_risk = spec.y["duration_km"], spec.y["event"], spec.y["at_risk"]
+    horizon = panel["horizon_km"].to_numpy()
+    derived = (at_risk & (event == 1) & (duration <= horizon)).astype(int)
+    check(
+        "target: `discrete_survival` reconstruye exactamente `label`",
+        bool((derived == panel["label"].to_numpy()).all()),
+        f"{int((derived != panel['label'].to_numpy()).sum())} filas discrepan",
+    )
+    # El dummy genera cortes hasta el evento, así que sí tiene filas dentro del gap:
+    # el chequeo verifica que queden fuera de riesgo y no que no existan.
+    inside_gap = panel["time_to_event_km"].lt(panel["gap_km"]).fillna(False).to_numpy()
+    check(
+        "target: los cortes dentro del gap quedan fuera de riesgo (regla 1)",
+        bool((~at_risk[inside_gap]).all()) and bool((duration[at_risk] >= 0).all())
+        and spec.params["gap_km"] == float(panel["gap_km"].iloc[0]),
+        f"{int(inside_gap.sum())} filas del dummy caen dentro del gap",
+    )
+    check(
+        "target: el `y` está alineado con las filas de train, no con el panel",
+        len(build_target("discrete_survival", panel, panel["label"].eq(0).to_numpy()).y)
+        == int(panel["label"].eq(0).sum()),
+    )
+    check(
+        "target: un modo que no existe falla en vez de entrenar con `label`",
+        _raises(lambda: build_target("no_existe", panel, all_rows), KeyError),
     )
 
     # 2 · splits antileakage
@@ -405,6 +457,69 @@ def main() -> int:
             - float(np.mean([m["pr_auc"] for m in repeated_block["by_repeat"]["max"]]))
         )
         < 1e-12,
+    )
+
+    # 6 · descomposición cohorte / cuándo: contra qué piso se lee un PR-AUC por fila
+    #
+    # El panel dummy no tiene señal, así que acá no se verifican valores del panel real
+    # (eso lo hace `audit_model.py` sobre dev): se verifican las propiedades que hacen
+    # que la descomposición signifique algo.
+    ceiling = cohort_ceiling(predictions["label"], predictions["vehicle_id"])
+    check(
+        "cohorte: el techo es la precisión de marcar todos los cortes de los fallados",
+        abs(ceiling["pr_auc"] - ceiling["n_positive"] / ceiling["n_failed_rows"]) < 1e-9,
+        f"techo={ceiling['pr_auc']:.4f} = {ceiling['n_positive']}/{ceiling['n_failed_rows']}",
+    )
+    check(
+        "cohorte: el techo está por encima de la tasa base (identificar cohorte ya paga)",
+        ceiling["pr_auc"] > ceiling["base_rate"] and ceiling["lift"] > 1.0,
+        f"techo={ceiling['pr_auc']:.4f} vs tasa base={ceiling['base_rate']:.4f} "
+        f"(lift {ceiling['lift']:.2f}x)",
+    )
+    check(
+        "cohorte: puntuar por tasa del vehículo es una cota más laxa que el indicador",
+        ceiling["pr_auc_rate"] >= ceiling["pr_auc"] - 1e-9,
+        f"por tasa={ceiling['pr_auc_rate']:.4f} >= indicador={ceiling['pr_auc']:.4f}",
+    )
+    # El propio indicador de cohorte, puntuado por `pr_auc_within_failed`, no puede
+    # ordenar nada: dentro de los fallados es constante. Ese es el sentido de la métrica.
+    cohort_score = (
+        predictions.groupby("vehicle_id", observed=True)["label"].transform("max").astype(float)
+    )
+    within_cohort = pr_auc_within_failed(
+        predictions["label"], cohort_score, predictions["vehicle_id"]
+    )
+    check(
+        "entre fallados: el identificador de cohorte perfecto no ordena (lift ≈ 1)",
+        abs(within_cohort["lift"] - 1.0) < 1e-9,
+        f"PR-AUC={within_cohort['pr_auc']:.4f} sobre tasa {within_cohort['base_rate']:.4f}",
+    )
+    check(
+        "entre fallados: el azar de referencia es la tasa del subconjunto, no la global",
+        within_cohort["base_rate"] > float(predictions["label"].mean()),
+        f"{within_cohort['base_rate']:.4f} vs {float(predictions['label'].mean()):.4f}",
+    )
+    # (a') sobre un oráculo del *cuándo* (score = -time_to_event_km) tiene que dar
+    # positivo: es un modelo que ordena los cortes dentro del auto y nada más.
+    when_oracle = predictions.copy()
+    when_oracle["score"] = -when_oracle["time_to_event_km"].fillna(
+        when_oracle["time_to_event_km"].max() + 1.0
+    )
+    oracle_when = when_contribution(when_oracle)
+    check(
+        "(a'): un oráculo del cuándo pierde PR-AUC al colapsarse por vehículo",
+        oracle_when["delta"] > 0,
+        f"{oracle_when['pr_auc']:.4f} → {oracle_when['pr_auc_vehicle_mean']:.4f} "
+        f"({oracle_when['delta']:+.4f})",
+    )
+    # Y sobre un score que ya es constante por vehículo tiene que dar exactamente 0:
+    # no había nada del *cuándo* que borrar.
+    flat_when = predictions.copy()
+    flat_when["score"] = cohort_score
+    check(
+        "(a'): un score constante por vehículo no pierde nada (no sabía el cuándo)",
+        abs(when_contribution(flat_when)["delta"]) < 1e-12,
+        f"delta={when_contribution(flat_when)['delta']:+.2e}",
     )
 
     failed = [name for name, ok, _ in _checks if not ok]

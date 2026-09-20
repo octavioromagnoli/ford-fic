@@ -1,50 +1,30 @@
-run: f3-baserate-panel-v1
-logged_on: '2026-09-19'
-note: '
-
-
-  [NO COMPARABLE · anotado al revisar las auditorias] Esta corrida se midio contra
-  el
-
-  panel ANTERIOR al commit 1eab4a1, que corrigio el umbral de regeneraciones (5 ->
-  15
-
-  puntos) y reconstruyo el panel: mismas filas, mismos vehiculos, mismos folds, otros
-
-  valores en las columnas feat_*regen*. El control se movio de 0,165 a 0,1612 y la
-  tabla
-
-  de results/ separa corridas por ~0,005, o sea menos que ese movimiento: su posicion
-  en
-
-  el ranking puede no sobrevivir. No se compara con las corridas posteriores. Las
-
-  metricas de arriba quedan como estaban, sin tocar.
-
-
-  [AUDITORIA · anotado al revisar los criterios] La auditoria (a) —permutar features
-
-  dentro de cada vehiculo esperando que el PR-AUC cayera a la tasa base— NO es un
-  null en
-
-  este panel: deja intacto que vehiculos fallan, que es de donde sale casi todo el
-  PR-AUC,
-
-  y sube a 0,17-0,21. Cualquier lectura de esta corrida que la haya citado como aprobada
-
-  paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
-  el
-
-  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
+run: f3-baserate-panel-v1-regen15
+logged_on: '2026-09-20'
+note: 'Piso de tasa base re-corrido contra el panel POST-1eab4a1: PR-AUC 0,1214, identico
+  al del panel viejo, como tiene que ser (baserate no usa ninguna feature y 1eab4a1
+  cambio features, no etiquetas). Es el control del re-corrido: confirma que las diferencias
+  que se ven en los otros modelos son de las features y no del panel entero. Auditado:
+  (a0) PASS, (a'') +0,0010 -> APROBADA, y eso expone el limite del criterio: un modelo
+  constante ''aprueba'' (a'') con un delta de ruido. (a'') dice si el poco cuando
+  que hay es real, no si alcanza; el tamano se lee contra el techo de cohorte de 0,2627.'
 source:
   config_path: configs/exp_baserate.yaml
   config_versioned: true
-  branch: feat/model-cnn-lstm
-  commit: 36dad79
+  branch: exp/survival-stacking
+  commit: 02ee0a5
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: baserate
   pr_auc: 0.12139555574321928
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2545410040875593
+  within_failed_lift: 0.96905964941996
+  when_delta: 0.0010247290759095584
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.3061354579025606
+  vehicle_lift: 0.9877200622893936
+  vehicle_base_rate: 0.30994152046783624
   pr_auc_lo: 0.11976403332725172
   pr_auc_hi: 0.13004926108374384
   base_rate: 0.1251848201084278

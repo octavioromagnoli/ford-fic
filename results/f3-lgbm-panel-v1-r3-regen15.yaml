@@ -1,0 +1,83 @@
+run: f3-lgbm-panel-v1-r3-regen15
+logged_on: '2026-09-20'
+note: 'CV repetida R=3 del control, contra el panel POST-1eab4a1 (el registro f3-lgbm-panel-v1-r3,
+  PR-AUC 0,1611, es del panel pre-fix y NO se compara con este). Declara el aporte
+  del cuando (a'') con su dispersion entre repeticiones: -0,0055 +/- 0,0040 (min -0,0097,
+  max -0,0000), NEGATIVO en las tres pasadas. El orden de los cortes dentro del vehiculo
+  le RESTA al control: colapsar su score al promedio del vehiculo lo mejora. PR-AUC
+  por fila 0,1595 +/- 0,0081; deteccion 11,9% +/- 3,2 (min 7,5, max 15,1) y anticipacion
+  9.370 +/- 2.237 km, o sea que el 9,4%-y-12.322-km del R=1 era en buena parte el
+  sorteo de folds. Contra el techo de cohorte de 0,2627 no llega: este PR-AUC no demuestra
+  anticipacion.'
+source:
+  config_path: configs/exp_lgbm_panel_v1_r3_regen15.yaml
+  config_versioned: false
+  branch: exp/survival-stacking
+  commit: 02ee0a5
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: lgbm
+  pr_auc: 0.15950122864945912
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2861259187081656
+  within_failed_lift: 1.0893061550818746
+  when_delta: -0.0031482673106644765
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.4629619442615635
+  vehicle_lift: 1.4937074050703274
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.1629697147668524
+  pr_auc_hi: 0.19249678301634635
+  base_rate: 0.1251848201084278
+  lift: 1.2741259564163485
+  roc_auc: 0.5855058962700085
+  brier: 0.17113867996514023
+  detection_rate: 0.09433962264150944
+  median_lead_km: 11802.0
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel.parquet
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 254
+config:
+  name: f3-lgbm-panel-v1-r3-regen15
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: lgbm
+    params:
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-feature-ablation
+    job_type: train
+    tags:
+    - f3
+    - lgbm
+    - panel-v1
+    - control
+    - r3
+    - regen15
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs/exp_lgbm_panel_v1_r3_regen15.yaml

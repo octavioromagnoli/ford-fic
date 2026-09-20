@@ -5,6 +5,189 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-20 · El piso no es la tasa base: es el techo de cohorte (0,2627). PROPUESTA para todo el proyecto
+
+**Código:** `src/eval/metrics.py::cohort_ceiling / pr_auc_within_failed /
+when_contribution`, reportadas por `scripts/train.py` en toda corrida y por
+`scripts/audit_model.py`. **Alcance: es una decisión de proyecto, no de esta rama.**
+Cambia cómo se lee cada número de `results/`, el criterio de las auditorías y la meta
+que el pitch declara. Está escrita como propuesta para que el equipo la mire y la
+discuta; lo que ya está hecho es medirla y dejarla reportada.
+
+### El hallazgo
+
+En el panel dev hay 2.029 filas y 254 positivas (tasa base 0,1252). **Las 254 están
+todas dentro de los 967 cortes de los 53 vehículos que fallan.** Entonces un modelo que
+solo sabe "este auto es de los que fallan", sin la menor idea de *cuándo*, puntúa esas
+967 filas por encima de las otras 1.062 y saca precisión 254/967 = **PR-AUC 0,2627, lift
+2,10×**. Eso es el **techo de cohorte**.
+
+```bash
+python -c "
+import pandas as pd, sys; sys.path.insert(0,'.')
+from src.config import resolve_path
+from src.eval.splits import load_test_split, test_split_masks
+from src.eval.metrics import cohort_ceiling
+panel = pd.read_parquet(resolve_path('data/processed/panel.parquet'))
+dev, _ = test_split_masks(panel, load_test_split(resolve_path('data/processed/test_split.json')))
+print(cohort_ceiling(panel.loc[dev, 'label'], panel.loc[dev, 'vehicle_id']))"
+# pr_auc 0.2627 · lift 2.098 · n_failed_rows 967 · n_positive 254
+```
+
+**Consecuencia incómoda: el objetivo del plan (1,6–2× de lift) está por debajo del
+techo.** O sea que se alcanza sin anticipar nunca. Los modelos medidos están todos
+*abajo* del techo —el control da 0,1612 (1,29×)— así que hoy el problema no es que
+alguien haya inflado un número: es que el número que veníamos mirando no contesta la
+pregunta del producto.
+
+### La propuesta
+
+1. **Reportar siempre la descomposición**, no un PR-AUC suelto. Tres números, que
+   `train.py` ya guarda en `metrics.json` y `compare.py` ya muestra:
+   - **techo de cohorte** (cuánto sale de *qué* auto), con `✓`/`✗` según el PR-AUC por
+     fila lo supere;
+   - **PR-AUC entre fallados** (`pr_auc_within_failed`), medido solo sobre esos 967
+     cortes, donde el nivel del vehículo ya no ordena nada. Su azar es 0,2627, **no**
+     0,1252: se lee el lift, nunca el número pelado;
+   - **(a') el aporte del *cuándo***: colapsar el score al promedio de su vehículo sin
+     reentrenar. La caída es lo que el modelo sabía de timing.
+2. **(a) pasa a informativa.** La auditoría de
+   [f3-modelos-candidatos.md](../f3-modelos-candidatos.md) §0.4 —permutar dentro del
+   vehículo esperando que el PR-AUC caiga a la tasa base— **no puede dar nulo**: deja
+   intacto *qué* vehículos fallan, que es de donde sale casi todo el PR-AUC, y encima le
+   saca a cada auto el ruido de qué ventana le tocó, así que entrena un ordenador de
+   vehículos **mejor**. Sube a 0,17–0,21 contra 0,161 de referencia, con tres semillas y
+   los dos modelos. `audit_model.py` la imprime y **no la marca ni como pass ni como
+   falla**. Aprueban **(a0)** (el null de verdad) y **(a')**.
+3. **Un lift dentro de 1,6–2× no demuestra anticipación.** Si el pitch lo usa, tiene que
+   ir acompañado del techo, o se está vendiendo "sabemos qué autos fallan" como "sabemos
+   cuándo". La curva de anticipación vs. falsas alarmas sigue siendo el número de
+   portada, y es el que no tiene este problema.
+
+### Qué cambia en la lectura de lo ya medido
+
+| corrida (panel post-1eab4a1) | PR-AUC fila | vs. techo | (a') |
+|---|---|---|---|
+| `f3-gpboost-survival` | 0,1431 | ✗ | **+0,0562** |
+| `f3-survival-stacking` | 0,1613 | ✗ | +0,0152 |
+| `f3-cnn-lstm-tutora-regen15` | 0,1553 | ✗ | +0,0036 |
+| `f3-baserate-panel-v1-regen15` | 0,1214 | ✗ | +0,0010 |
+| `f3-lgbm-panel-v1-regen15` (control) | 0,1612 | ✗ | **−0,0067** |
+
+Dos lecturas que el PR-AUC por fila escondía:
+
+- **El control ordena los cortes al revés.** Colapsarle el score al promedio del
+  vehículo le *sube* el PR-AUC de 0,1612 a 0,1679. Con R=3: −0,0055 ± 0,0040, negativo
+  en las tres pasadas. El mejor modelo de la tabla no sabe *cuándo*.
+- **`gpboost_survival` tiene el PR-AUC por fila más bajo de los finalistas y es por lejos
+  el que más sabe del *cuándo*** ((a') +0,0562, ROC intra-vehículo 0,8582 contra ~0,595
+  de los otros dos). El efecto aleatorio por vehículo se come el "qué auto" y deja el
+  score midiendo casi solo el "cuándo" — que es justo lo que el PR-AUC por fila penaliza.
+  **Si la propuesta se acepta, este modelo hay que volver a mirarlo en serio.**
+
+### Lo que la CV repetida contesta
+
+Con `splits.n_repeats: 3` (`configs/exp_lgbm_panel_v1_r3_regen15.yaml` y
+`configs/exp_survival_stacking_r3.yaml`), y la dispersión entre repeticiones:
+
+| | control R=3 | survival stacking R=3 |
+|---|---|---|
+| PR-AUC por fila | 0,1595 ± 0,0081 | 0,1721 ± 0,0135 |
+| **(a')** | **−0,0055 ± 0,0040** | **+0,0162 ± 0,0033** |
+| lift entre fallados | 1,093 ± 0,034 | 1,103 ± 0,066 |
+| detección | 11,9 % ± 3,2 | 15,7 % ± 0,9 |
+| anticipación mediana | 9.370 ± 2.237 km | 8.330 ± 22 km |
+
+**Sí: el +0,015 supera la dispersión.** Los rangos de (a') son disjuntos
+(`[−0,0097, −0,0000]` contra `[+0,0128, +0,0207]`) y caen de lados opuestos del cero; la
+diferencia de 0,0217 es ~4× el desvío combinado (0,0052). Y es **lo único** que los
+separa: el PR-AUC por fila no (rangos solapados) y la detección tampoco del todo (se
+tocan en 15,1 %). Lo que sí cambia mucho es la estabilidad: ±22 km de anticipación
+contra ±2.237.
+
+### Límites conocidos
+
+- **(a') aprueba a un modelo constante.** `baserate` da +0,0010 y "pasa". (a') dice si el
+  *cuándo* que hay es real, no si alcanza; el tamaño se lee contra el techo. Si el equipo
+  quiere un criterio con umbral, hay que fijarlo con la dispersión de R=3, no a ojo.
+- **(a') y el PR-AUC entre fallados pueden contradecirse.** Control 1,09× contra survival
+  stacking 1,05× entre fallados, al revés que (a'). Son dos cortes distintos de la misma
+  pregunta: se reportan los dos y no se elige el que conviene.
+- **El techo es del panel, no de la flota.** 0,2627 sale de que los sanos están
+  emparejados por odómetro y mes (`sampling` en `configs/data/panel_v1.yaml`). Con otra
+  prevalencia el techo se mueve; por eso se reporta junto al número, no como constante.
+- **`survival_stacking` marca atajo en (b)**: +0,0230 de ROC con las `aux_` de calendario,
+  por encima del umbral de 0,02 (el control da +0,0171 y no marca). **Sin resolver.**
+
+**Detalle:** [f3-survival-stacking.md](f3-survival-stacking.md),
+[f3-cnn-lstm-tutora.md](f3-cnn-lstm-tutora.md) (sección de corrección).
+
+---
+
+## 2026-09-20 · Con qué se entrena se declara en el YAML (`target:`), separado de con qué se mide
+
+**Código:** `src/training/targets.py`, hook en `src/training/cv.py`.
+
+**Qué.** Un bloque `target: {name, params}` en el YAML del experimento elige el objetivo
+de entrenamiento entre los modos registrados en `src/training/targets.py`. Sin la clave
+se entrena con `label`, que es lo que hacía siempre. **La evaluación no cambia nunca**:
+etiqueta dura y mismos folds, pase lo que pase.
+
+**Por qué.** Media docena de ideas de F3 (supervivencia, etiquetas blandas, horizonte
+ordinal, ranking dentro de celdas) quieren entrenar contra algo que no es el 0/1 de la
+ventana, y todas empiezan igual: tocando `cv.py`. Con un registro por nombre, agregar un
+modo es una función en un archivo y una línea en un YAML; `cv.py` no sabe qué modos
+existen. Dos ramas pueden agregar el suyo sin pisarse, que es el motivo concreto: esto
+salió junto con `exp/ordinal-horizon`.
+
+**Lo que no se negoció:** que la métrica de selección siga siendo el PR-AUC sobre `label`
+con los folds congelados. Si cada modo midiera contra su propio objetivo, la tabla de
+`results/` dejaría de significar algo.
+
+---
+
+## 2026-09-20 · El panel emite `aux_km_observed_after_cut`
+
+**Código:** `src/data/panel.py::vehicle_cuts`.
+
+**Qué.** Una columna más, `last_odo − c`: los km que el vehículo se observó después del
+corte. `aux_`, porque es información posterior al corte y no entra a ninguna ventana.
+
+**Por qué.** `time_to_event_km` es NaN en los sanos, así que un censurado no se
+distinguía de un negativo: el panel decía "no falló" cuando el dato es "llegó hasta acá
+sin fallar". Cualquier modelo de supervivencia necesita esa segunda frase. Sale gratis de
+lo que `vehicle_cuts` ya tenía.
+
+**Costo.** Hay que regenerar el panel, pero es estrictamente aditivo: mismas filas, mismo
+orden, misma huella, mismos folds (verificado). Los `splits.json` congelados siguen
+sirviendo.
+
+---
+
+## 2026-09-20 · La permutación dentro del vehículo no es un null: se lee con (a0) y (a')
+
+**Código:** `scripts/audit_model.py`.
+
+**Qué.** La auditoría (a) de [f3-modelos-candidatos.md](../f3-modelos-candidatos.md) §0.4
+—permutar dentro de cada vehículo y esperar que el PR-AUC caiga a la tasa base— **sube**
+en este panel, con los dos modelos probados y con tres semillas. Se agregan dos
+auditorías al lado: **(a0)** permutar entre *todas* las filas, que sí es el null y sí cae
+a la tasa base; y **(a')** colapsar el score al promedio de cada vehículo sin reentrenar,
+que es la cuenta de cuánto aporta el *cuándo*. Además se permutan las **features** y no
+la etiqueta, para que las dos corridas se midan contra exactamente el mismo `label`.
+
+**Por qué.** La permutación intra-vehículo deja intacto *qué* vehículos fallan —de donde
+sale casi todo el PR-AUC de este panel— y de paso le saca a cada vehículo el ruido de qué
+ventana le tocó. O sea que entrena un ordenador de vehículos **mejor**, no un modelo sin
+información. Leída sola, la auditoría dice lo contrario de lo que pasa.
+
+**Alcance.** Vale para todo F3, no solo para la supervivencia. La ficha de
+[f3-cnn-lstm-tutora.md](f3-cnn-lstm-tutora.md) lee su 0,143-contra-0,153 con el criterio
+viejo; hay que rehacerlo con `scripts/audit_model.py`.
+
+**Detalle:** [f3-survival-stacking.md](f3-survival-stacking.md).
+---
+
 ## 2026-09-20 · La decisión se mide por vehículo con `mean`, y siempre como lift
 
 **Código:** `src/eval/metrics.py::vehicle_scores/vehicle_metrics`, bloque
