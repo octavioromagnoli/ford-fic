@@ -9,9 +9,9 @@ note: 'El mismo apilado con intercept aleatorio por vehiculo (GPBoost). NO mejor
   recupera hasta 0.154, sigue por debajo. Ver docs/memoria/f3-survival-stacking.md.'
 source:
   config_path: configs/exp_gpboost_survival.yaml
-  config_versioned: false
+  config_versioned: true
   branch: exp/survival-stacking
-  commit: 1eab4a1
+  commit: 4ff381e
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: gpboost_survival

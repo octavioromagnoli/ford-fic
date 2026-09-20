@@ -8,9 +8,9 @@ note: 'Survival stacking (Craig/Zhong/Tibshirani 2021) sobre el panel v1 + feat_
   (+0.015 contra -0.007 del LightGBM). Detalle y auditorias en docs/memoria/f3-survival-stacking.md.'
 source:
   config_path: configs/exp_survival_stacking.yaml
-  config_versioned: false
+  config_versioned: true
   branch: exp/survival-stacking
-  commit: 1eab4a1
+  commit: 4ff381e
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: survival_stacking
