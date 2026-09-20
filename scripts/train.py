@@ -157,6 +157,55 @@ def repeat_metrics(predictions: pd.DataFrame, n_repeats: int) -> list[dict[str, 
     ]
 
 
+def when_by_repeat(
+    predictions: pd.DataFrame, n_repeats: int
+) -> list[dict[str, dict[str, float]]]:
+    """(a'), PR-AUC entre fallados y detección de CADA repetición, por separado.
+
+    Mismo criterio que `repeat_metrics`: con R > 1 cada repetición tiene su propia
+    columna `score_r{i}` y se mide sola. Promediar los scores antes de medir sería un
+    ensamble de R pasadas, que da mejor que el modelo que se está evaluando — y acá
+    importa el doble, porque lo que se quiere de la CV repetida es justamente **la
+    dispersión** entre repeticiones: sobre el score promediado esa dispersión es cero
+    por construcción y (a') parecería mucho más estable de lo que es.
+    """
+    columns = ["score"] if n_repeats <= 1 else [f"score_r{r}" for r in range(n_repeats)]
+    out = []
+    for column in columns:
+        frame = predictions.assign(score=predictions[column])
+        out.append(
+            {
+                "when": when_contribution(frame),
+                "within_failed": pr_auc_within_failed(
+                    frame["label"], frame["score"], frame["vehicle_id"]
+                ),
+            }
+        )
+    return out
+
+
+def detection_by_repeat(
+    predictions: pd.DataFrame, n_repeats: int, eval_cfg: dict
+) -> list[dict[str, float] | None]:
+    """El punto de operación de cada repetición: detección y anticipación con su sorteo.
+
+    Es el número del pitch, así que su dispersión entre repeticiones es lo que dice si
+    "detectamos el R%" es una propiedad del modelo o del sorteo de folds.
+    """
+    columns = ["score"] if n_repeats <= 1 else [f"score_r{r}" for r in range(n_repeats)]
+    budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
+    out = []
+    for column in columns:
+        frame = predictions.assign(score=predictions[column])
+        curve = lead_time_curve(
+            frame,
+            n_thresholds=int(eval_cfg.get("n_thresholds", 50)),
+            k_consecutive=int(eval_cfg.get("k_consecutive", 2)),
+        )
+        out.append(operating_point(curve, max_false_alarms_per_1000=budget))
+    return out
+
+
 def vehicle_block(
     predictions: pd.DataFrame, eval_cfg: dict, n_repeats: int
 ) -> dict[str, Any] | None:
@@ -359,6 +408,25 @@ def main() -> None:
         predictions["label"], predictions["score"], predictions["vehicle_id"]
     )
     when = when_contribution(predictions)
+    # Con R > 1, la misma cuenta por repetición: sin la dispersión, declarar que un
+    # modelo aporta +0,015 del *cuándo* no dice si eso supera el ruido del sorteo.
+    when_repeats = when_by_repeat(predictions, n_repeats)
+    detect_repeats = detection_by_repeat(predictions, n_repeats, eval_cfg)
+    when_spread = {
+        "when_delta": dispersion([r["when"]["delta"] for r in when_repeats]),
+        "within_failed_pr_auc": dispersion(
+            [r["within_failed"]["pr_auc"] for r in when_repeats]
+        ),
+        "within_failed_lift": dispersion(
+            [r["within_failed"]["lift"] for r in when_repeats]
+        ),
+        "detection_rate": dispersion(
+            [p["detection_rate"] for p in detect_repeats if p is not None]
+        ),
+        "median_lead_km": dispersion(
+            [p["median_lead_km"] for p in detect_repeats if p is not None]
+        ),
+    }
 
     # Secundarias. El C-index mide el orden usando a los sanos como censurados, no como
     # ceros; el bootstrap por vehículo es el intervalo que corresponde a un panel con ~5
@@ -385,6 +453,9 @@ def main() -> None:
         "cohort_ceiling": ceiling,
         "pr_auc_within_failed": within_failed,
         "when_contribution": when,
+        "when_by_repeat": when_repeats,
+        "detection_by_repeat": detect_repeats,
+        "when_spread": when_spread,
         "bootstrap_by_vehicle": by_vehicle,
         "operating_point": point,
         "operating_point_budget_per_1000": budget,
@@ -424,6 +495,18 @@ def main() -> None:
             "CV repetida (%d pasadas) | PR-AUC por repetición: %.4f ± %.4f (min %.4f, max %.4f)",
             n_repeats, spread["mean"], spread["std"], spread["min"], spread["max"],
         )
+        for key, label, scale in (
+            ("when_delta", "(a') aporte del cuándo", 1.0),
+            ("within_failed_lift", "lift entre fallados", 1.0),
+            ("detection_rate", "detección", 100.0),
+            ("median_lead_km", "anticipación mediana (km)", 1.0),
+        ):
+            d = when_spread[key]
+            logger.info(
+                "CV repetida (%d pasadas) | %-26s %.4f ± %.4f (min %.4f, max %.4f)",
+                n_repeats, label + ":", scale * d["mean"], scale * d["std"],
+                scale * d["min"], scale * d["max"],
+            )
     if point:
         logger.info(
             "Punto de operación (<= %.0f falsas alarmas/1000 sanos): detección %.1f%% | "
@@ -470,6 +553,9 @@ def main() -> None:
         flat.update({f"cohort/{k}": v for k, v in ceiling.items()})
         flat.update({f"within_failed/{k}": v for k, v in within_failed.items()})
         flat.update({f"when/{k}": v for k, v in when.items()})
+        flat.update({f"when_repeats/{k}_{stat}": v
+                     for k, stats in when_spread.items()
+                     for stat, v in stats.items()})
         if by_vehicle:
             flat.update({f"vehicle_boot/{k}_{stat}": v
                          for k, ci in by_vehicle.items()
