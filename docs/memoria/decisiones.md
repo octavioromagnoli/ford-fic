@@ -40,8 +40,17 @@ panel nuevo. El marcador sí filtra, pero solo donde el mes no se empareja (+0,0
 Δ=250+posición). **La ablación gruesa detecta que hay un atajo; la fina dice cuál es**, y
 de ahora en más se corre por familia.
 
+**Qué es artificial y qué no.** Ninguna etiqueta ni fila se inventa: las filas sanas son
+`label = 0` —su etiqueta real— e idénticas a las del panel v1 en los 466 cortes
+compartidos; lo sintético es el punto de corte de la observación, o sea **qué filas
+entran**. La consecuencia a tener presente es la mezcla: 56% de positivas contra 12,5%,
+así que de este panel se citan ROC y `pr_auc_norm`, y **no** el PR-AUC crudo, el F1 ni el
+punto de operación como número de despliegue.
+
 **Qué falta.** Sortear varios eventos ficticios por sano (*risk-set sampling* con k
-controles) para recuperar negativos, y re-medir todo con los eventos corregidos.
+controles) para recuperar negativos, re-medir todo con los eventos corregidos, y dos
+chequeos que quedaron abiertos: **estabilidad del ROC entre semillas del sorteo** y
+**punto de operación evaluado sobre el panel completo**, con mezcla realista.
 
 **Detalle:** [f3-evento-ficticio-y-ventana-de-riesgo.md](f3-evento-ficticio-y-ventana-de-riesgo.md)
 

@@ -99,6 +99,66 @@ Tres lecturas:
 Moraleja de método: **la ablación gruesa detecta que hay un atajo, la fina dice cuál es.**
 Vale correrla por familia y no en bloque.
 
+## 4b · Qué es artificial acá y qué no (leer antes de citar un número)
+
+La pregunta correcta frente a este panel es "¿esto no son datos inventados?". No lo son,
+pero hay que ser preciso sobre qué es sintético, porque **una parte sí lo es y cambia
+cómo se leen algunas métricas**.
+
+### Lo que NO es artificial
+
+Verificable en una línea:
+
+```bash
+python -c "import pandas as pd; p=pd.read_parquet('data/processed/panel_pseudo.parquet'); v=pd.read_parquet('data/processed/panel.parquet'); k=['vehicle_id','cut_odo']; m=v[k+['label']].merge(p[k+['label']],on=k,suffixes=('_v1','_ps')); print('etiquetas que no coinciden con el panel v1:', (m.label_v1!=m.label_ps).sum())"
+```
+
+- **Ninguna etiqueta es inventada.** Las 246 filas de vehículos sanos tienen `label = 0`,
+  que es su etiqueta verdadera —esos vehículos no tuvieron evento— y `time_to_event_km`
+  sigue nulo en todas. De las 466 filas que este panel comparte con el v1 canónico, las
+  etiquetas coinciden en **las 466**.
+- **Ninguna fila es inventada.** El evento ficticio y `window_only` solo **descartan**
+  filas: deciden hasta dónde se mira el historial de cada vehículo. No se generó ni un
+  corte, ni una feature, ni un valor.
+- **El modelo nunca ve el punto sorteado.** `pseudo_event_odo_km` no se escribe al panel;
+  el modelo recibe 54 columnas y ninguna es esa.
+
+### Lo que SÍ es artificial
+
+1. **Qué filas sobreviven.** El evento ficticio es un **punto de corte de la observación**,
+   no un evento: sorteado de la distribución de odómetros de evento de los positivos,
+   define la ventana de riesgo del sano. Es la asignación de fecha índice de la
+   epidemiología, y existe para que "estar al final de la propia serie" signifique lo
+   mismo en los dos grupos. Sin eso, esa sola asimetría separa con P = 0,836.
+2. **La mezcla de clases, y esto es lo que más importa.** Al quedarse solo con las
+   ventanas de riesgo, las positivas pasan del 12,5% al **55,8%** de las filas. En
+   producción se scorean *todos* los cortes de *todos* los vehículos, la mayoría fuera de
+   cualquier ventana de riesgo.
+
+### Qué métrica sobrevive a eso y cuál no
+
+| métrica | ¿se puede citar de este panel? |
+|---|---|
+| **ROC-AUC** (0,703) | **Sí.** No depende de la prevalencia. |
+| **PR-AUC normalizado** (0,392) | **Sí**, por la misma razón. |
+| **Test de permutación** (p < 0,001) | **Sí**: el nulo se calcula sobre este mismo panel. |
+| PR-AUC crudo (0,732) y F1 (0,758) | **No** contra otros paneles: siguen a la tasa base. |
+| **Detección y falsas alarmas** (30% @ ≤50/1000) | **No como número de despliegue.** |
+
+El último merece el detalle: acá un vehículo sano aporta ~6 cortes, y en la calle
+aportaría el doble o el triple. Menos oportunidades de disparar ⇒ **las falsas alarmas
+por vehículo salen más bajas de lo que serían en producción**. El punto de operación del
+pitch hay que medirlo sobre una población realista, no sobre este panel.
+
+### Los dos huecos que quedan abiertos
+
+- **Estabilidad de la semilla, sin medir.** El sorteo depende de `pseudo_event.seed`; con
+  otra semilla el panel es otro. Si el ROC se moviera mucho entre semillas, el 0,703 vale
+  menos de lo que parece. Se cierra construyendo con 3 semillas y comparando.
+- **Punto de operación honesto, sin medir.** Entrenar acá y **evaluar sobre el panel
+  completo** (`panel_nomatch.parquet`, todos los cortes, mezcla realista) es la forma de
+  sacar un número de detección y falsas alarmas que se pueda decir en voz alta.
+
 ## 5 · Qué quedó
 
 - `src/data/panel.py`: `assign_pseudo_events()` (sorteo factible, solo referencia dev,

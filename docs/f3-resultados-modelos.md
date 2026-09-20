@@ -31,6 +31,27 @@ modelo, no el 76% de acierto que parece. El F1 crudo de esta tabla es el **mejor
 sobre todos los umbrales —una cota optimista, porque el umbral se elige mirando las mismas
 filas que se evalúan—; el umbral de operación real sale del presupuesto de falsas alarmas.
 
+> ### ⚠️ Qué se puede citar de esta tabla y qué no
+>
+> El panel conserva de cada vehículo **solo su ventana de riesgo**, así que su mezcla de
+> clases es artificial (55,8% de positivas contra 12,5% del panel v1). Eso **no** invalida
+> la tabla, pero sí decide qué columna se puede decir en voz alta:
+>
+> - **Sí: ROC-AUC, PR-AUC normalizado y el test de permutación.** No dependen de la
+>   prevalencia; son los números que comparan paneles y los que sostienen que hay señal.
+> - **No entre paneles: PR-AUC crudo y F1.** Siguen a la tasa base. El salto de 0,181 a
+>   0,732 es casi todo mezcla (ver la sección siguiente).
+> - **No como número de despliegue: detección y falsas alarmas.** Acá un vehículo sano
+>   aporta ~6 cortes y en producción aportaría el doble o el triple, así que **las falsas
+>   alarmas por vehículo salen más bajas de lo que serían en la calle**. Para el pitch hay
+>   que re-medir el punto de operación sobre el panel completo.
+>
+> Lo que **no** es artificial: ninguna etiqueta ni ninguna fila fue inventada. Las 246
+> filas sanas tienen `label = 0`, que es su etiqueta real, y de las 466 filas compartidas
+> con el panel v1 las etiquetas coinciden en las 466. El evento ficticio decide **qué
+> filas entran**, no qué valen. El modelo nunca lo ve.
+> Detalle: [`memoria/f3-evento-ficticio-y-ventana-de-riesgo.md`](memoria/f3-evento-ficticio-y-ventana-de-riesgo.md) §4b.
+
 **Cómo leerla.**
 
 - El **piso hace su trabajo**: PR-AUC = tasa base y ROC = 0,50. Cualquier modelo que no le
@@ -142,3 +163,14 @@ python scripts/permutation_test.py --config configs/exp_gbm_pseudo.yaml
 
 El catálogo completo de modelos probados, con su config y su panel, está en
 [`f3-modelos-candidatos.md`](f3-modelos-candidatos.md).
+
+## Lo que falta medir antes de usar estos números afuera
+
+1. **Estabilidad de la semilla del evento ficticio.** El sorteo depende de
+   `pseudo_event.seed`; nadie verificó cuánto se mueve el ROC con otra. Tres construcciones
+   con semillas distintas lo cierran.
+2. **Punto de operación sobre una población realista.** Entrenar en este panel y evaluar
+   sobre `panel_nomatch.parquet` (todos los cortes, sin emparejar) para que la detección y
+   las falsas alarmas sean las de la calle y no las de un panel al 56% de positivas.
+3. **Re-medir todo con los eventos corregidos**, que es lo único que puede cambiar el
+   diagnóstico de fondo.

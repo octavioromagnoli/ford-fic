@@ -168,6 +168,16 @@ la deja fuera del modelo).
    comparan `roc_auc` y `pr_auc_norm` = (AP − π)/(1 − π), nunca el PR-AUC crudo. El F1
    va con su `f1_trivial` = 2π/(1+π) al lado, que es lo que saca decir "positivo"
    siempre. Los cinco los devuelve `classification_metrics`.
+5a. **Un panel con la mezcla cambiada cambia qué métrica se puede citar.** El panel del
+   evento ficticio conserva solo la ventana de riesgo de cada vehículo, así que tiene 56%
+   de positivas contra 12,5% del v1. De ahí se citan **ROC-AUC y `pr_auc_norm`**; el
+   PR-AUC crudo y el F1 no se comparan entre paneles, y **la detección y las falsas
+   alarmas de ese panel no son números de despliegue** (un sano aporta ~6 cortes en vez de
+   los ~15 que aportaría en la calle, así que las falsas alarmas por vehículo salen bajas).
+   Lo que **no** es artificial: ninguna etiqueta ni fila se inventa —las filas sanas son
+   `label = 0`, que es su etiqueta real, idénticas a las del v1 en los cortes compartidos—
+   y el modelo nunca ve `pseudo_event_odo_km`. Detalle:
+   `docs/memoria/f3-evento-ficticio-y-ventana-de-riesgo.md` §4b.
 5b. **Todo número bueno pasa el test de permutación** (`scripts/permutation_test.py`):
    la misma CV con la etiqueta permutada a nivel vehículo. El nulo **no es 0,50 por
    definición** —en el panel v1 es 0,555, porque las positivas son los últimos cortes de

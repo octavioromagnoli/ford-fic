@@ -1,4 +1,15 @@
-# Panel con EVENTO FICTICIO para los sanos (F3). Es el v1 —mismas features, misma
+# Panel con EVENTO FICTICIO para los sanos (F3).
+#
+# QUÉ ES ARTIFICIAL ACÁ, porque la pregunta va a aparecer: **ninguna etiqueta y ninguna
+# fila se inventan**. Las filas sanas tienen label 0, que es su etiqueta verdadera, y
+# coinciden una a una con las del panel v1 en los cortes compartidos. Lo sintético es el
+# PUNTO DE CORTE de la observación: hasta dónde se mira el historial de cada sano, o sea
+# qué filas entran. El modelo nunca ve `pseudo_event_odo_km`.
+#
+# La consecuencia que sí hay que tener presente: la mezcla de clases pasa a ser 56% de
+# positivas (contra 12,5% del v1), así que de este panel se citan ROC-AUC y PR-AUC
+# normalizado, y NO el PR-AUC crudo, el F1 ni el punto de operación como si fueran
+# números de despliegue. Detalle en docs/memoria/f3-evento-ficticio-y-ventana-de-riesgo.md §4b. Es el v1 —mismas features, misma
 # terna, mismo emparejado por odómetro y mes— más una cosa: a cada sano se le sortea
 # un punto de la distribución de odómetros de evento de los positivos y se le corta la
 # serie ahí, igual que a un positivo. Así 'el final de la serie' significa lo mismo en
