@@ -173,7 +173,7 @@ sobre el score), para el Brier se calibra con Platt sobre out-of-fold.
 celdas de 4.000 km × mes hay ~40, así que la señal por query es chica: usar
 `lambdarank_truncation_level` alto y pocas hojas.
 
-### 2.4 · Desvío respecto del propio vehículo (cambio, no nivel)
+### 2.4 · Desvío respecto del propio vehículo (cambio, no nivel) — **IMPLEMENTADO (19-09)**
 
 **Qué es.** Para cada corte, además del nivel de cada feature en la ventana, su
 **desvío respecto del historial previo del mismo vehículo**: `z_self = (x_t − media(x_{<t}))
@@ -188,12 +188,24 @@ las features que anticipan son justamente las que varían dentro del vehículo (
 degradando"; el desvío respecto de sí mismo separa las dos cosas. Y es la explicación
 más vendible en la demo: "este auto empezó a comportarse distinto a como venía".
 
-**Cómo.** Es medio feature engineering, medio modelo: las columnas `feat_*_zself` se
-generan en `src/data/panel.py` después de `build_panel` (agrupando por vehículo,
-ordenando por `cut_odo`, con `expanding()` y `shift(1)`), y cualquier modelo de arriba
-las consume. La variante CUSUM es un builder `cusum_rule` con dos parámetros
-(`k`, `h`) que se fijan con el train del fold. Costo: bajo. Cuidado con el primer corte
-de cada vehículo (sin historial: NaN, que el imputador maneja).
+**Cómo quedó.** En `src/features/sequence.py`, llamado desde `build_dataset.py` entre
+`build_panel()` y `match_healthy_cuts()` —la serie del vehículo tiene que estar completa
+cuando se calcula el desvío—. Parámetros en el bloque `sequence:` de
+`configs/data/panel_v1.yaml` (`min_history`, `k`, pesos del índice).
+
+El CUSUM **no** terminó siendo un builder: como `cv.py` selecciona por prefijo y le pasa
+al estimador solo las columnas de features, un modelo sklearn no ve `vehicle_id` ni el
+orden de los cortes, así que no puede acumular nada. Como el acumulador solo usa el
+pasado del propio vehículo, es una feature legítima (`feat_degradation_cusum`) y
+cualquier modelo del menú la consume sin cambios. Tampoco hace falta fitear `k` por fold:
+el estadístico de referencia es el propio vehículo, no la cohorte, así que no hay nada
+compartido entre train y validación que pueda filtrar. `h` deja de ser un parámetro del
+modelo y pasa a ser el umbral de la curva de anticipación, que es donde se elige.
+
+Chequeos en `scripts/check_setup.py` (bloque 5): que tocar el último corte no mueva
+ninguna fila anterior, que el acumulador arranque en cero en cada vehículo, que sin
+historial el índice sea NaN y no cero, y que sobre features sin señal una racha de 4
+cortes sea rara (0,08% de las filas del panel dummy).
 
 ### 2.5 · TabPFN v2 (el que puede sorprender sin esfuerzo)
 

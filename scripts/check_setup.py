@@ -12,6 +12,8 @@ fallan, invalidan todo lo que venga después:
 3. Un modelo de tasa base saca PR-AUC ≈ tasa base y ROC-AUC ≈ 0,5 (si saca más,
    hay leakage o un bug en la evaluación).
 4. Las métricas de anticipación premian a un ranker oráculo y castigan al ruido.
+5. Las features de secuencia (`_zself`, CUSUM) miran solo hacia atrás y no cruzan
+   vehículos: son las únicas del panel que dependen de otras filas.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from src.config import set_seed  # noqa: E402
 from src.eval.metrics import classification_metrics, lead_time_curve, operating_point  # noqa: E402
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
+from src.features.sequence import add_sequence_features  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
 
 CONTRACT_COLUMNS = {
@@ -264,6 +267,54 @@ def main() -> int:
         "métricas: K más alto no aumenta las falsas alarmas",
         float(lead_time_curve(noise, k_consecutive=3)["false_alarms_per_1000"].max())
         <= float(noise_curve["false_alarms_per_1000"].max()) + 1e-9,
+    )
+
+    # 5 · features de secuencia: las únicas que dependen de otras filas del panel
+    seq_cfg = {
+        "enabled": True, "min_history": 3, "k": 0.5,
+        "index": {"weights": {"feat_idle_per_1000km": 1, "feat_trips_below_regime_temp_frac": 1,
+                              "feat_speed_kmh_mean": -1, "feat_coolant_temp_end_mean": -1}},
+    }
+    seq, seq_summary = add_sequence_features(panel, seq_cfg)
+    new_cols = [c for c in seq.columns if c not in panel.columns]
+    check("secuencia: agrega las columnas declaradas", len(new_cols) == 7, f"{len(new_cols)}: {new_cols}")
+    check(
+        "secuencia: las columnas nuevas entran al modelo por prefijo",
+        set(new_cols) <= set(select_feature_columns(seq)),
+    )
+
+    # Hacia atrás (regla 3): alterar el ÚLTIMO corte de cada vehículo no puede mover
+    # ninguna fila anterior. Es el chequeo que atrapa un `shift()` mal puesto.
+    tampered = panel.copy()
+    last_rows = tampered.sort_values(["vehicle_id", "cut_odo"]).groupby("vehicle_id").tail(1).index
+    tampered.loc[last_rows, "feat_idle_per_1000km"] *= 1000.0
+    seq2, _ = add_sequence_features(tampered, seq_cfg)
+    before_last = ~seq.index.isin(last_rows)
+    a = seq.loc[before_last, "feat_degradation_index"]
+    b = seq2.loc[before_last, "feat_degradation_index"]
+    check(
+        "secuencia: tocar el último corte no altera los anteriores (solo hacia atrás)",
+        bool(a.equals(b)),
+        f"{int((a.fillna(-99) != b.fillna(-99)).sum())} filas cambiadas",
+    )
+
+    # El acumulador se reinicia en cada vehículo: si arrastrara, el primer corte de un
+    # vehículo heredaría la evidencia del anterior y el ranking sería del orden del panel.
+    first_rows = seq.sort_values(["vehicle_id", "cut_odo"]).groupby("vehicle_id").head(1)
+    check(
+        "secuencia: el CUSUM arranca en cero en cada vehículo",
+        bool((first_rows["feat_degradation_cusum"] == 0).all()),
+    )
+    check(
+        "secuencia: sin historial el índice es NaN, no cero",
+        bool(seq.loc[first_rows.index, "feat_degradation_index"].isna().all()),
+    )
+    # Sobre features sin señal, una racha larga tiene que ser rara: si no, el umbral
+    # está midiendo ruido y la alarma con persistencia no significaría nada.
+    check(
+        "secuencia: sobre ruido, las rachas largas son raras",
+        float((seq["feat_degradation_run"] >= 4).mean()) < 0.02,
+        f"{(seq['feat_degradation_run'] >= 4).mean():.3%} de las filas con racha >= 4",
     )
 
     failed = [name for name, ok, _ in _checks if not ok]

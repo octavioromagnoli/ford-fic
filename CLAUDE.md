@@ -16,7 +16,9 @@ features declaradas en `configs/data/features_v1.yaml`; el panel, los splits y e
 holdout están publicados como wandb Artifacts (`panel-v1`, `test-split`; se suben con
 `scripts/log_panel_artifact.py`) y `configs/exp_baserate.yaml` es el piso contra el
 panel real. **Lo siguiente es F3 (baselines) y F4 (dashboard contra el panel real)**,
-en paralelo; las ideas de modelos están en `docs/f3-modelos-candidatos.md`.
+en paralelo; las ideas de modelos están en `docs/f3-modelos-candidatos.md`. De ese menú
+ya está implementada la §2.4 (desvío contra uno mismo + CUSUM), como familia E de
+features.
 
 **Antes de tocar los datos, leer [`docs/memoria/`](docs/memoria/README.md).** Ahí
 están los hallazgos de F1/F2 y las decisiones tomadas, con la evidencia y el comando
@@ -143,6 +145,8 @@ src/data/panel.py        cortes en grilla de Δ, etiqueta con gap y horizonte, c
 src/features/trips.py    derivadas a nivel viaje (idle/moving, velocidad recalculada, topes físicos, regen = caída de AirRegeneration)
 src/features/signals.py  una booleana por nivel de Message; regen_marker solo como aux
 src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agregadores (per_1000km, half_*, gap_*, km_since_last…)
+src/features/sequence.py el vehículo contra su propio pasado: `_zself` (expanding+shift, solo hacia atrás),
+                         índice de degradación con signos físicos, CUSUM y racha. Se corre entre build_panel y el emparejado
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo
 src/eval/splits.py       splits antileakage + serialización a splits.json
@@ -190,6 +194,15 @@ revisar el YAML para no duplicar con otro nombre. Resumen:
   zero-inflated, `msg_abnormal_frac`, `msgs_per_1000km`, `oil_life_mean` y su pendiente
   (el delta intra-viaje es 0 siempre), consumo por 100 km.
 - **Control de ventana (2):** `n_trips_window`, `window_km_covered`.
+- **E secuencia (7), desde `src/features/sequence.py` y el bloque `sequence:` del YAML
+  del panel:** un `feat_<x>_zself` por componente del índice —desvío estandarizado del
+  corte contra los cortes **anteriores del mismo vehículo**—, más
+  `feat_degradation_index` (media de los `zself` con el signo físico de cada uno),
+  `feat_degradation_cusum` (evidencia acumulada, `S_t = max(0, S_{t−1} + idx_t − k)`) y
+  `feat_degradation_run` (cortes consecutivos por encima de `k`). No se declaran en
+  `features_v1.yaml`: no son agregados de una ventana sino de la **serie de cortes**, y
+  por eso viven en su propio bloque. Los primeros `min_history` cortes de cada vehículo
+  salen NaN a propósito.
 
 Lo que **no** se construye y por qué: elevación y presión de neumáticos (no hay
 columna), `accumulation_*` desde `signals` (es la misma variable que `AirRegeneration`),

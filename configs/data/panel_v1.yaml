@@ -34,6 +34,44 @@ label:
   min_trips_in_window: 5
   min_km_covered_frac: 0.5
 
+# Features de secuencia: cada corte contra los cortes ANTERIORES del mismo vehículo
+# (`src/features/sequence.py`). Se calculan entre el armado del panel y el emparejado,
+# porque la serie del vehículo tiene que estar completa.
+#
+# Por qué están: el EDA mostró que la señal es progresiva (`idle_frac` pasa de P = 0,58
+# a 0,74 a medida que el corte se acerca al evento) y que las features que anticipan son
+# las de ICC bajo —las que varían DENTRO del vehículo, no entre vehículos—. Un modelo de
+# nivel confunde "vehículo urbano" con "vehículo que se está degradando".
+#
+# No necesitan fitearse por fold: el estadístico de referencia es el propio pasado del
+# vehículo, así que no hay nada compartido entre train y validación que pueda filtrar.
+sequence:
+  enabled: true
+  # Cortes previos que hace falta tener para que el desvío signifique algo. Con 2, el
+  # desvío muestral es una diferencia disfrazada. Los cortes que no llegan salen NaN y
+  # los imputa el `Pipeline` de cada fold.
+  min_history: 3
+  # Holgura del CUSUM, en unidades de desvío del propio vehículo: cuánto se considera
+  # ruido y no se acumula. Con k = 0,5 un corte aislado a +0,3 no mueve nada y hacen
+  # falta ~4 cortes consecutivos a +0,75 para juntar 1,0 de evidencia.
+  k: 0.5
+  # Columnas a las que se les calcula `_zself`. Vacío = las del índice. Ampliarlo es
+  # barato en cómputo pero caro en grados de libertad: con 254 filas positivas, cada
+  # columna nueva es una comparación más que el modelo puede sobreajustar.
+  zself_columns: []
+  index:
+    # El peso es el SENTIDO físico, no una importancia aprendida: +1 en las que suben
+    # cuando el vehículo se degrada, −1 en las que bajan. Las cuatro salen del perfil
+    # alineado al evento (f2-eda-revision-y-features.md §3.2), que es el mismo criterio
+    # de la regla física de docs/f3-modelos-candidatos.md §1.1.
+    weights:
+      feat_idle_per_1000km: 1
+      feat_trips_below_regime_temp_frac: 1
+      feat_speed_kmh_mean: -1
+      feat_coolant_temp_end_mean: -1
+    # Un índice armado con una sola componente viva es esa feature, no un índice.
+    min_components: 2
+
 sampling:
   # Los cortes de vehículos sanos se muestrean con la MISMA distribución que los
   # positivos de dev (plan §9), sobre el odómetro Y sobre el mes del corte: los 60

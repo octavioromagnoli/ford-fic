@@ -50,6 +50,7 @@ from src.config import ensure_dir, load_config, repo_root, resolve_path, set_see
 from src.data.anchor import estimate_origin_day, event_dates, project_dates_to_odometer  # noqa: E402
 from src.data.join import load_vehicle_static  # noqa: E402
 from src.data.panel import LabelConfig, build_panel, match_healthy_cuts  # noqa: E402
+from src.features.sequence import add_sequence_features  # noqa: E402
 from src.data.subset import read_table_for_vehicles  # noqa: E402
 from src.eval.splits import (  # noqa: E402
     load_test_split,
@@ -138,6 +139,13 @@ def main() -> int:
     panel, report = build_panel(trips, signals, vehicles, specs, label_cfg,
                                 static_columns=static_columns, static_excluded=static_excluded)
 
+    # 4b · secuencia: el vehículo contra su propio pasado ---------------------------
+    # Va ANTES del emparejado a propósito: el desvío de un corte se calcula contra los
+    # cortes anteriores del mismo vehículo, y esa serie tiene que estar completa. Si se
+    # calculara después, el "historial previo" sería el que sobrevivió al muestreo de
+    # sanos —una serie con agujeros, distinta para cada `sampling`—.
+    panel, sequence_summary = add_sequence_features(panel, cfg.get("sequence"))
+
     # 5 · sanos emparejados con los positivos de dev --------------------------------
     sampling = cfg.get("sampling") or {}
     sampling_summary: dict[str, Any] | None = None
@@ -179,6 +187,7 @@ def main() -> int:
         },
         "raw": {"trips": {**trip_counters, **trip_derive}, "signals": {**signal_counters, **signal_derive}},
         "panel": report,
+        "sequence": sequence_summary,
         "sampling": sampling_summary,
         "dev": _side_summary(panel.loc[dev_mask]),
         # Del test solo se registra cuántos vehículos quedaron con filas: ni positivos ni
