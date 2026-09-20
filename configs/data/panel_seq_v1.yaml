@@ -1,0 +1,57 @@
+# Panel SECUENCIAL v1: las mismas filas que el panel v1, con la ventana (c − W, c]
+# partida en bins de odómetro en vez de resumida en 53 agregados. Es la entrada del
+# baseline CNN-LSTM de la tutora (configs/exp_cnn_lstm.yaml).
+#
+#   python scripts/build_dataset.py --config configs/data/panel_v1.yaml     # antes, si no existe
+#   python scripts/build_seq_panel.py --config configs/data/panel_seq_v1.yaml
+#
+# Mismas filas ⇒ misma huella ⇒ el splits.json del panel v1 sirve tal cual. Para
+# probar otra secuencia (otro bin, otros canales, sumar `trips`) se escribe otro YAML.
+seed: 42
+
+# Universo, cortes, etiqueta, W/G/H/Δ, sanos emparejados, fuentes, dedupe y umbrales
+# de las derivadas: todo sale del panel v1. Acá no se decide nada del problema.
+base_panel: configs/data/panel_v1.yaml
+
+sequence:
+  # L = W del panel v1. Con L > W los cortes tempranos tendrían bins anteriores al primer
+  # registro, y cuántos hay depende del odómetro del corte: un atajo que el emparejado
+  # de sanos existe para cerrar. Si se agranda, ver el warning del builder.
+  lookback_km: 1000
+  bin_km: 50              # T = 20 bins. Tiene que dividir a Δ = 500 (grilla de cortes)
+
+  # Canales por bin. La tutora usó solo DynamicInformation (`signals`) + StaticInformation:
+  # acá todos los canales son de `signals`. `source: trips` está soportado (con las
+  # derivadas de src/features/trips.py) para la variante que sume TripSummary.
+  #
+  # Fuera, por construcción (src/features/sequences.py::FORBIDDEN_COLUMNS): el marcador
+  # `Regenerations` y `DistanceBetweenRegenerations`, cortados el 25-05-2026 (miden el
+  # calendario). Las regeneraciones se cuentan desde las caídas de `Acumulation`.
+  #
+  # fill: qué vale un bin sin registros. `zero` para conteos y fracciones; `carry` para
+  # niveles (último valor dentro de la misma secuencia, todo anterior al corte).
+  channels:
+    # Densidad de registros: `signals` emite cada ~4 min con el motor encendido, así que
+    # registros por km ≈ tiempo de motor por km (idle, tránsito lento): la familia A vista
+    # desde la tabla dinámica.
+    - {name: n_records, source: signals, column: "*", agg: count, fill: zero, transform: log1p}
+    - {name: observed, source: signals, column: "*", agg: any, fill: zero}
+    # Nivel del filtro (0–100). Es la misma variable que trips.AirRegeneration*.
+    - {name: acum_mean, source: signals, column: Acumulation, agg: mean, fill: carry}
+    - {name: acum_max, source: signals, column: Acumulation, agg: max, fill: carry}
+    # Carga (puntos que sube el nivel) y regeneraciones (caídas > regen_drop_points de
+    # features_v1.yaml), con diferencias en orden temporal dentro del vehículo.
+    - {name: acum_rise, source: signals, column: acum_rise, agg: sum, fill: zero}
+    - {name: regen_drops, source: signals, column: acum_regen_drop, agg: sum, fill: zero}
+    # Severidad del filtro (`Message`): fracción de registros del bin en cada estado.
+    - {name: msg_full_frac, source: signals, column: msg_full, agg: mean, fill: zero}
+    - {name: msg_severe_frac, source: signals, column: msg_severe, agg: mean, fill: zero}
+    - {name: msg_cleaning_auto_frac, source: signals, column: msg_cleaning_auto, agg: mean, fill: zero}
+
+# Las `aux_*` del panel v1 viajan (no entran al modelo: cv.py selecciona por prefijo),
+# para poder auditar atajos sin reconstruir nada.
+keep_aux: true
+
+output:
+  panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  meta: ${DATA_DIR}/processed/panel_seq_v1_meta.json
