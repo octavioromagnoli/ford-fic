@@ -143,7 +143,9 @@ src/data/panel.py        cortes en grilla de Δ, etiqueta con gap y horizonte, c
 src/features/trips.py    derivadas a nivel viaje (idle/moving, velocidad recalculada, topes físicos, regen = caída de AirRegeneration)
 src/features/signals.py  una booleana por nivel de Message; regen_marker solo como aux
 src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agregadores (per_1000km, half_*, gap_*, km_since_last…)
+src/features/sequences.py  la ventana en T bins de km × C canales (entrada de modelos secuenciales), aplanada a feat_seq_*
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
+src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia + rama estática (torch, opcional)
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo
 src/eval/splits.py       splits antileakage + serialización a splits.json
                          estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML
@@ -157,9 +159,12 @@ scripts/eda_gaps.py      complemento del EDA sobre dev: factibilidad de W/G/H, p
                          post-evento, calendario, ICC intra-vehículo (experiments/eda/dev/gaps/)
 scripts/log_panel_artifact.py  publica panel.parquet + splits.json + panel_meta.json (`panel-v1`) y
                          test_split.json (`test-split`) como wandb Artifacts
+scripts/build_seq_panel.py  panel secuencial: mismas filas que el panel v1, feat_seq_* en vez de agregados
+                         (+ _meta.json con T y C); mismo splits.json
 scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambiar folds no es reconstruir el panel)
 scripts/train.py         entrypoint único de entrenamiento
 scripts/compare.py       tabla comparativa de corridas (markdown)
+scripts/results.py       registro versionado en results/: métricas + config completa por corrida (log/table/show)
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
 scripts/check_setup.py   smoke test del harness (15 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
