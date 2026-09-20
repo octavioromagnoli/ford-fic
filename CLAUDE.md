@@ -120,9 +120,25 @@ folds. Agregar un modo es una función con `@register_target` y cero líneas en 
    sigue siendo reporte secundario, y el origen se estima una vez y se congela.
 5. **Métricas.** PR-AUC out-of-fold para seleccionar modelo, curva de
    anticipación vs. falsas alarmas para el pitch, accuracy nunca.
-6. **Un PR-AUC sospechosamente alto se audita antes de celebrarse.** Variables
-   como el nivel del DPF son casi la definición del evento: sin gap, el modelo
-   memoriza en vez de predecir.
+6. **Un PR-AUC se audita antes de celebrarse, y el piso es el techo de cohorte.**
+   Dos mitades. (i) Uno **sospechosamente alto**: variables como el nivel del DPF
+   son casi la definición del evento; sin gap, el modelo memoriza en vez de
+   predecir. (ii) Uno **normal tampoco se celebra solo**: en dev las 254 filas
+   positivas están *todas* dentro de los 967 cortes de vehículos fallados, así
+   que puntuar cada fila con "¿este auto falla?" —sin nada del *cuándo*— da
+   **PR-AUC 0,2627 y lift 2,10×** (`src/eval/metrics.py::cohort_ceiling`). Ese es
+   el piso, no la tasa base de 0,1252: **por debajo de 0,2627 un PR-AUC por fila
+   no demuestra anticipación**, y el objetivo de 1,6–2× de lift del plan se
+   alcanza sin anticipar nunca. Para el *cuándo* se miran `pr_auc_within_failed`
+   (lift sobre 0,2627) y **(a')**, y las dos las reporta toda corrida.
+
+   Las auditorías obligatorias son `scripts/audit_model.py`. Aprueban **(a0)**
+   —features permutadas entre todas las filas, el PR-AUC cae a la tasa base o hay
+   leakage— y **(a')** —colapsar el score al promedio del vehículo sin
+   reentrenar; la caída es lo que el modelo sabía del *cuándo*—. **(a)**, la
+   permutación dentro del vehículo, es **informativa y no es un null**: deja
+   intacto qué vehículos fallan y sube. No aprueba nada, y lo que la haya citado
+   como aprobación hay que rehacerlo (`docs/memoria/decisiones.md`).
 7. **Nada se hardcodea.** Paths, semillas e hiperparámetros salen de un YAML de
    `configs/`. Para cambiar un hiperparámetro se escribe otro YAML, no se edita
    el código.

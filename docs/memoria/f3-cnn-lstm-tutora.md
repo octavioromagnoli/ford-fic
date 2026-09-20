@@ -82,17 +82,60 @@ se midió para este panel.
 | 5 semillas de la red (mismos folds) | PR-AUC 0,153–0,164 (media 0,159), ROC 0,562–0,588 (media 0,576) | la inicialización mueve ±0,01; comparar modelos con una sola semilla es ruido |
 | sin rama estática (`static_hidden: 0`) | 0,153 / **0,558** | la rama estática aporta ~0,02 de ROC |
 | `SalesCountry_cd` sola | ROC 0,434 (**0,566** invertida) | el mercado solo ya es buena parte de la señal |
-| `label` permutada dentro de cada vehículo (`default_rng(0)`, mismos folds) | 0,143 / 0,538 | no cae a 0,5, y no tiene por qué: la permutación conserva *qué* vehículos fallan (el mercado lo sabe) y destruye *cuándo*. La distancia hasta 0,574 es lo que aporta el cuándo |
+| ~~`label` permutada dentro de cada vehículo (`default_rng(0)`, mismos folds) | 0,143 / 0,538 | la distancia hasta 0,574 es lo que aporta el cuándo~~ | **MAL LEÍDA · ver abajo** |
 | ρ de cada canal (promedio de la ventana) con el mes del corte | \|ρ\| ≤ 0,11 | a nivel flota la densidad de registros baja de 404 a 320 por 1.000 km en el año y el nivel sube de 34 a 46; dentro del panel, el emparejado por odómetro × mes lo neutraliza |
 
 La auditoría (b) de [f3-modelos-candidatos.md](../f3-modelos-candidatos.md) (sumar las
 `aux_` de calendario) no aplica: este modelo no recibe `aux_`.
 
+### Corrección (2026-09-20): la permutación intra-vehículo no aprobaba nada
+
+**La fila tachada de arriba está mal leída, y la conclusión que sacaba no se sostiene.**
+Decía que el 0,143-contra-0,153 medía el aporte del *cuándo*: que al destruir el *cuándo*
+el PR-AUC bajaba, y que la distancia era lo que el modelo sabía de timing. Dos problemas:
+
+1. **Esa permutación no es un null.** Conserva *qué* vehículos fallan —de donde sale casi
+   todo el PR-AUC de este panel— y encima le saca a cada auto el ruido de qué ventana le
+   tocó, así que entrena un ordenador de vehículos **mejor**. No hay valor esperado bajo
+   "el modelo no aprendió nada" contra el cual leer el resultado. Re-medida ahora con
+   `scripts/audit_model.py`, da **0,1663 contra 0,1553: sube**, que es lo que hace
+   siempre en este panel (0,17–0,21 con tres semillas y los dos modelos).
+2. **Permutaba `label` y no las features**, así que la referencia y la auditoría quedaban
+   medidas contra etiquetas distintas y los dos números no eran comparables.
+
+Re-auditado con los criterios vigentes (`python scripts/audit_model.py --config
+configs/exp_cnn_lstm.yaml`), contra el panel secuencial reconstruido después de 1eab4a1:
+
+| auditoría | resultado | veredicto |
+|---|---|---|
+| **(a0)** features permutadas entre *todas* las filas | 0,1182 vs tasa base 0,1252 (−0,0070) | **PASS**, no hay leakage |
+| **(a')** score colapsado al promedio de su vehículo | 0,1553 → 0,1517 (**+0,0036**) | **PASS**, el orden dentro del vehículo suma |
+| (a) features permutadas dentro del vehículo | 0,1553 → 0,1663 (+0,0110) | informativa, ni pass ni falla |
+| (b) `aux_` de calendario | ROC +0,0101 | no hay salto |
+
+**El modelo queda APROBADO**, pero por (a0) y (a'), no por lo que decía la fila vieja. Y
+el aporte del *cuándo* es +0,0036, mucho más chico que lo que sugería el 0,143-contra-0,153.
+
+Dos números que esa lectura no tenía y que cambian la conclusión de la sección anterior:
+
+- **El techo de cohorte es 0,2627 (lift 2,10×)**: es lo que saca un modelo que solo sabe
+  qué autos fallan. El 0,1553 de este modelo **está por debajo**, así que su PR-AUC por
+  fila no demuestra anticipación. Tampoco el del LightGBM (0,1612).
+- **PR-AUC entre fallados: 0,2801**, lift 1,07× sobre el azar de 0,2627.
+
+Nota de comparabilidad: el 0,153 de las tablas de arriba es del panel secuencial
+**anterior** a 1eab4a1. Reconstruido (el canal `regen_drops` usa el umbral que ese commit
+cambió de 5 a 15 puntos), el mismo modelo da **0,1553** (`f3-cnn-lstm-tutora-regen15`).
+Las tablas viejas se dejan como estaban; no se comparan con las corridas nuevas.
+
 ## Qué queda
 
 - **Es el baseline, no el ganador.** Pierde por 0,01 de PR-AUC contra el LightGBM y la
   diferencia es del orden de la varianza por semilla. Para declarar algo: CV repetida
-  (`n_repeats: 3`) y promedio de varias semillas de red.
+  (`n_repeats: 3`) y promedio de varias semillas de red. Ya hay R=3 del control y de
+  survival stacking (`configs/exp_*_r3*.yaml`); falta la de este modelo, y es la que
+  diría si su (a') de +0,0036 se distingue de cero — el control da −0,0055 ± 0,0040 y
+  survival stacking +0,0162 ± 0,0033, así que +0,0036 cae justo en la zona dudosa.
 - **Primera extensión obvia: sumar `TripSummary`.** Lo que anticipa según el EDA (idle,
   régimen térmico, velocidad) vive en `trips`. El builder ya acepta `source: trips` con
   las derivadas de `src/features/trips.py` (probado: 12 canales, mismas filas); es un YAML
