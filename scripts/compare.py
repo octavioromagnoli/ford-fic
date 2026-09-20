@@ -76,8 +76,10 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
     return {
         "run": run_dir.name,
         "model": (config.get("model") or {}).get("name", "?"),
-        "measured_at": metrics_path.stat().st_mtime,
-        "panel_built_at": _panel_mtime(panel),
+        # Internas del aviso de panel viejo: no son métricas y no se versionan
+        # (`results.py` descarta las claves con guion bajo al armar el registro).
+        "_measured_at": metrics_path.stat().st_mtime,
+        "_panel_built_at": _panel_mtime(panel),
         "pr_auc": oof.get("pr_auc"),
         "cohort_ceiling": ceiling.get("pr_auc"),
         "cohort_lift": ceiling.get("lift"),
@@ -125,9 +127,9 @@ def comparability_warnings(runs: list[dict[str, Any]]) -> list[str]:
     stale = sorted(
         r["run"]
         for r in runs
-        if r["measured_at"] is not None
-        and r["panel_built_at"] is not None
-        and r["measured_at"] < r["panel_built_at"]
+        if r["_measured_at"] is not None
+        and r["_panel_built_at"] is not None
+        and r["_measured_at"] < r["_panel_built_at"]
     )
     if stale:
         warnings.append(

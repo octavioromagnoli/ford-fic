@@ -2,18 +2,47 @@ run: f3-lgbm-panel-v1-regen15
 logged_on: '2026-09-20'
 note: 'El control de f3-lgbm-panel-v1 recorrido sobre el panel RECONSTRUIDO despues
   del umbral de regeneraciones de 15 puntos (commit 1eab4a1): el panel con el que
-  se midio el 0.165 historico es anterior al arreglo y tiene otras 7 columnas feat_*regen*.
-  Mismo modelo, mismas filas, mismos folds: 0.1612. Es contra este numero, no contra
-  el 0.165, que se comparan las corridas nuevas.'
+  se midio el 0,165 historico es anterior al arreglo. Mismo modelo, mismas filas,
+  mismos folds: 0,1612. Es contra este numero, no contra el 0,165, que se comparan
+  las corridas nuevas. Re-auditado con los criterios nuevos: (a0) 0,1251 vs tasa base
+  0,1252 PASS, (a'') -0,0067 FALLA -> NO APROBADA. El orden dentro del vehiculo le
+  resta: colapsar el score al promedio del vehiculo sube el PR-AUC de 0,1612 a 0,1679.
+  Con R=3 se confirma: -0,0055 +/- 0,0040, negativo en las tres pasadas. No llega
+  al techo de cohorte de 0,2627.
+
+
+  [AUDITORIA · anotado al revisar los criterios] La auditoria (a) —permutar features
+
+  dentro de cada vehiculo esperando que el PR-AUC cayera a la tasa base— NO es un
+  null en
+
+  este panel: deja intacto que vehiculos fallan, que es de donde sale casi todo el
+  PR-AUC,
+
+  y sube a 0,17-0,21. Cualquier lectura de esta corrida que la haya citado como aprobada
+
+  paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
+  el
+
+  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
 source:
   config_path: configs/exp_lgbm_panel_v1.yaml
   config_versioned: true
   branch: exp/survival-stacking
-  commit: 1eab4a1
+  commit: 02ee0a5
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm
   pr_auc: 0.16121376584202757
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2870829464170356
+  within_failed_lift: 1.0929496424617062
+  when_delta: -0.006713251666781772
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.4767501966998375
+  vehicle_lift: 1.53819403086174
+  vehicle_base_rate: 0.30994152046783624
   pr_auc_lo: 0.1580413847744114
   pr_auc_hi: 0.21302996625641532
   base_rate: 0.1251848201084278

@@ -1,21 +1,48 @@
 run: f3-gpboost-survival
 logged_on: '2026-09-20'
-note: 'El mismo apilado con intercept aleatorio por vehiculo (GPBoost). NO mejora:
-  0.143 de PR-AUC contra 0.161 sin efecto aleatorio. El motivo esta medido: la varianza
-  del intercept se estima en 9.4-10.3 (sd ~3.1 en logit) porque ~100 de los ~137 vehiculos
-  de cada train no tienen ni un hazard positivo y su intercept se va a -inf (cuasi-separacion).
-  El efecto aleatorio se come la senal en vez de regularizarla, y en validacion no
-  sirve porque el vehiculo nunca fue visto (split agrupado). Fijando sigma2 en 0.1-2
-  recupera hasta 0.154, sigue por debajo. Ver docs/memoria/f3-survival-stacking.md.'
+note: 'GPBoost (efecto aleatorio por vehiculo) contra el panel POST-1eab4a1. PR-AUC
+  por fila 0,1431, el MAS BAJO de los finalistas, y sin embargo es el que mas sabe
+  del cuando por lejos: (a'') +0,0562 y ROC dentro del vehiculo 0,8582 (contra 0,5956
+  de survival stacking y 0,5950 del control). Auditado: (a0) 0,1144 vs 0,1252 PASS,
+  (a'') PASS -> APROBADA. Es el ejemplo mas claro de por que el PR-AUC por fila no
+  es el numero de este problema: el efecto aleatorio por vehiculo se come el ''que
+  auto'' y deja el score midiendo casi solo el ''cuando'', que es lo que el producto
+  necesita y lo que el PR-AUC por fila penaliza. Merece mirarse en serio antes de
+  decidir.
+
+
+  [AUDITORIA · anotado al revisar los criterios] La auditoria (a) —permutar features
+
+  dentro de cada vehiculo esperando que el PR-AUC cayera a la tasa base— NO es un
+  null en
+
+  este panel: deja intacto que vehiculos fallan, que es de donde sale casi todo el
+  PR-AUC,
+
+  y sube a 0,17-0,21. Cualquier lectura de esta corrida que la haya citado como aprobada
+
+  paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
+  el
+
+  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
 source:
   config_path: configs/exp_gpboost_survival.yaml
   config_versioned: true
   branch: exp/survival-stacking
-  commit: 4ff381e
+  commit: 02ee0a5
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: gpboost_survival
   pr_auc: 0.14309835345668726
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2976602318254379
+  within_failed_lift: 1.1332182841543246
+  when_delta: 0.056202385225630716
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.31287513817438717
+  vehicle_lift: 1.009465068449438
+  vehicle_base_rate: 0.30994152046783624
   pr_auc_lo: 0.1386983463640418
   pr_auc_hi: 0.19560110596759417
   base_rate: 0.1251848201084278

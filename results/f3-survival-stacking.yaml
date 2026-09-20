@@ -1,20 +1,46 @@
 run: f3-survival-stacking
 logged_on: '2026-09-20'
-note: 'Survival stacking (Craig/Zhong/Tibshirani 2021) sobre el panel v1 + feat_cut_odo:
-  hazard discreto por bin de 500 km, score = 1-S(H|x). Empata al LightGBM en PR-AUC
-  (0.161 vs 0.161 sobre el MISMO panel reconstruido con el umbral de regen de 15)
-  pero llega distinto: Brier 0.114 vs 0.173, C-index 0.570 vs 0.562, deteccion 15%
-  vs 7.5% a <=50 FA/1000, y es el unico cuyo orden DENTRO del vehiculo suma PR-AUC
-  (+0.015 contra -0.007 del LightGBM). Detalle y auditorias en docs/memoria/f3-survival-stacking.md.'
+note: 'Survival stacking R=1 contra el panel POST-1eab4a1. PR-AUC 0,1613: EMPATA con
+  el control (0,1612). Lo que lo separa es el cuando: (a'') +0,0152 contra -0,0067
+  del control, confirmado con R=3 (+0,0162 +/- 0,0033 contra -0,0055 +/- 0,0040, rangos
+  disjuntos). Auditado: (a0) 0,1227 vs 0,1252 PASS, (a'') PASS -> APROBADA. PENDIENTE:
+  la auditoria (b) marca atajo (+0,0230 de ROC al darle las aux_ de calendario, por
+  encima del umbral de 0,02); el control da +0,0171 y no marca. Hay que revisarlo
+  antes de elegir este modelo. No llega al techo de cohorte de 0,2627.
+
+
+  [AUDITORIA · anotado al revisar los criterios] La auditoria (a) —permutar features
+
+  dentro de cada vehiculo esperando que el PR-AUC cayera a la tasa base— NO es un
+  null en
+
+  este panel: deja intacto que vehiculos fallan, que es de donde sale casi todo el
+  PR-AUC,
+
+  y sube a 0,17-0,21. Cualquier lectura de esta corrida que la haya citado como aprobada
+
+  paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
+  el
+
+  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
 source:
   config_path: configs/exp_survival_stacking.yaml
   config_versioned: true
   branch: exp/survival-stacking
-  commit: 4ff381e
+  commit: 02ee0a5
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: survival_stacking
   pr_auc: 0.16126213847572982
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.27581948728778105
+  within_failed_lift: 1.050068677981434
+  when_delta: 0.015233742995215516
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.5102495591223258
+  vehicle_lift: 1.6462768794324099
+  vehicle_base_rate: 0.30994152046783624
   pr_auc_lo: 0.16440754153703813
   pr_auc_hi: 0.2079493255631077
   base_rate: 0.1251848201084278
