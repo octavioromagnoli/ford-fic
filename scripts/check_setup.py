@@ -12,6 +12,7 @@ fallan, invalidan todo lo que venga después:
 3. Un modelo de tasa base saca PR-AUC ≈ tasa base y ROC-AUC ≈ 0,5 (si saca más,
    hay leakage o un bug en la evaluación).
 4. Las métricas de anticipación premian a un ranker oráculo y castigan al ruido.
+5. La agregación a nivel vehículo (MIL) colapsa bolsas sin romper el out-of-fold.
 """
 
 from __future__ import annotations
@@ -30,8 +31,16 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from scripts.build_eda_cache import resolved_eda_config  # noqa: E402
+from scripts.train import vehicle_block  # noqa: E402
 from src.config import load_config, set_seed  # noqa: E402
-from src.eval.metrics import classification_metrics, lead_time_curve, operating_point  # noqa: E402
+from src.eval.metrics import (  # noqa: E402
+    VEHICLE_AGGREGATIONS,
+    classification_metrics,
+    lead_time_curve,
+    operating_point,
+    vehicle_metrics,
+    vehicle_scores,
+)
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
@@ -285,6 +294,117 @@ def main() -> int:
         "métricas: K más alto no aumenta las falsas alarmas",
         float(lead_time_curve(noise, k_consecutive=3)["false_alarms_per_1000"].max())
         <= float(noise_curve["false_alarms_per_1000"].max()) + 1e-9,
+    )
+
+    # 5 · agregación a nivel vehículo (MIL): la capa de decisión, no un modelo nuevo
+    bags = {how: vehicle_scores(predictions, how, k=3) for how in VEHICLE_AGGREGATIONS}
+    check(
+        "MIL: una bolsa por vehículo, etiquetada con event_observed",
+        all(len(b) == predictions["vehicle_id"].nunique() for b in bags.values())
+        and bool(
+            (
+                bags["max"].set_index("vehicle_id")["label"]
+                == predictions.groupby("vehicle_id")["event_observed"].max()
+            ).all()
+        ),
+    )
+    check(
+        "MIL: mean <= topk <= max <= noisy_or en toda bolsa",
+        bool(
+            (bags["mean"]["score"] <= bags["topk"]["score"] + 1e-12).all()
+            and (bags["topk"]["score"] <= bags["max"]["score"] + 1e-12).all()
+            and (bags["max"]["score"] <= bags["noisy_or"]["score"] + 1e-12).all()
+        ),
+    )
+
+    # El oráculo de bolsa: score alto en los vehículos con evento y bajo en los sanos.
+    # Si la agregación funciona, el PR-AUC por vehículo tiene que ser ~1 con cualquiera.
+    vehicle_oracle = predictions.copy()
+    vehicle_oracle["score"] = np.where(vehicle_oracle["event_observed"] == 1, 0.9, 0.1)
+    oracle_metrics = {how: vehicle_metrics(vehicle_oracle, how, k=3) for how in VEHICLE_AGGREGATIONS}
+    check(
+        "MIL: el oráculo por vehículo saca PR-AUC ≈ 1 con max/mean/topk",
+        all(oracle_metrics[how]["pr_auc"] > 0.99 for how in ("max", "mean", "topk")),
+        ", ".join(f"{how}={m['pr_auc']:.3f}" for how, m in oracle_metrics.items()),
+    )
+    # noisy_or ni siquiera con el oráculo: 1 − Π(1 − p) satura con el tamaño de la
+    # bolsa, así que un vehículo sano con muchos cortes supera a uno con evento y
+    # pocos. No es un bug de la implementación, es la agregación: queda medido acá
+    # para que nadie la elija sin saberlo (docs/memoria/f3-mil-agregacion-vehiculo.md).
+    # Entre los sanos el riesgo por corte es constante (0,1), así que lo único que
+    # queda ordenando sus bolsas es cuántos cortes tienen.
+    healthy_bags = vehicle_scores(vehicle_oracle, "noisy_or").query("label == 0")
+    size_rank_corr = float(healthy_bags["score"].corr(healthy_bags["n_cuts"], method="spearman"))
+    check(
+        "MIL: noisy_or satura con el tamaño de la bolsa (mide historia, no riesgo)",
+        oracle_metrics["noisy_or"]["pr_auc"] < 0.99 and size_rank_corr > 0.99,
+        f"PR-AUC del oráculo={oracle_metrics['noisy_or']['pr_auc']:.3f}, "
+        f"corr de rango(score, n_cuts) entre sanos={size_rank_corr:.2f}",
+    )
+    noise_vehicle = vehicle_metrics(noise, "max", k=3)
+    check(
+        "MIL: el ruido por vehículo no le gana a la tasa base de bolsas",
+        noise_vehicle["pr_auc_lift"] < 1.5,
+        f"PR-AUC={noise_vehicle['pr_auc']:.3f} vs tasa base {noise_vehicle['base_rate']:.3f} "
+        f"(la de filas es {oof['base_rate']:.3f}: no son el mismo número)",
+    )
+    check(
+        "MIL: la tasa base de vehículos no es la de filas (no se comparan los PR-AUC)",
+        abs(noise_vehicle["base_rate"] - oof["base_rate"]) > 0.05,
+        f"{noise_vehicle['base_rate']:.3f} vs {oof['base_rate']:.3f}",
+    )
+
+    # noisy_or sobre algo que no es una probabilidad: se niega en vez de calibrar solo.
+    margins = predictions.copy()
+    margins["score"] = 4.0 * (predictions["score"] - 0.5)
+    noisy_error = ""
+    try:
+        vehicle_scores(margins, "noisy_or")
+    except ValueError as exc:
+        noisy_error = str(exc)
+    check(
+        "MIL: noisy_or se niega si los scores no son probabilidades",
+        "probabilidades" in noisy_error,
+        noisy_error.split(".")[0] if noisy_error else "no falló (debería)",
+    )
+
+    # Y si un vehículo tuviera cortes en dos folds, la bolsa dejaría de ser out-of-fold.
+    leaky = predictions.copy()
+    leaky.loc[leaky.index[0], "fold"] = (int(leaky.loc[leaky.index[0], "fold"]) + 1) % 5
+    leak_error = ""
+    try:
+        vehicle_scores(leaky, "max")
+    except ValueError as exc:
+        leak_error = str(exc)
+    check(
+        "MIL: una bolsa repartida entre dos folds hace fallar la agregación",
+        "out-of-fold" in leak_error,
+        leak_error.split(".")[0] if leak_error else "no falló (debería)",
+    )
+
+    # El bloque del YAML: sin la clave se miden las cuatro; con lista vacía, ninguna.
+    default_block = vehicle_block(predictions, {}, 1)
+    check(
+        "MIL: sin `eval.vehicle_aggregation` se miden las cuatro agregaciones",
+        default_block is not None
+        and tuple(default_block["aggregations"]) == VEHICLE_AGGREGATIONS
+        and default_block["n_vehicles"] == predictions["vehicle_id"].nunique(),
+    )
+    check(
+        "MIL: `vehicle_aggregation: []` apaga el eje de vehículo",
+        vehicle_block(predictions, {"vehicle_aggregation": []}, 1) is None
+        and vehicle_block(predictions, {"vehicle_aggregation": None}, 1) is None,
+    )
+    repeated_block = vehicle_block(rep_predictions, {"vehicle_aggregation": ["max"]}, 3)
+    check(
+        "MIL: con R>1 se agrega cada repetición por separado, no el score promediado",
+        repeated_block is not None
+        and len(repeated_block["by_repeat"]["max"]) == 3
+        and abs(
+            repeated_block["aggregations"]["max"]["pr_auc"]
+            - float(np.mean([m["pr_auc"] for m in repeated_block["by_repeat"]["max"]]))
+        )
+        < 1e-12,
     )
 
     failed = [name for name, ok, _ in _checks if not ok]
