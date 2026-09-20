@@ -5,6 +5,217 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-20 · Cierre de F3: el PR-AUC por fila mide *qué auto*, no *cuándo*. El finalista es survival stacking, elegido por (a′) y estabilidad
+
+**Alcance: decisión de proyecto, no de una rama.** Consolida las tres ramas con las que
+cerró F3 —`exp/gamma-degradation`, `exp/survival-stacking`, `exp/ordinal-horizon`— y
+cambia el criterio con el que se lee todo `results/`, la meta que declara el pitch y qué
+se considera una auditoría aprobada. Las fichas por rama siguen siendo la evidencia
+detallada; esta entrada es la lectura conjunta, que ninguna de las tres podía hacer sola.
+
+**Los números traen el build del panel** (`2026-09-19` = antes de 1eab4a1, umbral de
+regeneraciones de 5 puntos; `2026-09-20` = después, con 15). No se mezclan: el mismo
+control da 0,1653 en uno y 0,1612 en el otro, más que lo que separa filas vecinas de la
+tabla. Ver `configs/data/panel_builds.yaml` y el preámbulo de `results/README.md`.
+
+### 1 · El techo de cohorte: la meta declarada se alcanza sin anticipar nada
+
+En dev hay 2.029 filas y 254 positivas (tasa base **0,1252**; por vehículo, **0,3099**).
+Las 254 están **todas** dentro de los 967 cortes de los 53 vehículos con evento, así que
+un identificador de vehículo perfecto —marcar todos los cortes de los fallados, sin
+ninguna información del *cuándo*— saca **PR-AUC 0,2627, lift 2,098×**
+(`src/eval/metrics.py::cohort_ceiling`, que toda corrida reporta).
+
+La consecuencia es dura y hay que decirla en el pitch: **el objetivo declarado del
+proyecto —1,6–2× de lift, `docs/f3-modelos-candidatos.md` §0— cae entero dentro de lo
+alcanzable sin anticipar nada**, porque el techo ya está arriba. Ninguna corrida medida
+contra esta tasa base lo supera: la mejor es survival stacking con 0,1721. Así que **el PR-AUC por
+fila de este panel mide sobre todo *qué auto*, y muy poco *cuándo*.** Sigue siendo el
+número que ordena la tabla, pero dejó de ser el número que elige el modelo (§4).
+
+### 2 · La auditoría (a) estaba mal planteada, y por eso la aprobaban todos
+
+El plan pedía permutar `label` **dentro de cada vehículo** y esperar que el PR-AUC
+cayera a la tasa base. No cae: **sube**. La razón es de construcción, no de
+implementación: permutar adentro del vehículo conserva *qué* vehículos fallan, y como un
+vehículo sano no tiene ninguna fila positiva, permutar lo deja con cero positivas — la
+etiqueta permutada sigue siendo perfectamente predecible desde la cohorte. Encima le
+saca a cada auto el ruido de qué ventana le tocó, así que entrena un ordenador de
+vehículos *mejor* que el original.
+
+Medido (panel `2026-09-19`, tres semillas de folds):
+
+| PR-AUC | control binario | ordinal restringido | ordinal extendido |
+|---|---:|---:|---:|
+| modelo | 0,1653 | 0,1524 | 0,1567 |
+| nulo intra-vehículo (cohorte viva) | **0,1928** | **0,1867** | **0,1784** |
+| nulo global (cohorte destruida) | 0,1259 | 0,1237 | 0,1250 |
+| tasa base | 0,1252 | 0,1252 | 0,1252 |
+
+Los tres nulos intra-vehículo quedan **por encima de su propio modelo**. El nulo global,
+en cambio, cae exacto a la tasa base en las tres (+0,0007 / −0,0015 / −0,0002): **el
+pipeline está limpio, no hay leakage** — splits agrupados, preprocesamiento por fold y
+gap de blanking hacen lo que dicen.
+
+Por eso **(a) pasa a informativa**: no se marca pass ni falla, se lee junto a (a′). Los
+criterios que aprueban ahora son **(a0)** —permutar features entre todas las filas, tiene
+que caer a la tasa base— y **(a′)**. Y el piso contra el que se mide un PR-AUC por fila
+es el techo de cohorte, no la tasa base. Cualquier informe anterior que cite (a) como
+aprobación hay que rehacerlo.
+
+### 3 · Tres rutas independientes llegan al mismo lugar
+
+El timing intra-vehículo **no se aprende con features de ventana agregadas y modelos
+tipo GBM**. Tres mediciones que no comparten método lo dicen:
+
+- **MIL (eje de decisión).** Colapsar los scores del LightGBM al promedio por vehículo
+  *sube* el lift: 1,32 → 1,51 en el panel `2026-09-19`, y 1,29 → 1,54 en el
+  `2026-09-20`. Tirar el orden de los cortes mejora la decisión.
+- **(a′) (aporte del cuándo).** Para el control con R=3, **−0,0055 ± 0,0040**, negativo
+  en las tres pasadas: el orden dentro del vehículo le *resta*.
+- **Nulo intra-vehículo.** 0,1928 contra 0,1653 del modelo (§2).
+
+Que tres caminos distintos —cambiar la unidad de decisión, colapsar el score sin
+reentrenar, y destruir el timing conservando la cohorte— den la misma respuesta es **la
+evidencia más fuerte que tiene el proyecto**. No es un artefacto de una métrica.
+
+### 4 · La excepción, y es el finalista: survival stacking
+
+Es el **único modelo del repo cuyo "cuándo" es positivo y sobrevive a R=3** (todo lo de
+abajo, panel `2026-09-20`, `f3-survival-stacking-r3` contra `f3-lgbm-panel-v1-r3-regen15`):
+
+| R=3 | survival stacking | control binario |
+|---|---:|---:|
+| **(a′) aporte del cuándo** | **+0,0162 ± 0,0033** (positivo en las 3) | −0,0055 ± 0,0040 (negativo en las 3) |
+| PR-AUC por fila | 0,1721 ± 0,0135 | 0,1595 ± 0,0081 |
+| Brier | **0,1123** | 0,1711 |
+| lift por vehículo (`mean`) | **1,616** | 1,494 |
+| detección @ ≤50 FA/1000 | 15,7% ± 0,9 | 11,9% ± 3,2 |
+| anticipación mediana | 8.330 km **± 22** | 9.370 km **± 2.237** |
+
+La diferencia de (a′) es **0,0217, unas 4× el desvío combinado (0,0052)**, y los dos
+rangos caen de lados opuestos del cero. **No gana en PR-AUC por fila** —0,1721 ± 0,0135
+contra 0,1595 ± 0,0081 se solapan— ni llega al techo de cohorte de 0,2627. Gana en lo
+que el producto vende:
+
+- **Calibración.** Brier 0,1123 contra 0,1711, con riesgo medio predicho 0,133 contra
+  0,125 real. El hazard se entrena sin `class_weight`, así que `1 − S(H|x)` es una
+  probabilidad; el LightGBM con `class_weight="balanced"` predice 0,314 de media. La
+  diferencia entre "este auto tiene 13% de riesgo" y un score ordinal es la diferencia
+  entre poder priorizar un taller y no.
+- **Estabilidad.** ±22 km de anticipación entre repeticiones contra ±2.237 km del
+  control. El control cambia 5.400 km de anticipación según qué folds le toquen: su
+  "12.322 km" del R=1 era el sorteo.
+- **Eje de vehículo.** Lift 1,616 contra 1,494.
+
+**La recomendación que queda escrita: el finalista se elige por (a′) y por estabilidad,
+no por PR-AUC por fila.** El motivo está en §1 — un PR-AUC por fila por debajo de 0,2627
+no demuestra anticipación, así que ordenar candidatos por él es ordenarlos por cuán bien
+identifican la cohorte de muestreo. Pendiente antes de fijarlo: la auditoría (b) le
+marca atajo (+0,0230 de ROC al darle las `aux_` de calendario, por encima del umbral de
+0,02; el control da +0,0171 y no marca).
+
+Un número que no hay que sobreleer: el ordinal extendido re-corrido contra el panel
+`2026-09-20` da (a′) **+0,0118**, el único positivo fuera de survival stacking. Está
+medido con **R=1 y nada más**, así que no es comparable con el +0,0162 ± 0,0033
+confirmado con R=3: queda como pista sin medir, no como resultado.
+
+### 5 · Dos trampas de exposición, opuestas, con la misma raíz
+
+Las dos ya aparecieron disfrazadas de señal fuerte, en direcciones contrarias, y van a
+volver porque la raíz —cuánto historial hay por vehículo— no se arregló:
+
+- **En los crudos, el evento corta el historial del fallado.** Span mediano **7.439 km**
+  contra **15.508 km** de los sanos. Produjo un AUC de **0,694** en la pendiente de la
+  distancia entre regeneraciones que, al igualar la ventana de odómetro, cae a
+  **0,564**: medía cuánto duró el registro. Apuntaba además al revés que la hipótesis.
+- **En el panel, el emparejado ralea al sano.** Los fallados conservan todos sus cortes
+  (**18,25** por bolsa, span medio 9.302 km) y a los sanos el emparejado por odómetro ×
+  mes les deja solo los que llenan cada celda (**9,00** por bolsa, span medio 7.763 km;
+  1.241 filas sanas de 7.308). El tamaño de bolsa **solo**, como score, da lift 1,79×.
+  Produjo el lift **1,83×** de `noisy_or`, que pierde contra un nulo que conserva los
+  tamaños de bolsa.
+
+**La regla que sale de esto: toda métrica que dependa del tamaño de la bolsa o de la
+longitud del historial se compara contra un nulo que conserve esa magnitud, nunca contra
+la tasa base.** `scripts/audit_mil_bagsize.py` es la implementación para el eje de
+vehículo; `mean` es la única agregación insensible al tamaño (corr. de rango con
+`n_cuts` = 0,04, contra 0,85 de `noisy_or`), y por eso es la que se reporta.
+
+### 6 · Gamma: descartado con motivo físico, no por no funcionar
+
+No hay **carga irreversible medible en esta flota**, que es la premisa que el proceso
+gamma necesita. La monotonía aparente es el asentamiento de los primeros ~1.000 km:
+ρ(nivel, odómetro) **+0,457** en 0–6.000 km, pero **−0,036** en 1.000–8.000 y **−0,009**
+en 4.000–16.000 (45–47% de vehículos con ρ > 0, que es lo que da una moneda). El proxy
+directo de ceniza —el residuo con el que termina la regeneración— no muestra nada
+(ρ mediano **+0,013**, p = 0,52) y tiene un problema de resolución: **el 51% de las
+14.695 regeneraciones termina en 0 exacto**.
+
+La razón de fondo es de escala de tiempo, y por eso el resultado no depende del modelo:
+la ceniza en un DPF es un fenómeno de **>100.000 km**, y acá el evento cae a una
+**mediana de 7.987 km**, con **7 vehículos de 290** pasando los 50.000. La rama paró en
+el paso de verificación de la premisa, a propósito, y no se escribió el modelo.
+
+**Pregunta abierta, y no la contesta esta entrada: qué es el evento a 8.000 km si no es
+ceniza.** Condiciona si falta una familia de features entera. La auditoría
+(`scripts/audit_gamma_monotonia.py`) es ejecutable y su criterio de veredicto está
+declarado en el YAML, así que una extracción con vehículos más viejos —o con
+contrapresión diferencial del filtro, que mide la capacidad perdida directo— vuelve a
+contestar la pregunta sin rehacer nada.
+
+### 7 · Costo: el modelo paga a ~7×, y es reporte, nunca criterio
+
+El barrido de `C_FN/C_FP` tiene su pico en **7×** en las tres corridas medidas, y ese 7
+no es empírico: es la aritmética. Con `p = 0,125`, alertar siempre le gana a no alertar
+nunca en cuanto `C_FN/C_FP > (1−p)/p = 0,875/0,125 = 7`. Por encima de ahí **"revisar
+todo" gana sin importar el modelo**, así que la matriz 20–50× de SCANIA es degenerada en
+este panel: deja **1,4–1,8%** de ahorro. El ahorro máximo es **~14% en el pico**
+(14,6% / 14,1% / 13,7%) y se desarma rápido: 1,7–3,5% a 10×.
+
+**Frase para el pitch:** el modelo paga cuando una degradación no detectada cuesta unas
+**7× una inspección innecesaria**. Es reporte, y **nunca** criterio de selección: el
+punto de quiebre lo fija la tasa base, no el modelo.
+
+### Qué queda abierto
+
+1. **La formulación intra-vehículo**, que §2 y §3 vuelven urgente: features medidas como
+   **desvío respecto de la historia previa del mismo vehículo** —la pista que ya había
+   dejado TimesFM y que el panel v1 no tiene— y un target entrenado **solo sobre los
+   vehículos que fallan**, que aísla el horizonte de la cohorte en vez de mezclarlos.
+2. **Reemparejar el panel a nivel vehículo** para que las bolsas sean simétricas (§5).
+   Es Track A.
+3. **Qué es el evento a 8.000 km** (§6).
+4. **La auditoría (b) de survival stacking** antes de fijarlo como final (§4).
+
+Lo que **no** queda pendiente: afinar bins ordinales (las dos variantes acotan el rango y
+ninguna mueve la aguja, en ninguno de los dos builds del panel), el efecto aleatorio por
+vehículo (GPBoost queda 0,018 de PR-AUC por debajo del apilado simple) y el proceso gamma.
+
+**Detalle por rama:** [f3-survival-stacking.md](f3-survival-stacking.md) ·
+[f3-ordinal-horizonte.md](f3-ordinal-horizonte.md) ·
+[f3-proceso-gamma.md](f3-proceso-gamma.md) ·
+[f3-mil-agregacion-vehiculo.md](f3-mil-agregacion-vehiculo.md) ·
+[f3-timesfm-zeroshot.md](f3-timesfm-zeroshot.md) ·
+[f3-cnn-lstm-tutora.md](f3-cnn-lstm-tutora.md).
+
+**Cómo se reproduce:**
+
+```bash
+# el techo de cohorte, (a') y el barrido de costo salen de cualquier corrida
+python scripts/train.py --config configs/exp_lgbm_panel_v1_mil.yaml
+python scripts/audit_model.py --config configs/exp_survival_stacking.yaml   # (a0) y (a')
+python scripts/audit_ordinal_horizon.py --config configs/exp_lgbm_panel_v1.yaml  # los dos nulos
+python scripts/audit_mil_bagsize.py f3-lgbm-panel-v1-mil                    # el nulo de tamaño de bolsa
+python scripts/audit_gamma_monotonia.py --config configs/data/gamma_monotonia.yaml
+python scripts/results.py table --out results/README.md                     # la tabla, con el build de cada corrida
+```
+
+Las corridas contra el panel `2026-09-20` necesitan
+`FORD_DATA_DIR=<dir con el panel reconstruido>`; sin red, `WANDB_MODE=disabled`.
+
+---
+
 ## 2026-09-20 · El piso no es la tasa base: es el techo de cohorte (0,2627). PROPUESTA para todo el proyecto
 
 **Código:** `src/eval/metrics.py::cohort_ceiling / pr_auc_within_failed /

@@ -42,7 +42,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-survival-stacking.md](f3-survival-stacking.md) | Supervivencia en tiempo discreto sobre el panel: empata en PR-AUC pero calibrado y con el doble de detección; por qué el efecto aleatorio por vehículo no paga; y por qué la auditoría (a) de §0.4 no es un null en este panel |
 | [f3-proceso-gamma.md](f3-proceso-gamma.md) | Proceso gamma de degradación: por qué no se implementó — no hay carga irreversible medible a estos kilometrajes |
 | [f3-ordinal-horizonte.md](f3-ordinal-horizonte.md) | Target ordinal: dos variantes de bins (la restringida no aporta información), el costo como barrido de C_FN/C_FP y la permutación intra-vehículo que ningún modelo del repo supera |
-| [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
+| [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué. **Su primera entrada cierra F3**: el techo de cohorte, por qué el PR-AUC por fila mide *qué auto* y no *cuándo*, y por qué el finalista se elige por (a′) y estabilidad |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 
 ## Cómo se reproduce todo esto
@@ -58,6 +58,7 @@ python scripts/train.py --config configs/exp_baserate.yaml            # piso con
 python scripts/train.py --config configs/exp_lgbm_panel_v1_mil.yaml    # el mismo modelo, medido por vehículo
 python scripts/audit_mil_bagsize.py f3-lgbm-panel-v1-mil              # ¿el lift por vehículo es señal o tamaño de bolsa?
 python scripts/audit_model.py --config configs/exp_<x>.yaml           # las auditorías obligatorias de F3 §0.4
+python scripts/audit_ordinal_horizon.py --config configs/exp_<x>.yaml  # los dos nulos: global e intra-vehículo
 python scripts/audit_gamma_monotonia.py --config configs/data/gamma_monotonia.yaml  # ¿hay carga irreversible? (paso 1 del proceso gamma)
 python scripts/check_setup.py      # chequeos del harness
 ```
