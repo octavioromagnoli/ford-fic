@@ -1,41 +1,41 @@
-run: f3-ordinal-horizon
+run: f3-ordinal-horizon-ext
 logged_on: '2026-09-20'
-note: 'Target ordinal 5 clases con bins RESTRINGIDOS a [G, G+H] = [500, 3500]. Defecto
-  de diseño: ese intervalo es exactamente el que ya era label=1, así que clase>0 <=>
-  label==1 y el target no aporta nada sobre las 1.775 filas negativas (87% del panel).
-  Mide el costo de varianza de partir 254 positivas en cuatro baldes de ~60 sin el
-  beneficio de información: PR-AUC 0.152 < control 0.165 y Brier 0.207 > 0.173. Se
-  conserva como evidencia; la variante corregida es f3-ordinal-horizon-ext. Costo
-  OOF 18.872 con la matriz de SCANIA, que resultó degenerada a esta tasa base (el
-  barrido de C_FN/C_FP la reemplaza). Corrida local con WANDB_MODE=disabled.'
+note: 'Target ordinal con bins EXTENDIDOS más allá de G+H (2.000/3.500/6.000/10.000
+  km), la formulación de SCANIA donde la clase 0 es ''lejos del fallo'' y no ''sano'':
+  394 filas que hoy son label=0 pero vienen de vehículos que fallan pasan a las clases
+  intermedias. Por fila PR-AUC 0.157 (bins restringidos 0.152, control 0.165) y el
+  mejor Brier de las tres (0.152 vs 0.173 del control); por vehículo con mean el lift
+  BAJA a 1.31x (control 1.51x). No gana en ninguno de los dos ejes. Lo que deja: el
+  barrido de costo (paga a C_FN/C_FP ~7x, 14% de ahorro) y la auditoría de permutación
+  intra-vehículo, que dice que ni este modelo ni el control binario le ganan a su
+  propio nulo de cohorte. Corrida local con WANDB_MODE=disabled.'
 source:
-  config_path: configs/exp_ordinal_horizon.yaml
+  config_path: configs/exp_ordinal_horizon_ext.yaml
   config_versioned: true
   branch: exp/ordinal-horizon
   commit: cb35d65
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm_ordinal
-  pr_auc: 0.15242324253379358
-  pr_auc_lo: 0.15145870570157485
-  pr_auc_hi: 0.20409370270707167
+  pr_auc: 0.156741202964082
+  pr_auc_lo: 0.1416529606630248
+  pr_auc_hi: 0.2540226245109259
   base_rate: 0.1251848201084278
-  lift: 1.217585665752233
-  roc_auc: 0.5778950870577798
-  brier: 0.20655329493164468
-  detection_rate: 0.09433962264150944
-  median_lead_km: 10408.0
+  lift: 1.2520783496618992
+  roc_auc: 0.5785050460241765
+  brier: 0.1518665964693672
+  detection_rate: 0.07547169811320754
+  median_lead_km: 12322.470813159141
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel.parquet
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
-  cost_per_1000: 9301.13356333169
+  cost_per_1000: null
   cost_best_ratio: 7.0
-  cost_best_savings_frac: 0.14140845070422536
-  cost_matrix: '[[0, 7, 8, 9, 10], [200, 0, 7, 8, 9], [300, 200, 0, 7, 8], [400, 300,
-    200, 0, 7], [500, 400, 300, 200, 0]]'
+  cost_best_savings_frac: 0.13746478873239437
+  cost_matrix: null
 config:
-  name: f3-ordinal-horizon
+  name: f3-ordinal-horizon-ext
   seed: 42
   data:
     panel: ${DATA_DIR}/processed/panel.parquet
@@ -55,10 +55,10 @@ config:
     name: ordinal_horizon
     params:
       bins_km:
-      - 1250
       - 2000
-      - 2750
       - 3500
+      - 6000
+      - 10000
       score_max_tte_km: 3500
   model:
     name: lgbm_ordinal
@@ -88,32 +88,8 @@ config:
     - 20
     - 50
     cost_fp: 1.0
-    cost_matrix:
-    - - 0
-      - 7
-      - 8
-      - 9
-      - 10
-    - - 200
-      - 0
-      - 7
-      - 8
-      - 9
-    - - 300
-      - 200
-      - 0
-      - 7
-      - 8
-    - - 400
-      - 300
-      - 200
-      - 0
-      - 7
-    - - 500
-      - 400
-      - 300
-      - 200
-      - 0
+    vehicle_aggregation:
+    - mean
   wandb:
     enabled: true
     project: ford-fic
@@ -125,8 +101,9 @@ config:
     - lgbm
     - ordinal
     - multi-horizon
+    - extended-bins
     - panel-v1
     mode: online
     log_artifacts: false
   output_dir: experiments
-  _config_path: configs/exp_ordinal_horizon.yaml
+  _config_path: configs/exp_ordinal_horizon_ext.yaml

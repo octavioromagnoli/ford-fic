@@ -4,28 +4,30 @@ Generado por `python scripts/results.py table`; no editar a mano (las notas vive
 PR-AUC out-of-fold. Solo son comparables las corridas con la misma tasa base (mismas filas), splits y presupuesto de falsas alarmas:
 un PR-AUC más bajo con otra tasa base puede ser un lift mayor. Las corridas `timesfm3` (zero-shot) no producen estas métricas.
 
-| Corrida | Modelo | Panel | Tasa base | PR-AUC [IC fold] | Lift | Detección | Anticip. mediana | Config | Nota |
-|---|---|---|---|---|---|---|---|---|---|
-| `f3-lgbm-timesfm` | lgbm | panel_timesfm.parquet | 0.125 | 0.170 [0.168, 0.244] | 1.36× | 13% | 4,802 km | `configs/exp_lgbm_timesfm.yaml` ⚠ |  |
-| `f3-lgbm-timesfm-r3` | lgbm | panel_timesfm.parquet | 0.125 | 0.169 [0.175, 0.219] | 1.35× | 9% | 11,906 km | `data/v364/cfg/exp_lgbm_timesfm_r3.yaml` ⚠ |  |
-| `f3-lgbm-panel-v1-mil` | lgbm | panel.parquet | 0.125 | 0.165 [0.173, 0.221] | 1.32× | 9% | 10,408 km | `configs/exp_lgbm_panel_v1_mil.yaml` | Mismo LightGBM y mismos folds que f3-lgbm-panel-v1: lo único que cambia es el eje de evaluación (agregación a nivel vehículo, MIL). Por vehículo el lift sube a 1,51x con `mean` (vs 1,32x por fila) y la detección a 15% (vs 9,4%) con el mismo presupuesto de falsas alarmas. `max`, `topk` y `noisy_or` dan más lift pero no le ganan a su propio nulo de permutación: es el tamaño de la bolsa (los que fallan conservan todos sus cortes, los sanos solo los emparejados). Detalle y evidencia: docs/memoria/f3-mil-agregacion-vehiculo.md. |
-| `f3-lgbm-panel-v1` | lgbm | panel.parquet | 0.125 | 0.165 [0.173, 0.221] | 1.32× | 9% | 10,408 km | `configs/exp_lgbm_panel_v1.yaml` ⚠ |  |
-| `f3-lgbm-panel-v1-r3` | lgbm | panel.parquet | 0.125 | 0.161 [0.169, 0.200] | 1.29× | 9% | 11,802 km | `data/v364/cfg/exp_lgbm_panel_v1_r3.yaml` ⚠ |  |
-| `f3-lgbm-thermal-debt` | lgbm | panel_thermal_debt.parquet | 0.125 | 0.157 [0.158, 0.207] | 1.26× | 9% | 9,908 km | `configs/exp_lgbm_thermal_debt.yaml` ⚠ |  |
-| `f3-lgbm-thermal-debt-r3` | lgbm | panel_thermal_debt.parquet | 0.125 | 0.154 [0.157, 0.187] | 1.23× | 11% | 11,855 km | `data/v364/cfg/exp_lgbm_thermal_debt_r3.yaml` ⚠ |  |
-| `f3-cnn-lstm-tutora` | cnn_lstm | panel_seq_v1.parquet | 0.125 | 0.153 [0.144, 0.213] | 1.23× | 19% | 7,740 km | `configs/exp_cnn_lstm.yaml` | Baseline de la tutora (Conv1D+LSTM, ~3.000 parámetros) sobre panel_seq_v1: mismas filas y folds que el panel v1. Queda 0,012 de PR-AUC por debajo del LightGBM con la misma tasa base; detecta más (19% vs 9%) pero con menos anticipación. No lo reemplaza: 53 eventos no alcanzan para una red. |
-| `f3-baserate-panel-v1` | baserate | panel.parquet | 0.125 | 0.121 [0.120, 0.130] | 0.97× | 0% | — | `configs/exp_baserate.yaml` |  |
-| `f3-lgbm-tfm-full` | lgbm | panel_tfm_full.parquet | 0.025 | 0.098 [0.080, 0.161] | 3.89× | 38% | 6,704 km | `configs/exp_lgbm_tfm_full.yaml` ⚠ |  |
-| `f3-lgbm-tfm-window` | lgbm | panel_tfm_window.parquet | 0.025 | 0.093 [0.091, 0.167] | 3.69× | 37% | 9,182 km | `configs/exp_lgbm_tfm_window.yaml` ⚠ |  |
-| `f3-lgbm-tfm-full-nostatic` | lgbm | panel_tfm_full_nostatic.parquet | 0.025 | 0.034 [0.032, 0.044] | 1.34× | 8% | 14,937 km | `configs/exp_lgbm_tfm_full_nostatic.yaml` ⚠ |  |
-| `f3-lgbm-tfm-window-nostatic` | lgbm | panel_tfm_window_nostatic.parquet | 0.025 | 0.030 [0.032, 0.046] | 1.20× | 8% | 8,097 km | `configs/exp_lgbm_tfm_window_nostatic.yaml` ⚠ |  |
-| `f0-dummy-baserate` | baserate | panel_dummy.parquet | 0.021 | 0.021 [0.021, 0.021] | 0.99× | 0% | — | `configs/exp_dummy.yaml` |  |
-| `f3-timesfm3-zeroshot-accumulation-local` | timesfm3 | — | — | — [—, —] | —× | — | — | `configs/exp_timesfm3_zeroshot_accumulation.yaml` ⚠ |  |
-| `f3-timesfm3-zeroshot-accumulation` | timesfm3 | — | — | — [—, —] | —× | — | — | `configs/exp_timesfm3_zeroshot_accumulation.yaml` ⚠ |  |
-| `f3-timesfm3-zeroshot-badmsg-local` | timesfm3 | — | — | — [—, —] | —× | — | — | `configs/exp_timesfm3_zeroshot_badmsg.yaml` ⚠ |  |
-| `f3-timesfm3-zeroshot-badmsg` | timesfm3 | — | — | — [—, —] | —× | — | — | `configs/exp_timesfm3_zeroshot_badmsg.yaml` ⚠ |  |
-| `f3-timesfm3-zeroshot-regen-local` | timesfm3 | — | — | — [—, —] | —× | — | — | `configs/exp_timesfm3_zeroshot.yaml` ⚠ |  |
-| `f3-timesfm3-zeroshot-regen` | timesfm3 | — | — | — [—, —] | —× | — | — | `configs/exp_timesfm3_zeroshot.yaml` ⚠ |  |
+| Corrida | Modelo | Panel | Tasa base | PR-AUC [IC fold] | Lift | Ahorro máx. | Detección | Anticip. mediana | Config | Nota |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `f3-lgbm-timesfm` | lgbm | panel_timesfm.parquet | 0.125 | 0.170 [0.168, 0.244] | 1.36× | — | 13% | 4,802 km | `configs/exp_lgbm_timesfm.yaml` ⚠ |  |
+| `f3-lgbm-timesfm-r3` | lgbm | panel_timesfm.parquet | 0.125 | 0.169 [0.175, 0.219] | 1.35× | — | 9% | 11,906 km | `data/v364/cfg/exp_lgbm_timesfm_r3.yaml` ⚠ |  |
+| `f3-lgbm-panel-v1-mil` | lgbm | panel.parquet | 0.125 | 0.165 [0.173, 0.221] | 1.32× | 14.6% @7× | 9% | 10,408 km | `configs/exp_lgbm_panel_v1_mil.yaml` | Mismo LightGBM y mismos folds que f3-lgbm-panel-v1: lo único que cambia es el eje de evaluación (agregación a nivel vehículo, MIL). Por vehículo el lift sube a 1,51x con `mean` (vs 1,32x por fila) y la detección a 15% (vs 9,4%) con el mismo presupuesto de falsas alarmas. `max`, `topk` y `noisy_or` dan más lift pero no le ganan a su propio nulo de permutación: es el tamaño de la bolsa (los que fallan conservan todos sus cortes, los sanos solo los emparejados). Detalle: docs/memoria/f3-mil-agregacion-vehiculo.md. Reanotada al agregarle el barrido de costo: paga a C_FN/C_FP ~7x (14,6% de ahorro sobre revisar todo) y por encima de 10x ahorra menos del 3%. |
+| `f3-lgbm-panel-v1` | lgbm | panel.parquet | 0.125 | 0.165 [0.173, 0.221] | 1.32× | — | 9% | 10,408 km | `configs/exp_lgbm_panel_v1.yaml` ⚠ |  |
+| `f3-lgbm-panel-v1-r3` | lgbm | panel.parquet | 0.125 | 0.161 [0.169, 0.200] | 1.29× | — | 9% | 11,802 km | `data/v364/cfg/exp_lgbm_panel_v1_r3.yaml` ⚠ |  |
+| `f3-lgbm-thermal-debt` | lgbm | panel_thermal_debt.parquet | 0.125 | 0.157 [0.158, 0.207] | 1.26× | — | 9% | 9,908 km | `configs/exp_lgbm_thermal_debt.yaml` ⚠ |  |
+| `f3-ordinal-horizon-ext` | lgbm_ordinal | panel.parquet | 0.125 | 0.157 [0.142, 0.254] | 1.25× | 13.7% @7× | 8% | 12,322 km | `configs/exp_ordinal_horizon_ext.yaml` | Target ordinal con bins EXTENDIDOS más allá de G+H (2.000/3.500/6.000/10.000 km), la formulación de SCANIA donde la clase 0 es 'lejos del fallo' y no 'sano': 394 filas que hoy son label=0 pero vienen de vehículos que fallan pasan a las clases intermedias. Por fila PR-AUC 0.157 (bins restringidos 0.152, control 0.165) y el mejor Brier de las tres (0.152 vs 0.173 del control); por vehículo con mean el lift BAJA a 1.31x (control 1.51x). No gana en ninguno de los dos ejes. Lo que deja: el barrido de costo (paga a C_FN/C_FP ~7x, 14% de ahorro) y la auditoría de permutación intra-vehículo, que dice que ni este modelo ni el control binario le ganan a su propio nulo de cohorte. Corrida local con WANDB_MODE=disabled. |
+| `f3-lgbm-thermal-debt-r3` | lgbm | panel_thermal_debt.parquet | 0.125 | 0.154 [0.157, 0.187] | 1.23× | — | 11% | 11,855 km | `data/v364/cfg/exp_lgbm_thermal_debt_r3.yaml` ⚠ |  |
+| `f3-cnn-lstm-tutora` | cnn_lstm | panel_seq_v1.parquet | 0.125 | 0.153 [0.144, 0.213] | 1.23× | — | 19% | 7,740 km | `configs/exp_cnn_lstm.yaml` | Baseline de la tutora (Conv1D+LSTM, ~3.000 parámetros) sobre panel_seq_v1: mismas filas y folds que el panel v1. Queda 0,012 de PR-AUC por debajo del LightGBM con la misma tasa base; detecta más (19% vs 9%) pero con menos anticipación. No lo reemplaza: 53 eventos no alcanzan para una red. |
+| `f3-ordinal-horizon` | lgbm_ordinal | panel.parquet | 0.125 | 0.152 [0.151, 0.204] | 1.22× | 14.1% @7× | 9% | 10,408 km | `configs/exp_ordinal_horizon.yaml` | Target ordinal 5 clases con bins RESTRINGIDOS a [G, G+H] = [500, 3500]. Defecto de diseño: ese intervalo es exactamente el que ya era label=1, así que clase>0 <=> label==1 y el target no aporta nada sobre las 1.775 filas negativas (87% del panel). Mide el costo de varianza de partir 254 positivas en cuatro baldes de ~60 sin el beneficio de información: PR-AUC 0.152 < control 0.165 y Brier 0.207 > 0.173. Se conserva como evidencia; la variante corregida es f3-ordinal-horizon-ext. Costo OOF 18.872 con la matriz de SCANIA, que resultó degenerada a esta tasa base (el barrido de C_FN/C_FP la reemplaza). Corrida local con WANDB_MODE=disabled. |
+| `f3-baserate-panel-v1` | baserate | panel.parquet | 0.125 | 0.121 [0.120, 0.130] | 0.97× | — | 0% | — | `configs/exp_baserate.yaml` |  |
+| `f3-lgbm-tfm-full` | lgbm | panel_tfm_full.parquet | 0.025 | 0.098 [0.080, 0.161] | 3.89× | — | 38% | 6,704 km | `configs/exp_lgbm_tfm_full.yaml` ⚠ |  |
+| `f3-lgbm-tfm-window` | lgbm | panel_tfm_window.parquet | 0.025 | 0.093 [0.091, 0.167] | 3.69× | — | 37% | 9,182 km | `configs/exp_lgbm_tfm_window.yaml` ⚠ |  |
+| `f3-lgbm-tfm-full-nostatic` | lgbm | panel_tfm_full_nostatic.parquet | 0.025 | 0.034 [0.032, 0.044] | 1.34× | — | 8% | 14,937 km | `configs/exp_lgbm_tfm_full_nostatic.yaml` ⚠ |  |
+| `f3-lgbm-tfm-window-nostatic` | lgbm | panel_tfm_window_nostatic.parquet | 0.025 | 0.030 [0.032, 0.046] | 1.20× | — | 8% | 8,097 km | `configs/exp_lgbm_tfm_window_nostatic.yaml` ⚠ |  |
+| `f0-dummy-baserate` | baserate | panel_dummy.parquet | 0.021 | 0.021 [0.021, 0.021] | 0.99× | — | 0% | — | `configs/exp_dummy.yaml` |  |
+| `f3-timesfm3-zeroshot-accumulation-local` | timesfm3 | — | — | — [—, —] | —× | — | — | — | `configs/exp_timesfm3_zeroshot_accumulation.yaml` ⚠ |  |
+| `f3-timesfm3-zeroshot-accumulation` | timesfm3 | — | — | — [—, —] | —× | — | — | — | `configs/exp_timesfm3_zeroshot_accumulation.yaml` ⚠ |  |
+| `f3-timesfm3-zeroshot-badmsg-local` | timesfm3 | — | — | — [—, —] | —× | — | — | — | `configs/exp_timesfm3_zeroshot_badmsg.yaml` ⚠ |  |
+| `f3-timesfm3-zeroshot-badmsg` | timesfm3 | — | — | — [—, —] | —× | — | — | — | `configs/exp_timesfm3_zeroshot_badmsg.yaml` ⚠ |  |
+| `f3-timesfm3-zeroshot-regen-local` | timesfm3 | — | — | — [—, —] | —× | — | — | — | `configs/exp_timesfm3_zeroshot.yaml` ⚠ |  |
+| `f3-timesfm3-zeroshot-regen` | timesfm3 | — | — | — [—, —] | —× | — | — | — | `configs/exp_timesfm3_zeroshot.yaml` ⚠ |  |
 
 ⚠ = el YAML no estaba commiteado al anotar; la config completa está embebida en `results/<corrida>.yaml`
 (`python scripts/results.py show <corrida>` la imprime lista para guardarse como `configs/exp_*.yaml`).

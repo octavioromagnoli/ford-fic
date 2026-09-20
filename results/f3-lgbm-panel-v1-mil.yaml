@@ -5,13 +5,14 @@ note: 'Mismo LightGBM y mismos folds que f3-lgbm-panel-v1: lo único que cambia 
   a 1,51x con `mean` (vs 1,32x por fila) y la detección a 15% (vs 9,4%) con el mismo
   presupuesto de falsas alarmas. `max`, `topk` y `noisy_or` dan más lift pero no le
   ganan a su propio nulo de permutación: es el tamaño de la bolsa (los que fallan
-  conservan todos sus cortes, los sanos solo los emparejados). Detalle y evidencia:
-  docs/memoria/f3-mil-agregacion-vehiculo.md.'
+  conservan todos sus cortes, los sanos solo los emparejados). Detalle: docs/memoria/f3-mil-agregacion-vehiculo.md.
+  Reanotada al agregarle el barrido de costo: paga a C_FN/C_FP ~7x (14,6% de ahorro
+  sobre revisar todo) y por encima de 10x ahorra menos del 3%.'
 source:
   config_path: configs/exp_lgbm_panel_v1_mil.yaml
   config_versioned: true
-  branch: exp/mil-vehicle-aggregation
-  commit: 1931a05
+  branch: exp/ordinal-horizon
+  commit: cb35d65
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm
@@ -28,6 +29,10 @@ summary:
   panel: ${DATA_DIR}/processed/panel.parquet
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: 7.0
+  cost_best_savings_frac: 0.14591549295774647
+  cost_matrix: null
 config:
   name: f3-lgbm-panel-v1-mil
   seed: 42
@@ -59,6 +64,15 @@ config:
     - topk
     - noisy_or
     vehicle_topk: 3
+    cost_ratios:
+    - 2
+    - 3
+    - 5
+    - 7
+    - 10
+    - 20
+    - 50
+    cost_fp: 1.0
   wandb:
     enabled: true
     project: ford-fic
