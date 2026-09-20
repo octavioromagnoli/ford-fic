@@ -5,6 +5,27 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-20 · El target ordinal queda como reporte, no reemplaza al binario
+
+**Qué.** Cinco clases: 0 sano/no inminente y cuatro buckets equidistantes dentro de
+500–3.500 km. LightGBM multiclase devuelve el score comparable como `P(clase >= 1)`;
+la matriz asimétrica de SCANIA se reporta aparte y PR-AUC OOF contra `label` sigue
+siendo la selección.
+
+**Por qué esos bins.** `[1250, 2000, 2750, 3500]` deja 55/63/68/68 filas positivas
+y 38/43/46/47 vehículos: cinco clases totales sin bajar de 9 filas por bucket en
+ningún fold de validación.
+
+**Resultado.** PR-AUC 0,152 (lift 1,22×), por debajo del control binario 0,165 y con
+IC por fold solapados. Costo OOF 18.872: mejora mucho contra nunca alertar (91.100),
+pero apenas contra alertar siempre en clase 4 (19.225), consecuencia directa de que
+un falso negativo cuesta 200–500 y un falso positivo 7–10. No entra como ganador; queda
+la infraestructura genérica de targets y el costo como lenguaje operativo.
+
+**Detalle:** [f3-ordinal-horizonte.md](f3-ordinal-horizonte.md).
+
+---
+
 ## 2026-09-20 · La decisión se mide por vehículo con `mean`, y siempre como lift
 
 **Código:** `src/eval/metrics.py::vehicle_scores/vehicle_metrics`, bloque
