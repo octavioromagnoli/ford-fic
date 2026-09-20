@@ -79,6 +79,22 @@ Que tres caminos distintos —cambiar la unidad de decisión, colapsar el score 
 reentrenar, y destruir el timing conservando la cohorte— den la misma respuesta es **la
 evidencia más fuerte que tiene el proyecto**. No es un artefacto de una métrica.
 
+**Ojo con el (a′) del control, que cambia de signo con el build del panel.** Corrido
+sobre el `2026-09-19` da **+0,0065** (y `scripts/audit_model.py` lo marca APROBADA);
+sobre el `2026-09-20`, **−0,0067** con R=1 y **−0,0055 ± 0,0040** con R=3. No es una
+contradicción: es la medida de cuán chico es el efecto —±0,007 alrededor de cero,
+sensible a 7 columnas de regeneración— y la razón de que **(a′) se declare con CV
+repetida y no con una pasada**. El número que vale es el de R=3 sobre el panel
+corregido. Vale también como aviso: si alguien corre la auditoría en un checkout cuyo
+`panel.parquet` es el viejo, va a ver un veredicto distinto al de esta entrada, y el
+build es lo primero que hay que mirar.
+
+Las tres patas tampoco están medidas sobre el mismo build, y conviene saber cuál es
+cuál: **MIL aguanta en los dos** (1,32 → 1,51 en el `2026-09-19` y 1,29 → 1,54 en el
+`2026-09-20`), el **nulo intra-vehículo está medido solo sobre el `2026-09-19`** y el
+**(a′) del control, sobre el `2026-09-20` con R=3**. Las tres apuntan al mismo lado, y
+de las tres la única que un cambio de build podría dar vuelta es la del medio.
+
 ### 4 · La excepción, y es el finalista: survival stacking
 
 Es el **único modelo del repo cuyo "cuándo" es positivo y sobrevive a R=3** (todo lo de
