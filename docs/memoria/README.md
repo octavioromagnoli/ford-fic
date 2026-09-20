@@ -37,6 +37,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-cadencia-y-ventana.md](f3-cadencia-y-ventana.md) | Por qué la ventana es de km y la cadencia puede ser quincenal (no son lo mismo) |
 | [f3-posicion-en-la-serie.md](f3-posicion-en-la-serie.md) | **La posición del corte en su serie separa con P = 0,83**: el atajo que hereda cualquier feature acumulativa |
 | [f3-secuencia-zself-cusum.md](f3-secuencia-zself-cusum.md) | `_zself` + CUSUM: se construyó, se midió y no da. Qué quedó y qué no queda descartado |
+| [f3-evento-ficticio-y-ventana-de-riesgo.md](f3-evento-ficticio-y-ventana-de-riesgo.md) | **El atajo de posición, cerrado**: evento ficticio + ventana de riesgo bajan P de 0,84 a 0,49 y el modelo sube a ROC 0,703. Y la ablación fina: el leakage eran las estáticas, no el calendario |
 | [f3-emparejado-posicion-vs-calendario.md](f3-emparejado-posicion-vs-calendario.md) | **Posición y calendario no se pueden emparejar a la vez** (es estructural, no de resolución), y la ablación muestra que el calendario da ROC 0,92 donde no se lo empareja. La solución es el evento ficticio |
 | [f3-primer-modelo-y-emparejado-por-posicion.md](f3-primer-modelo-y-emparejado-por-posicion.md) | **El primer modelo real (PR-AUC 1,44× la tasa base, ROC 0,62) y por qué el multivariado no le gana al univariado.** Y qué pasa al emparejar los sanos también por posición: la señal sobrevive, el atajo no se cierra |
 | [f3-barrido-de-relaciones.md](f3-barrido-de-relaciones.md) | **El barrido de los 7.310 cocientes y su nulo: nada pasa la barra del azar.** Las rarezas (reloj, viaje anterior, forma del reparto) tampoco. Por qué la ingeniería de features tocó techo |
@@ -58,7 +59,8 @@ python scripts/log_panel_artifact.py --config configs/data/panel_v1.yaml  # publ
 python scripts/train.py --config configs/exp_baserate.yaml            # piso contra el panel real
 python scripts/train.py --config configs/exp_logistic_l1.yaml         # el mejor modelo de F3 (y exp_{logistic,gbm,lgbm}.yaml)
 python scripts/build_dataset.py --config configs/data/panel_posmatch.yaml  # sanos emparejados TAMBIÉN por posición en la serie
-python scripts/train.py --config configs/exp_l1_v1_auxcal.yaml        # ablación de calendario: chequeo obligatorio de todo panel nuevo
+python scripts/build_dataset.py --config configs/data/panel_pseudo.yaml   # evento ficticio + ventana de riesgo: el panel sin atajo de posición
+python scripts/train.py --config configs/exp_l1_v1_abl_static.yaml   # ablación POR FAMILIA (la gruesa detecta, la fina dice cuál)
 python scripts/compare.py                                             # tabla comparativa de corridas
 python scripts/build_dataset.py --config configs/data/panel_v2.yaml   # el mismo panel + las 16 candidatas físicas de F3 (medidas, negativas)
 python scripts/audit_sequence.py --panel data/processed/panel.parquet  # atajo de posición + features de secuencia

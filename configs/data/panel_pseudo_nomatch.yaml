@@ -1,0 +1,171 @@
+# Panel con EVENTO FICTICIO para los sanos (F3). Es el v1 —mismas features, misma
+# terna, mismo emparejado por odómetro y mes— más una cosa: a cada sano se le sortea
+# un punto de la distribución de odómetros de evento de los positivos y se le corta la
+# serie ahí, igual que a un positivo. Así 'el final de la serie' significa lo mismo en
+# los dos grupos por construcción, que es la causa del atajo de posición
+# (docs/memoria/f3-emparejado-posicion-vs-calendario.md §4).
+#
+#   python scripts/build_dataset.py --config configs/data/panel_pseudo.yaml
+#
+# Los valores de W, G, H y Δ salen de la factibilidad medida sobre dev
+# (`python scripts/eda_gaps.py`, bloque 1) y del perfil alineado al evento; el
+# porqué de cada uno está en docs/memoria/decisiones.md (2026-09-18) y en
+# docs/memoria/f2-eda-revision-y-features.md. Para probar otra terna se escribe
+# otro YAML (regla 7), no se edita este.
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml   # 13 vehículos duplicados bajo dos códigos (F1)
+
+# Universo + holdout congelado. El panel se construye con los 364 del universo (dev +
+# test); los 717 excluidos no entran. `dev_vehicles` es además la referencia para
+# estimar el origen del calendario y la distribución de cortes de los sanos: el test
+# no se mira ni en agregado.
+test_split: ${DATA_DIR}/processed/test_split.json
+
+axis: odometer            # eje por defecto (plan §0.3). El evento se traduce a km con el anclaje de F1.
+
+label:
+  window_km: 1000         # W · ventana móvil hacia atrás sobre la que se agregan las features
+  gap_km: 500             # G · blanking. Sin esto el modelo detecta en vez de anticipar
+  horizon_km: 3000        # H · el evento cuenta si cae en [corte+G, corte+G+H]
+  cut_step_km: 500        # Δ · cada cuántos km se genera un punto de corte (grilla de múltiplos)
+  # Sanos: un corte solo es un negativo verificable si el vehículo se observó hasta
+  # corte+G+H. `drop` los descarta; `keep_as_negative` los deja como 0 asumiendo que
+  # no hubo evento (más filas, etiqueta con ruido).
+  censored_policy: drop
+  # Control de calidad de la ventana: filas con menos viajes, o que cubren menos de
+  # esta fracción de W en km recorridos, se descartan (huecos de registro).
+  min_trips_in_window: 5
+  min_km_covered_frac: 0.5
+  # Solo la ventana de riesgo: los H/Δ cortes previos al evento (real o ficticio).
+  # Sin esto, el evento ficticio arregla dónde TERMINA la serie del sano pero no el
+  # problema de fondo —que dentro de un vehículo la etiqueta ES la posición—, y el
+  # atajo sigue en P = 0,88. Con esto, los dos grupos aportan los mismos cortes
+  # relativos. El precio son los negativos tempranos de los vehículos con evento.
+  window_only: true
+
+# Features de secuencia: cada corte contra los cortes ANTERIORES del mismo vehículo
+# (`src/features/sequence.py`). Se calculan entre el armado del panel y el emparejado,
+# porque la serie del vehículo tiene que estar completa.
+#
+# Por qué están: el EDA mostró que la señal es progresiva (`idle_frac` pasa de P = 0,58
+# a 0,74 a medida que el corte se acerca al evento) y que las features que anticipan son
+# las de ICC bajo —las que varían DENTRO del vehículo, no entre vehículos—. Un modelo de
+# nivel confunde "vehículo urbano" con "vehículo que se está degradando".
+#
+# No necesitan fitearse por fold: el estadístico de referencia es el propio pasado del
+# vehículo, así que no hay nada compartido entre train y validación que pueda filtrar.
+sequence:
+  # APAGADA (19-09). Se construyó, se midió sobre dev y no se gana el lugar: el
+  # índice separa con P = 0,53 contra P = 0,59 del nivel del que sale, y el CUSUM
+  # hereda el atajo de posición en la serie (corr 0,37) que separa solo con P = 0,83.
+  # El módulo, los chequeos y el bloque quedan: poner  la reactiva.
+  # Detalle: docs/memoria/f3-secuencia-zself-cusum.md
+  enabled: false
+  # Cortes previos que hace falta tener para que el desvío signifique algo. Con 2, el
+  # desvío muestral es una diferencia disfrazada. Los cortes que no llegan salen NaN y
+  # los imputa el `Pipeline` de cada fold.
+  min_history: 3
+  # Holgura del CUSUM, en unidades de desvío del propio vehículo: cuánto se considera
+  # ruido y no se acumula. Con k = 0,5 un corte aislado a +0,3 no mueve nada y hacen
+  # falta ~4 cortes consecutivos a +0,75 para juntar 1,0 de evidencia.
+  k: 0.5
+  # Columnas a las que se les calcula `_zself`. Vacío = las del índice. Ampliarlo es
+  # barato en cómputo pero caro en grados de libertad: con 254 filas positivas, cada
+  # columna nueva es una comparación más que el modelo puede sobreajustar.
+  zself_columns: []
+  index:
+    # El peso es el SENTIDO físico, no una importancia aprendida: +1 en las que suben
+    # cuando el vehículo se degrada, −1 en las que bajan. Las cuatro salen del perfil
+    # alineado al evento (f2-eda-revision-y-features.md §3.2), que es el mismo criterio
+    # de la regla física de docs/f3-modelos-candidatos.md §1.1.
+    weights:
+      feat_idle_per_1000km: 1
+      feat_trips_below_regime_temp_frac: 1
+      feat_speed_kmh_mean: -1
+      feat_coolant_temp_end_mean: -1
+    # Un índice armado con una sola componente viva es esa feature, no un índice.
+    min_components: 2
+
+# Evento ficticio (asignación de fecha índice, la solución estándar del sesgo de
+# tiempo inmortal). `enabled: false` deja el panel exactamente como el v1.
+pseudo_event:
+  enabled: true
+  # Semilla propia: cambiar el sorteo de los eventos ficticios no tiene por qué
+  # mover los folds ni el muestreo de sanos.
+  seed: 42
+
+sampling:
+  # Los cortes de vehículos sanos se muestrean con la MISMA distribución que los
+  # positivos de dev (plan §9), sobre el odómetro Y sobre el mes del corte: los 60
+  # eventos de dev caen entre sep-2025 y mar-2026 mientras la exposición sana se
+  # concentra en 2026, así que emparejar solo por odómetro deja el calendario como
+  # atajo (ver `Regenerations`, que se corta el 25-05-2026). Se conserva el mayor
+  # subconjunto de filas sanas que reproduce esa distribución conjunta.
+  # Celdas de 4.000 km × mes y hasta un 25% de déficit: con celdas más finas (2.000 km
+  # × mes, 10%) quedan 682 filas sanas de 7.308; con odómetro solo quedan 4.916 pero la
+  # distribución de meses no se parece en nada (distancia TV 0,57) y el atajo sigue abierto.
+  match_healthy_cut_distribution: false
+  match_on: [cut_odo, cut_date]
+  odo_bin_km: 4000
+  date_freq: M
+  max_shortfall: 0.25
+
+features:
+  spec: configs/data/features_v1.yaml
+  # Familias del plan §4. Cada entrada del spec se traduce a una columna feat_* con
+  # la primitiva de src/features/windows.py: (columna derivada, agregador).
+  enabled_families: [A_thermal, B_regeneration, C_usage, D_severity]
+
+  # Estáticas que SÍ entran como `static_*`.
+  #   - SalesCountry_cd: dos mercados (CNTRY_3/CNTRY_4) que miden parecido pero con
+  #     distinto nivel; el modelo necesita verlo para no confundir nivel con síntoma.
+  static_columns: [SalesCountry_cd]
+
+  # Fuera del set base (quedan en el panel como `aux_static_*`, para ablaciones):
+  #   - Engine: ENG_3 es el 0% de los fallados y el 20% de los sanos de dev (F1).
+  #   - ModelSeries: el cruce Engine × ModelSeries es casi diagonal; MODEL_3 tiene 0
+  #     eventos de 24 y MODEL_4 2 de 91. Sacar Engine y dejar ModelSeries renombra el sesgo.
+  #   - ProductionDay: ρ = −0,435 con la etiqueta y −0,933 con span_days. Es la
+  #     ventana de observación (los producidos tarde no llegaron a fallar), no física.
+  #   - daysUntilSale: el mismo sesgo por otra vía. La fecha de venta
+  #     (ProductionDay + daysUntilSale) da ρ = −0,48 con la etiqueta y la tasa de
+  #     eventos por quintil va de 0,53 a 0,00: un vehículo vendido tarde no llegó a
+  #     acumular km antes del corte de los datos. Con W/G/H fijos, un modelo que la use
+  #     aprende cuándo se vendió el auto, no cómo se usa.
+  static_excluded: [Engine, ModelSeries, ProductionDay, daysUntilSale]
+
+splits:
+  n_splits: 5
+  seed: 42
+  # De qué columna sale la etiqueta con la que se estratifican los folds. `label` es
+  # la que mide el PR-AUC (¿el evento cae en el horizonte de ESTA fila?);
+  # `event_observed` dice si el vehículo falló alguna vez, que no es lo mismo.
+  # `level: vehicle` la colapsa con max por vehículo: ¿tiene al menos un corte
+  # positivo? Ver src/eval/splits.py::make_splits.
+  stratify:
+    column: label
+    level: vehicle
+  # Guarda dura: un fold con menos de estas filas label=1 en validación hace fallar
+  # el armado. Con menos, el PR-AUC del fold es ruido; con cero, NaN.
+  min_valid_positives: 5
+  # Repeticiones de la CV, cada una con otra semilla (seed + r*10000). 1 = CV simple.
+  # La repetición 0 siempre son los folds de `seed`, así que subir R no invalida lo
+  # ya corrido: lo complementa.
+  n_repeats: 1
+
+output:
+  panel: ${DATA_DIR}/processed/panel_pseudo_nomatch.parquet
+  splits: ${DATA_DIR}/processed/splits_pseudo_nomatch.json
+  meta: ${DATA_DIR}/processed/panel_pseudo_nomatch_meta.json
+
+# Publicación como wandb Artifacts (plan §4): `python scripts/log_panel_artifact.py`.
+# Mismo team y proyecto que las corridas (regla 9); `WANDB_ENTITY`/`WANDB_MODE` lo pisan.
+wandb:
+  project: ford-fic
+  entity: oromagnoli-
+  artifact: panel-pseudo            # tipo `dataset`: panel.parquet + splits.json + panel_meta.json + YAMLs
+  holdout_artifact: test-split  # tipo `holdout`: test_split.json
+  group: f3-panel
+  tags: [f3, panel-pseudo]

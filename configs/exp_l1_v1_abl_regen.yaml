@@ -1,0 +1,56 @@
+# CONTROL de la ablación de calendario: la misma corrida con `aux_`, pero contra el
+# panel v1, que SÍ empareja los sanos por mes. La comparación entre las dos dice
+# cuánto del calendario quedó abierto en cada emparejado.
+name: f3-l1-v1-ABL-regenmarker
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false    # los folds los deja scripts/build_dataset.py, sobre dev
+  strict: true
+  # Tiene que decir lo mismo que el splits.json congelado: los folds salen del
+  # archivo, así que si esto no coincide, train.py falla en vez de entrenar una
+  # corrida distinta de la que el YAML describe. Se regenera con
+  # `python scripts/make_splits.py --config configs/data/panel_v1.yaml`.
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5     # guarda dura: filas label=1 por fold en validación
+  n_repeats: 1               # CV repetida: R pasadas con semillas distintas
+  # Holdout dev/test congelado (regla 2): la CV corre solo sobre dev.
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+# ABLACIÓN de auditoría: le suma al modelo las columnas `aux_` —temperatura
+# ambiente, ProductionDay, daysUntilSale, el marcador Regenerations cortado en
+# 2026—, que están fuera del set base justamente porque miden el calendario. Si
+# el número SALTA, confirma que el calendario es explotable en este panel y que
+# emparejar por posición en vez de por mes salió caro. No es un modelo candidato.
+features:
+  extra_prefixes: [aux_regen_marker]
+model:
+  name: logistic_l1
+  params:
+    C: 0.05
+
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-modelos
+  job_type: train
+  tags: [f3, ablacion, panel-v1]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

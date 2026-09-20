@@ -55,6 +55,22 @@ class LabelConfig:
     censored_policy: str = "drop"          # "drop" | "keep_as_negative"
     min_trips_in_window: int = 5
     min_km_covered_frac: float = 0.5       # km recorridos en la ventana / W
+    # Conservar solo la ventana de riesgo de cada vehículo: los H/Δ cortes previos al
+    # evento (real o ficticio). Requiere `pseudo_event.enabled`, porque un sano sin
+    # evento ficticio no tiene ventana de riesgo que conservar.
+    #
+    # Por qué existe: dentro de un vehículo, **la etiqueta ES la posición** —las filas
+    # positivas son, por definición, los últimos H/Δ cortes de la serie—, así que la
+    # posición relativa separa sola con P = 0,83 y ninguna feature es comparable entre
+    # grupos. Cortarle la serie al sano en un evento ficticio (`assign_pseudo_events`)
+    # arregla dónde TERMINA la serie, pero no esto: el sano sigue aportando filas en
+    # todas las posiciones y el positivo solo en la última. Quedándose en los dos grupos
+    # con la misma ventana, los dos aportan cortes en el mismo tramo y la posición deja
+    # de decir de qué grupo es la fila.
+    #
+    # El precio: se pierden los negativos tempranos de los vehículos con evento (filas
+    # legítimas), y el panel queda como un caso-control emparejado a nivel ventana.
+    window_only: bool = False
 
     def __post_init__(self) -> None:
         for key in ("window_km", "gap_km", "horizon_km", "cut_step_km"):
@@ -63,15 +79,45 @@ class LabelConfig:
                 raise ValueError(f"label.{key} tiene que ser > 0 (vale {value}). F2 lo fija en panel_v1.yaml")
         if self.censored_policy not in {"drop", "keep_as_negative"}:
             raise ValueError(f"label.censored_policy desconocida: {self.censored_policy}")
+        if self.window_only and self.horizon_km < self.cut_step_km:
+            raise ValueError("label.window_only con H < Δ deja ventanas de riesgo vacías")
 
 
-def vehicle_cuts(first_odo: float, last_odo: float, event_odo: float | None, cfg: LabelConfig) -> pd.DataFrame:
-    """Cortes de un vehículo con su etiqueta. Vacío si no entra ni una ventana completa."""
+def vehicle_cuts(
+    first_odo: float,
+    last_odo: float,
+    event_odo: float | None,
+    cfg: LabelConfig,
+    *,
+    pseudo_event_odo: float | None = None,
+) -> pd.DataFrame:
+    """Cortes de un vehículo con su etiqueta. Vacío si no entra ni una ventana completa.
+
+    `pseudo_event_odo` solo aplica a vehículos **sanos** (ver `assign_pseudo_events`): la
+    serie se corta en `P − G`, igual que la de un vehículo con evento se corta en `E − G`,
+    pero todas las etiquetas siguen siendo 0 y `time_to_event_km` sigue siendo NaN. No es
+    un evento: es un punto de corte de la observación.
+
+    Con `cfg.window_only` se conserva **solo la ventana de riesgo**: los `H/Δ` cortes
+    anteriores al evento (real o ficticio). Es lo que iguala la posición entre los dos
+    grupos; el porqué está en `LabelConfig.window_only`. Vive en el config y no en la
+    firma a propósito: es una decisión del panel, no de cada llamada.
+    """
     step = cfg.cut_step_km
     start = np.ceil((first_odo + cfg.window_km) / step) * step
     has_event = event_odo is not None and np.isfinite(event_odo)
+    has_pseudo = pseudo_event_odo is not None and np.isfinite(pseudo_event_odo)
+    if cfg.window_only and (has_event or has_pseudo):
+        # Solo la ventana de riesgo: los `H/Δ` cortes previos al evento (real o ficticio).
+        # Es lo que iguala la posición entre grupos, ver `LabelConfig.window_only`.
+        anchor = event_odo if has_event else pseudo_event_odo
+        start = max(start, np.ceil((anchor - cfg.gap_km - cfg.horizon_km) / step) * step)
+    if has_event and has_pseudo:
+        raise ValueError("Un vehículo con evento no puede tener además un evento ficticio")
     if has_event:
         end = event_odo - cfg.gap_km
+    elif has_pseudo:
+        end = pseudo_event_odo - cfg.gap_km
     elif cfg.censored_policy == "drop":
         end = last_odo - cfg.gap_km - cfg.horizon_km
     else:
@@ -86,6 +132,96 @@ def vehicle_cuts(first_odo: float, last_odo: float, event_odo: float | None, cfg
         tte = np.full(cuts.shape, np.nan)
         label = np.zeros(cuts.shape, dtype=int)
     return pd.DataFrame({"cut_odo": cuts, "label": label, "time_to_event_km": tte})
+
+
+def assign_pseudo_events(
+    vehicles: pd.DataFrame,
+    spans: pd.DataFrame,
+    cfg: LabelConfig,
+    *,
+    reference_vehicles: set[str],
+    seed: int = 42,
+) -> tuple[pd.Series, dict[str, Any]]:
+    """Un **evento ficticio** para cada vehículo sano: dónde se le corta la serie.
+
+    El problema que resuelve (medido en `docs/memoria/f3-emparejado-posicion-vs-calendario.md`):
+    la serie de un vehículo con evento termina en `E − G` —temprano, y a pocos km— y la de
+    un sano termina donde se acaba el historial, o sea tarde y con más kilómetros. Por eso
+    **"estar al final de la propia serie" significa cosas distintas en cada grupo**: el 77%
+    de las filas positivas cae en el último cuarto de su serie contra el 30% de las sanas, y
+    esa asimetría separa sola con P = 0,83. No se puede arreglar emparejando celdas después
+    —odómetro, mes y posición son incompatibles entre sí—, porque se genera **al construir
+    las series**.
+
+    La solución es de diseño y es la estándar del sesgo de tiempo inmortal (asignación de
+    fecha índice / *risk-set sampling*): a cada sano se le sortea un punto `P` de la
+    **distribución de odómetros de evento de los positivos** y se le corta la serie en
+    `P − G`, exactamente como a un positivo. Con eso los dos grupos terminan igual por
+    construcción: la posición dentro de la serie deja de ser informativa, y el emparejado
+    por odómetro y mes puede seguir haciendo su trabajo sin competir con una tercera
+    dimensión.
+
+    `P` tiene que caer en el rango **factible** del vehículo:
+
+    - `P >= first_odo + W + G`, o no entra ni un corte con ventana completa;
+    - `P <= last_odo − H`, o el último corte no es verificable (hay que haber observado
+      hasta `c + G + H` para afirmar que no hubo evento; es la misma exigencia que hoy
+      impone `censored_policy: drop`, solo que ahora la ancla el punto sorteado).
+
+    Se sortea **con reemplazo entre los valores de referencia que caen en ese rango**. Un
+    vehículo sin ningún valor factible se descarta y se cuenta: preferimos perderlo antes
+    que recortar la distribución a un borde, que es justamente el sesgo que se quiere sacar.
+
+    La referencia se toma **solo de `reference_vehicles` (dev)**: el test no se mira ni
+    para esto, igual que en `match_healthy_cuts` y en el anclaje del calendario.
+    """
+    is_event = vehicles["event_observed"].eq(1)
+    reference = vehicles.loc[
+        is_event & vehicles.index.astype(str).isin(reference_vehicles), "event_odo_km"
+    ].dropna()
+    if reference.empty:
+        raise ValueError("No hay odómetros de evento de referencia (dev) para sortear eventos ficticios")
+
+    rng = np.random.default_rng(seed)
+    pool = np.sort(reference.to_numpy(dtype="float64"))
+    healthy = vehicles.index[~is_event]
+    out = pd.Series(np.nan, index=vehicles.index, dtype="float64")
+    n_infeasible_range = 0
+    n_no_reference = 0
+    for vehicle_id in healthy:
+        if vehicle_id not in spans.index:
+            continue
+        first_odo = float(spans.at[vehicle_id, "first_odo"])
+        last_odo = float(spans.at[vehicle_id, "last_odo"])
+        lo = first_odo + cfg.window_km + cfg.gap_km
+        hi = last_odo - cfg.horizon_km
+        if hi < lo:
+            n_infeasible_range += 1
+            continue
+        feasible = pool[(pool >= lo) & (pool <= hi)]
+        if feasible.size == 0:
+            n_no_reference += 1
+            continue
+        out.at[vehicle_id] = float(rng.choice(feasible))
+
+    assigned = out.notna()
+    summary = {
+        "enabled": True,
+        "seed": seed,
+        "reference": "dev_event_vehicles",
+        "n_reference": int(len(reference)),
+        "reference_odo_km_median": float(np.median(pool)),
+        "n_healthy": int((~is_event).sum()),
+        "n_assigned": int(assigned.sum()),
+        "n_dropped_infeasible_range": n_infeasible_range,
+        "n_dropped_no_reference_in_range": n_no_reference,
+        "pseudo_odo_km_median": float(out[assigned].median()) if assigned.any() else None,
+    }
+    logger.info("Eventos ficticios: %d de %d sanos (%d sin rango factible, %d sin referencia en rango) "
+                "· odómetro mediano %s km",
+                summary["n_assigned"], summary["n_healthy"], n_infeasible_range, n_no_reference,
+                f"{summary['pseudo_odo_km_median']:.0f}" if summary["pseudo_odo_km_median"] else "-")
+    return out, summary
 
 
 def build_panel(
@@ -118,7 +254,8 @@ def build_panel(
                      if signals is not None else {})
 
     frames: list[pd.DataFrame] = []
-    dropped: dict[str, list[str]] = {"sin_viajes": [], "sin_ventana_completa": [], "sin_corte_verificable": []}
+    dropped: dict[str, list[str]] = {"sin_viajes": [], "sin_ventana_completa": [],
+                                     "sin_corte_verificable": [], "sin_evento_ficticio": []}
     rows_dropped_qc = 0
     for vehicle_id, info in vehicles.iterrows():
         vtrips = trip_groups.get(vehicle_id)
@@ -128,7 +265,18 @@ def build_panel(
         first_odo = float(vtrips["OdometerTripEnd"].min())
         last_odo = float(vtrips["OdometerTripEnd"].max())
         event_odo = float(info["event_odo_km"]) if int(info["event_observed"]) == 1 else None
-        cuts = vehicle_cuts(first_odo, last_odo, event_odo, cfg)
+        # Evento ficticio: solo en sanos, y solo si `vehicles` lo trae (lo asigna
+        # `assign_pseudo_events`). Corta la serie como si fuera un evento; la etiqueta
+        # sigue siendo 0.
+        pseudo = info.get(PSEUDO_EVENT_COL) if PSEUDO_EVENT_COL in vehicles.columns else None
+        pseudo_odo = float(pseudo) if pseudo is not None and pd.notna(pseudo) else None
+        if pseudo_odo is not None and int(info["event_observed"]) == 1:
+            pseudo_odo = None
+        if PSEUDO_EVENT_COL in vehicles.columns and int(info["event_observed"]) == 0 and pseudo_odo is None:
+            # Sano sin punto de corte factible: no entra al panel, y se cuenta aparte.
+            dropped["sin_evento_ficticio"].append(str(vehicle_id))
+            continue
+        cuts = vehicle_cuts(first_odo, last_odo, event_odo, cfg, pseudo_event_odo=pseudo_odo)
         if cuts.empty:
             key = "sin_ventana_completa" if (last_odo - first_odo) < cfg.window_km else "sin_corte_verificable"
             dropped[key].append(str(vehicle_id))
@@ -184,6 +332,9 @@ def build_panel(
 
 
 AUX_POSITION = f"{AUX_PREFIX}cut_position"
+# Columna de `vehicles` con el evento ficticio de cada sano (la escribe
+# `assign_pseudo_events`; `build_panel` la lee si está).
+PSEUDO_EVENT_COL = "pseudo_event_odo_km"
 
 
 def add_cut_position(panel: pd.DataFrame) -> pd.DataFrame:

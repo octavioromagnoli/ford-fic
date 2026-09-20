@@ -49,7 +49,14 @@ if hasattr(sys.stdout, "reconfigure"):
 from src.config import ensure_dir, load_config, repo_root, resolve_path, set_seed  # noqa: E402
 from src.data.anchor import estimate_origin_day, event_dates, project_dates_to_odometer  # noqa: E402
 from src.data.join import load_vehicle_static  # noqa: E402
-from src.data.panel import LabelConfig, add_cut_position, build_panel, match_healthy_cuts  # noqa: E402
+from src.data.panel import (  # noqa: E402
+    PSEUDO_EVENT_COL,
+    LabelConfig,
+    add_cut_position,
+    assign_pseudo_events,
+    build_panel,
+    match_healthy_cuts,
+)
 from src.features.derived import add_derived_features, load_derived_specs  # noqa: E402
 from src.features.sequence import add_sequence_features  # noqa: E402
 from src.data.subset import read_table_for_vehicles  # noqa: E402
@@ -137,6 +144,24 @@ def main() -> int:
     logger.info("Eventos ubicados: %d · odómetro mediano %.0f km · fuentes %s · incertidumbre mediana %.0f km",
                 len(events), events["event_odo_km"].median(), source_counts, events["event_odo_uncertainty_km"].median())
 
+    # 3b · evento ficticio para los sanos ------------------------------------------
+    # Le corta la serie a cada sano en un punto sorteado de la distribución de los
+    # positivos, para que "final de la serie" signifique lo mismo en los dos grupos.
+    # Sin esto, la posición del corte separa sola con P = 0,83 y ninguna feature es
+    # comparable entre grupos (docs/memoria/f3-emparejado-posicion-vs-calendario.md).
+    pseudo_cfg = cfg.get("pseudo_event") or {}
+    pseudo_summary: dict[str, Any] = {"enabled": False}
+    if pseudo_cfg.get("enabled", False):
+        spans = pd.DataFrame({
+            "first_odo": trips.groupby(ID, observed=True)["OdometerTripEnd"].min(),
+            "last_odo": trips.groupby(ID, observed=True)["OdometerTripEnd"].max(),
+        })
+        pseudo, pseudo_summary = assign_pseudo_events(
+            vehicles, spans, label_cfg, reference_vehicles=dev,
+            seed=int(pseudo_cfg.get("seed", seed)),
+        )
+        vehicles[PSEUDO_EVENT_COL] = pseudo
+
     # 4 · cortes, etiqueta y features ---------------------------------------------
     static_columns = list(cfg["features"].get("static_columns") or [])
     static_excluded = list(cfg["features"].get("static_excluded") or [])
@@ -203,6 +228,7 @@ def main() -> int:
         },
         "raw": {"trips": {**trip_counters, **trip_derive}, "signals": {**signal_counters, **signal_derive}},
         "panel": report,
+        "pseudo_event": pseudo_summary,
         "derived": derived_summary,
         "sequence": sequence_summary,
         "sampling": sampling_summary,

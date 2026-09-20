@@ -69,9 +69,15 @@ Dos conclusiones, y la segunda es incómoda:
    —ROC 0,92 cuando se lo dejan usar—, y las `feat_` con deriva temporal arrastran parte de
    eso. Es exactamente el caso de la regla 6 de `CLAUDE.md`: un número que mejora se audita
    antes de celebrarse. Este no pasa la auditoría.
-2. **El panel v1 también filtra calendario**, solo que menos: 0,719 contra 0,617. Se sabía
-   que las `aux_` eran un atajo; ahora está cuantificado por primera vez, y el emparejado
-   por mes no lo cierra del todo.
+2. **El panel v1 también se deja ganar 0,10 con las `aux_`** (0,719 contra 0,617).
+
+> **Corrección (más tarde, el 19-09):** la ablación fina por familia muestra que ese salto
+> **no es calendario**. La temperatura ambiente aporta +0,007 en el v1 y el marcador
+> `Regenerations`, 0,000: el emparejado por mes hace su trabajo. Lo que filtra son las
+> **estáticas** (`Engine` y compañía, el sesgo de muestreo de F1), +0,093. En el panel
+> Δ=250+posición sí hay calendario, pero entra por el **marcador cortado en 2026** (+0,072),
+> no por la temperatura. Detalle en
+> [f3-evento-ficticio-y-ventana-de-riesgo.md](f3-evento-ficticio-y-ventana-de-riesgo.md) §4.
 
 ## 4 · Por dónde sí se cierra
 
@@ -87,6 +93,13 @@ tiempo inmortal (asignación de fecha índice / *risk-set sampling*), y se imple
 
 Es la única de las tres cosas que probamos (Δ más fino, celdas más gruesas, tercera
 dimensión de emparejado) que ataca la causa en vez del síntoma.
+
+> **Implementado el 19-09, y funcionó** —con una pieza más de la que preveía esta sección:
+> el evento ficticio solo no alcanza, porque dentro de un vehículo la etiqueta *es* la
+> posición. Hace falta además quedarse con la ventana de riesgo de cada vehículo
+> (`label.window_only`). Con las dos, la posición cae de P = 0,84 a 0,49 y los tres ejes
+> cierran a la vez. Ver
+> [f3-evento-ficticio-y-ventana-de-riesgo.md](f3-evento-ficticio-y-ventana-de-riesgo.md).
 
 ## 5 · Qué quedó
 

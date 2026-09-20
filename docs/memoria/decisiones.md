@@ -5,6 +5,48 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-19 · El evento ficticio + la ventana de riesgo cierran el atajo de posición
+
+**Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:**
+`src/data/panel.py::assign_pseudo_events()` y `LabelConfig.window_only`,
+`configs/data/panel_pseudo{,_nomatch}.yaml`, `configs/exp_*_pseudo.yaml`, 11 chequeos
+nuevos (52 en total).
+
+**Qué cambia.** El panel canónico **no**: las dos claves vienen apagadas por default. Lo
+que cambia es que existe un panel donde la posición del corte ya no es la etiqueta.
+
+**Cómo.** Dos piezas, y la primera sola no alcanzó:
+
+1. **Evento ficticio**: a cada sano se le sortea un punto de la distribución de odómetros
+   de evento de los positivos (solo dev) y se le corta la serie ahí, igual que a un
+   positivo. 242 de 284 sanos consiguen un punto factible.
+2. **Ventana de riesgo** (`window_only`): de cada vehículo se conservan solo los `H/Δ`
+   cortes previos al evento real o ficticio. Hizo falta porque **dentro de un vehículo la
+   etiqueta ES la posición**: el sano aportaba filas en todas las posiciones y el positivo
+   las positivas solo en la última, así que arreglar dónde termina la serie no bastaba
+   (con el ficticio solo, la posición seguía en P = 0,88).
+
+**Resultado.** La posición pasa de **P = 0,836 a 0,489**, y con eso el trade-off
+estructural de la entrada anterior desaparece: el emparejado por odómetro y mes recupera
+su trabajo (distancia de mes 0,091, **mejor que el v1**). El modelo da **ROC 0,703**
+contra 0,617 del v1, y es el primer número del proyecto que no se apoya en el artefacto.
+Con la advertencia del tamaño: 455 filas, 140 vehículos, 246 negativos.
+
+**Y una corrección.** La ablación fina por familia desarma la conclusión de la entrada
+anterior: **el leakage no era el calendario**. La temperatura ambiente aporta +0,007 y el
+marcador `Regenerations` 0,000 en el v1 —el emparejado por mes funciona—; lo que filtra
+son las **estáticas** (`Engine` y compañía, el sesgo de F1): +0,093 en v1 y +0,164 en el
+panel nuevo. El marcador sí filtra, pero solo donde el mes no se empareja (+0,072 en
+Δ=250+posición). **La ablación gruesa detecta que hay un atajo; la fina dice cuál es**, y
+de ahora en más se corre por familia.
+
+**Qué falta.** Sortear varios eventos ficticios por sano (*risk-set sampling* con k
+controles) para recuperar negativos, y re-medir todo con los eventos corregidos.
+
+**Detalle:** [f3-evento-ficticio-y-ventana-de-riesgo.md](f3-evento-ficticio-y-ventana-de-riesgo.md)
+
+---
+
 ## 2026-09-19 · El emparejado no puede cerrar posición y calendario a la vez; la ablación de calendario pasa a ser obligatoria
 
 **Decidió:** medición sobre dev, a revisión de Gonzalo · **Código:**

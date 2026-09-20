@@ -34,6 +34,7 @@ from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from src.config import set_seed  # noqa: E402
 from src.eval.metrics import classification_metrics, lead_time_curve, operating_point  # noqa: E402
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
+from src.data.panel import LabelConfig, assign_pseudo_events, vehicle_cuts  # noqa: E402
 from src.features.derived import add_derived_features, load_derived_specs  # noqa: E402
 from src.features.sequence import add_sequence_features  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
@@ -364,6 +365,60 @@ def main() -> int:
     check("derivadas: una operación desconocida falla",
           _raises(ValueError, lambda: load_derived_specs(
               {"derived": [{"name": "x", "op": "potencia", "a": "feat_a", "b": "feat_b"}]})))
+
+    # 7 · evento ficticio para los sanos: corta la serie, no inventa etiqueta
+    label_cfg = LabelConfig(window_km=1000, gap_km=500, horizon_km=3000, cut_step_km=500)
+    vehicles = pd.DataFrame(
+        {"event_observed": [1, 1, 0, 0, 0], "event_odo_km": [6000.0, 9000.0, np.nan, np.nan, np.nan]},
+        index=pd.Index(["E1", "E2", "H1", "H2", "H3"], name="vehicle_id"),
+    )
+    spans = pd.DataFrame(
+        {"first_odo": [100.0, 100.0, 100.0, 100.0, 100.0],
+         "last_odo": [8000.0, 12000.0, 30000.0, 20000.0, 2000.0]},
+        index=vehicles.index,
+    )
+    pseudo, pseudo_summary = assign_pseudo_events(
+        vehicles, spans, label_cfg, reference_vehicles={"E1", "E2"}, seed=7)
+    check("evento ficticio: solo a los sanos", bool(pseudo[["E1", "E2"]].isna().all()))
+    check("evento ficticio: sale de la distribución de los positivos",
+          bool(pseudo.dropna().isin([6000.0, 9000.0]).all()),
+          f"valores: {sorted(pseudo.dropna().unique())}")
+    # H3 solo llega a 2.000 km: no hay P que cumpla P <= last_odo - H. Se descarta.
+    check("evento ficticio: el sano sin rango factible se descarta y se cuenta",
+          bool(np.isnan(pseudo["H3"])) and pseudo_summary["n_dropped_infeasible_range"] == 1)
+    check("evento ficticio: es determinístico con la misma semilla",
+          bool(assign_pseudo_events(vehicles, spans, label_cfg,
+                                    reference_vehicles={"E1", "E2"}, seed=7)[0].equals(pseudo)))
+    # Lo que corta es la SERIE, no la etiqueta: un sano con P sigue teniendo label 0 en
+    # todos sus cortes, y su último corte cae en P - G.
+    cuts = vehicle_cuts(100.0, 30000.0, None, label_cfg, pseudo_event_odo=9000.0)
+    check("evento ficticio: el sano sigue con todas las etiquetas en 0",
+          bool((cuts["label"] == 0).all()) and bool(cuts["time_to_event_km"].isna().all()))
+    check("evento ficticio: la serie del sano termina en P - G",
+          float(cuts["cut_odo"].max()) <= 9000.0 - label_cfg.gap_km + 1e-6,
+          f"último corte {float(cuts['cut_odo'].max()):.0f} km")
+    # La razón de ser: un sano con P y un positivo con E = P tienen la MISMA cantidad de
+    # cortes, así que la posición dentro de la serie deja de decir de qué grupo es la fila.
+    same = vehicle_cuts(100.0, 30000.0, 9000.0, label_cfg)
+    check("evento ficticio: misma serie que un positivo con el evento en el mismo km",
+          len(cuts) == len(same) and bool(np.allclose(cuts["cut_odo"], same["cut_odo"])),
+          f"{len(cuts)} vs {len(same)} cortes")
+    # `window_only`: los dos grupos aportan EXACTAMENTE los mismos cortes relativos, que
+    # es lo que rompe la equivalencia entre posición y etiqueta. Sin esto, el sano aporta
+    # filas en todas las posiciones y el positivo solo en la última.
+    wo = LabelConfig(window_km=1000, gap_km=500, horizon_km=3000, cut_step_km=500, window_only=True)
+    pos_w = vehicle_cuts(100.0, 30000.0, 9000.0, wo)
+    san_w = vehicle_cuts(100.0, 30000.0, None, wo, pseudo_event_odo=9000.0)
+    check("ventana de riesgo: positivo y sano aportan los mismos cortes",
+          bool(np.allclose(pos_w["cut_odo"], san_w["cut_odo"])) and len(pos_w) == len(san_w),
+          f"{len(pos_w)} cortes cada uno")
+    check("ventana de riesgo: el positivo queda todo en 1 y el sano todo en 0",
+          bool((pos_w["label"] == 1).all()) and bool((san_w["label"] == 0).all()))
+    check("ventana de riesgo: H/Δ cortes, ni uno más",
+          len(pos_w) == int(wo.horizon_km / wo.cut_step_km) + 1, f"{len(pos_w)} cortes")
+    check("evento ficticio: un vehículo no puede tener evento Y evento ficticio",
+          _raises(ValueError, lambda: vehicle_cuts(100.0, 30000.0, 6000.0, label_cfg,
+                                                   pseudo_event_odo=9000.0)))
 
     failed = [name for name, ok, _ in _checks if not ok]
     print()
