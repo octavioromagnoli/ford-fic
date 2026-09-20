@@ -41,6 +41,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-timesfm-zeroshot.md](f3-timesfm-zeroshot.md) | TimesFM zero-shot en el panel v1: no le gana a la tasa base, pero señaló el desvío respecto de la historia del vehículo |
 | [f3-survival-stacking.md](f3-survival-stacking.md) | Supervivencia en tiempo discreto sobre el panel: empata en PR-AUC pero calibrado y con el doble de detección; por qué el efecto aleatorio por vehículo no paga; y por qué la auditoría (a) de §0.4 no es un null en este panel |
 | [f3-proceso-gamma.md](f3-proceso-gamma.md) | Proceso gamma de degradación: por qué no se implementó — no hay carga irreversible medible a estos kilometrajes |
+| [f3-ordinal-horizonte.md](f3-ordinal-horizonte.md) | Target ordinal: dos variantes de bins (la restringida no aporta información), el costo como barrido de C_FN/C_FP y la permutación intra-vehículo que ningún modelo del repo supera |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 

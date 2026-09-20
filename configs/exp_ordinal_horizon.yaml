@@ -1,0 +1,81 @@
+# F3 · Reformulación ordinal multi-horizonte sobre exactamente el panel y los
+# folds del control f3-lgbm-panel-v1. PR-AUC se calcula contra `label`; el costo
+# ordinal se reporta aparte y no participa de la selección.
+#
+#   python scripts/train.py --config configs/exp_ordinal_horizon.yaml
+name: f3-ordinal-horizon
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 1
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+target:
+  name: ordinal_horizon
+  params:
+    # Clase 0 = sano/no inminente (>3500 km). En eventos dentro de G+H:
+    # 1=2750–3500, 2=2000–2750, 3=1250–2000 y 4=500–1250 km.
+    bins_km: [1250, 2000, 2750, 3500]
+    # P(label=1) = P(time_to_event_km <= G+H) = P(clase >= 1).
+    score_max_tte_km: 3500
+
+model:
+  name: lgbm_ordinal
+  params:
+    objective: multiclass
+    n_estimators: 300
+    learning_rate: 0.03
+    num_leaves: 7
+    min_child_samples: 40
+    reg_lambda: 5.0
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.7
+    class_weight: balanced
+    random_state: 42
+    verbose: -1
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  # Barrido del ratio C_FN/C_FP, el reporte de costo que sí discrimina a esta tasa
+  # base. Se agrega después de medir la variante: la matriz de abajo resultó
+  # degenerada (con p = 0,125 revisar todo es óptimo desde C_FN/C_FP ≈ 7, así que
+  # sus 20–50× eligen la política sin mirar el modelo). Se conserva la matriz para
+  # reproducir el número ya registrado, pero lo comparable entre corridas es esto.
+  # Ver docs/memoria/f3-ordinal-horizonte.md.
+  cost_ratios: [2, 3, 5, 7, 10, 20, 50]
+  cost_fp: 1.0
+  # Filas = clase real; columnas = clase predicha. Costos del benchmark
+  # SCANIA Component X (Kharazian et al., 2025). Es reporte, no selección.
+  cost_matrix:
+    - [0,   7,   8,   9,  10]
+    - [200, 0,   7,   8,   9]
+    - [300, 200, 0,   7,   8]
+    - [400, 300, 200, 0,   7]
+    - [500, 400, 300, 200, 0]
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-target-reformulation
+  job_type: train
+  tags: [f3, lgbm, ordinal, multi-horizon, panel-v1]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

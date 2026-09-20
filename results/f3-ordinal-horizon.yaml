@@ -1,0 +1,132 @@
+run: f3-ordinal-horizon
+logged_on: '2026-09-20'
+note: 'Target ordinal 5 clases con bins RESTRINGIDOS a [G, G+H] = [500, 3500]. Defecto
+  de diseño: ese intervalo es exactamente el que ya era label=1, así que clase>0 <=>
+  label==1 y el target no aporta nada sobre las 1.775 filas negativas (87% del panel).
+  Mide el costo de varianza de partir 254 positivas en cuatro baldes de ~60 sin el
+  beneficio de información: PR-AUC 0.152 < control 0.165 y Brier 0.207 > 0.173. Se
+  conserva como evidencia; la variante corregida es f3-ordinal-horizon-ext. Costo
+  OOF 18.872 con la matriz de SCANIA, que resultó degenerada a esta tasa base (el
+  barrido de C_FN/C_FP la reemplaza). Corrida local con WANDB_MODE=disabled.'
+source:
+  config_path: configs/exp_ordinal_horizon.yaml
+  config_versioned: true
+  branch: exp/ordinal-horizon
+  commit: cb35d65
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: lgbm_ordinal
+  pr_auc: 0.15242324253379358
+  pr_auc_lo: 0.15145870570157485
+  pr_auc_hi: 0.20409370270707167
+  base_rate: 0.1251848201084278
+  lift: 1.217585665752233
+  roc_auc: 0.5778950870577798
+  brier: 0.20655329493164468
+  detection_rate: 0.09433962264150944
+  median_lead_km: 10408.0
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel.parquet
+  splits: ${DATA_DIR}/processed/splits.json
+  n_positive: 254
+  cost_per_1000: 9301.13356333169
+  cost_best_ratio: 7.0
+  cost_best_savings_frac: 0.14140845070422536
+  cost_matrix: '[[0, 7, 8, 9, 10], [200, 0, 7, 8, 9], [300, 200, 0, 7, 8], [400, 300,
+    200, 0, 7], [500, 400, 300, 200, 0]]'
+config:
+  name: f3-ordinal-horizon
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  target:
+    name: ordinal_horizon
+    params:
+      bins_km:
+      - 1250
+      - 2000
+      - 2750
+      - 3500
+      score_max_tte_km: 3500
+  model:
+    name: lgbm_ordinal
+    params:
+      objective: multiclass
+      n_estimators: 300
+      learning_rate: 0.03
+      num_leaves: 7
+      min_child_samples: 40
+      reg_lambda: 5.0
+      subsample: 0.8
+      subsample_freq: 1
+      colsample_bytree: 0.7
+      class_weight: balanced
+      random_state: 42
+      verbose: -1
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    cost_ratios:
+    - 2
+    - 3
+    - 5
+    - 7
+    - 10
+    - 20
+    - 50
+    cost_fp: 1.0
+    cost_matrix:
+    - - 0
+      - 7
+      - 8
+      - 9
+      - 10
+    - - 200
+      - 0
+      - 7
+      - 8
+      - 9
+    - - 300
+      - 200
+      - 0
+      - 7
+      - 8
+    - - 400
+      - 300
+      - 200
+      - 0
+      - 7
+    - - 500
+      - 400
+      - 300
+      - 200
+      - 0
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-target-reformulation
+    job_type: train
+    tags:
+    - f3
+    - lgbm
+    - ordinal
+    - multi-horizon
+    - panel-v1
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs/exp_ordinal_horizon.yaml

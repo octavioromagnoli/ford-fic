@@ -27,8 +27,9 @@ Y el protocolo, que no cambia con el modelo:
 2. **Presupuesto de comparaciones**: con ~12 eventos por fold, más de 6–8 candidatos
    garantiza que "el mejor" sea ruido. Preregistrar la lista y no agregar sobre la marcha.
 3. CV repetida (3 semillas de folds) para cualquier diferencia que se quiera declarar.
-4. **Auditorías obligatorias por modelo** (`scripts/audit_model.py`, que las corre
-   todas sobre el YAML del experimento). Se aprueban dos:
+4. **Auditorías obligatorias por modelo** (`scripts/audit_model.py` y
+   `scripts/audit_ordinal_horizon.py`, que las corren sobre el YAML del experimento).
+   Se aprueban dos:
 
    - **(a0) el null.** Permutar las **features** entre *todas* las filas → el PR-AUC
      tiene que caer a la tasa base. Si no cae, hay leakage y ningún otro número vale.
@@ -48,9 +49,12 @@ Y el protocolo, que no cambia con el modelo:
    fallan —de donde sale casi todo el PR-AUC de este panel— y encima le saca a cada auto
    el ruido de qué ventana le tocó, así que entrena un ordenador de vehículos mejor. No
    se marca ni como pass ni como falla; se lee junto a (a'). Cualquier informe que la
-   cite como aprobación hay que rehacerlo.
+   cite como aprobación hay que rehacerlo. Medida como piso —no como null— **ningún
+   modelo del repo le gana a su propio nulo intra-vehículo**, tampoco el control
+   binario: 0,1928 / 0,1867 / 0,1784 contra 0,1653 / 0,1524 / 0,1567.
 
-   (Detalle y evidencia: [`docs/memoria/decisiones.md`](memoria/decisiones.md).)
+   (Detalle y evidencia: [`docs/memoria/decisiones.md`](memoria/decisiones.md) y
+   [`docs/memoria/f3-ordinal-horizonte.md`](memoria/f3-ordinal-horizonte.md).)
 
 5. **El piso es el techo de cohorte, no la tasa base.** En dev las 254 filas positivas
    están **todas** dentro de los 967 cortes de vehículos fallados, así que puntuar cada

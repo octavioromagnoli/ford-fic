@@ -127,3 +127,23 @@ def _build_gpboost_survival(params: dict[str, Any]) -> BaseEstimator:
     params.setdefault("backend", "gpboost")
     params.setdefault("random_state", 42)
     return DiscreteSurvivalStacker(**params)
+
+
+@register("lgbm_ordinal")
+def _build_lgbm_ordinal(params: dict[str, Any]) -> BaseEstimator:
+    """LightGBM multiclase chico; `targets.py` acumula clases para recuperar P(evento en H)."""
+    from lightgbm import LGBMClassifier  # import pesado adentro del builder
+
+    params.setdefault("objective", "multiclass")
+    params.setdefault("n_estimators", 300)
+    params.setdefault("learning_rate", 0.03)
+    params.setdefault("num_leaves", 7)
+    params.setdefault("min_child_samples", 40)
+    params.setdefault("reg_lambda", 5.0)
+    params.setdefault("subsample", 0.8)
+    params.setdefault("subsample_freq", 1)
+    params.setdefault("colsample_bytree", 0.7)
+    params.setdefault("class_weight", "balanced")
+    params.setdefault("random_state", 42)
+    params.setdefault("verbose", -1)
+    return LGBMClassifier(**params)

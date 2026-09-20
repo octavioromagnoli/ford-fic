@@ -173,12 +173,16 @@ src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia +
 src/models/survival_stacking.py  supervivencia en tiempo discreto: apila (fila × bin de km), hazard por bin,
                          score = 1 − S(H|x). Backend lightgbm o gpboost (efecto aleatorio por vehículo, opcional)
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo; hook `target:`
-src/training/targets.py  con qué se entrena: una función por modo, registro por nombre (`discrete_survival`).
-                         Lo que se evalúa sigue siendo `label`
+src/training/targets.py  con qué se entrena (no con qué se mide) y cómo la salida del modelo vuelve a un
+                         score comparable: registro por nombre, `discrete_survival` y `ordinal_horizon`.
+                         Lo que se evalúa sigue siendo `label`; cv.py no sabe qué modos hay
 src/eval/splits.py       splits antileakage + serialización a splits.json
                          estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
-                         (por folds y por vehículo) + C-index out-of-fold
+                         (por folds y por vehículo) + C-index out-of-fold +
+                         cohort_ceiling()/pr_auc_within_failed()/when_contribution() (el piso real y la
+                         descomposición cohorte/cuándo), vehicle_scores()/vehicle_metrics() (la decisión
+                         por vehículo, MIL) y cost_ratio_sweep() (C_FN/C_FP: reporte, nunca selección)
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
@@ -197,10 +201,13 @@ scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambia
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/train.py         entrypoint único de entrenamiento
+scripts/audit_mil_bagsize.py  ¿el lift por vehículo es señal o tamaño de bolsa? (nulo de permutación)
+scripts/audit_ordinal_horizon.py  las tres auditorías obligatorias de cualquier corrida: permutación
+                         (nulo global y nulo intra-vehículo), aux_ de calendario como feat_, importancias
 scripts/compare.py       tabla comparativa de corridas (markdown)
 scripts/results.py       registro versionado en results/: métricas + config completa por corrida (log/table/show)
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (36 chequeos)
+scripts/check_setup.py   smoke test del harness (62 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

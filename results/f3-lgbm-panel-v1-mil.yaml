@@ -41,12 +41,19 @@ note: 'Mismo LightGBM y mismos folds que f3-lgbm-panel-v1: lo único que cambia 
   paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
   el
 
-  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
+  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.
+
+
+  [COSTO · anotado al agregarle el barrido] Paga a C_FN/C_FP ~7x (14,6% de
+
+  ahorro sobre revisar todo) y por encima de 10x ahorra menos del 3%: es reporte,
+
+  nunca criterio de seleccion.'
 source:
   config_path: configs/exp_lgbm_panel_v1_mil.yaml
   config_versioned: true
-  branch: exp/mil-vehicle-aggregation
-  commit: 1931a05
+  branch: exp/ordinal-horizon
+  commit: cb35d65
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm
@@ -63,6 +70,10 @@ summary:
   panel: ${DATA_DIR}/processed/panel.parquet
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: 7.0
+  cost_best_savings_frac: 0.14591549295774647
+  cost_matrix: null
 config:
   name: f3-lgbm-panel-v1-mil
   seed: 42
@@ -94,6 +105,15 @@ config:
     - topk
     - noisy_or
     vehicle_topk: 3
+    cost_ratios:
+    - 2
+    - 3
+    - 5
+    - 7
+    - 10
+    - 20
+    - 50
+    cost_fp: 1.0
   wandb:
     enabled: true
     project: ford-fic
