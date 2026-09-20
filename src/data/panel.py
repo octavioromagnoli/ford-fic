@@ -254,6 +254,30 @@ def match_healthy_cuts(
     return keep, summary
 
 
+PANEL_KEY = ["vehicle_id", "cut_odo"]
+
+
+def attach_columns(panel: pd.DataFrame, extra: pd.DataFrame, *, key: list[str] = PANEL_KEY) -> pd.DataFrame:
+    """Variante del panel con columnas `feat_*`/`aux_*` nuevas: mismas filas, mismo orden.
+
+    Es la forma de medir una familia de features como ablación limpia: mismas filas
+    ⇒ misma huella ⇒ mismos folds de `splits.json`. `extra` trae `key` + las columnas
+    nuevas; una fila del panel sin pareja queda en NaN (el imputador del `Pipeline` la
+    maneja). Falla si una columna nueva pisa una existente o si la clave no es única.
+    """
+    new = [c for c in extra.columns if c not in key]
+    clash = sorted(set(new) & set(panel.columns))
+    if clash:
+        raise ValueError(f"Las columnas nuevas pisan columnas del panel: {clash}")
+    bad = [c for c in new if not c.startswith((FEAT_PREFIX, AUX_PREFIX))]
+    if bad:
+        raise ValueError(f"Toda columna agregada al panel es `feat_` o `aux_`: {bad}")
+    out = panel.merge(extra[key + new], on=key, how="left", validate="1:1")
+    if len(out) != len(panel):
+        raise RuntimeError("El merge cambió la cantidad de filas del panel")
+    return out[_column_order(out)]
+
+
 def _column_order(panel: pd.DataFrame) -> list[str]:
     head = [c for c in HEAD_COLUMNS if c in panel.columns]
     feats = sorted(c for c in panel.columns if c.startswith(FEAT_PREFIX))

@@ -38,6 +38,10 @@ tables:
 
   trips:
     description: Un registro por viaje, con agregados del viaje (2.53M filas).
+    # Los timestamps mezclan dos formatos (con y sin milisegundos). Sin `ISO8601`,
+    # pandas infiere el formato de la primera fila y las otras salen NaT en silencio
+    # (ver docs/memoria/f2-fechas-formato-mixto.md).
+    date_format: ISO8601
     parts:
       failed: ${DATA_DIR}/raw/TripSummary_Failed_SelectionVins.csv
       not_failed: ${DATA_DIR}/raw/TripSummary_NotFailed_SelectionVins.csv
@@ -70,6 +74,7 @@ tables:
       - TripDatetimeEnd
 
   signals:
+    date_format: ISO8601            # mismo problema de formatos mixtos que `trips`
     description: >
       Señales dinámicas del postratamiento (10.6M filas). `Message` es el nivel del
       filtro: sus estados "malos" (Full / Overloaded / Over Limit) aparecen en las

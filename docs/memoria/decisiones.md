@@ -24,6 +24,50 @@ paralelo y una tabla compartida se pisaría en cada merge.
 
 ---
 
+## 2026-09-19 · TimesFM re-medido sobre el panel v1: no entra, ni como score ni como features
+
+**Decidió:** rama `feat/model-timesfm-zeroshot` (Octavio), al traer el EDA de main; queda
+a revisión en el PR. **Detalle:** [f3-timesfm-zeroshot.md](f3-timesfm-zeroshot.md).
+
+La primera versión (16-09) armaba sus propios cortes sobre los 1081, contaba
+regeneraciones con el marcador `Regenerations` y emparejaba los sanos solo por odómetro:
+las tres cosas que el EDA del 18-09 invalidó. Se rehízo sobre los cortes, el holdout y
+los folds del panel v1, y los resúmenes del pronóstico se miden como **variante del panel
+con las mismas filas** (`src/data/panel.py::attach_columns`) contra el mismo LightGBM
+sobre el panel v1:
+
+| | PR-AUC |
+|---|---|
+| zero-shot, mejor canal (mensajes malos) | 0,128 (tasa base 0,125) |
+| LightGBM sobre el panel v1 (control), R=3 | 0,161 ± 0,006 |
+| LightGBM + 9 `feat_tfm_*`, R=3 | 0,169 ± 0,007: +0,008, pero 9/15 folds y ROC igual. Ruido |
+
+No entra a `features_v1.yaml`, y tampoco podría: los pesos de la 3.0 son de licencia no
+comercial. **Lo que sí queda es una pista:** la feature que más separa de todo lo medido
+a nivel fila es `feat_tfm_regen_delta` (ROC 0,614), y su versión sin modelo —media de
+la historia previa menos media de la ventana— da 0,602 y no está en el panel. Es la idea
+2.4 de `docs/f3-modelos-candidatos.md`; se construye sin TimesFM, auditando calendario antes.
+
+**Cambios chicos en código compartido que salen de acá:** `attach_columns` en
+`src/data/panel.py`; builder `lgbm` con los defaults del LightGBM chico del §1.3 del doc
+de F3; `configs/exp_lgbm_panel_v1.yaml` como control de cualquier ablación de familia.
+
+---
+
+## 2026-09-19 · `date_format: ISO8601` para `trips` y `signals`
+
+**Decidió:** rama `exp/hazard-xgb-landmark` (Octavio); queda a revisión en el PR.
+**Detalle:** [f2-fechas-formato-mixto.md](f2-fechas-formato-mixto.md).
+
+Los timestamps mezclan dos formatos y pandas anulaba en silencio los del formato que no
+era el de la primera fila del chunk: el 0,3% de "fechas nulas" era eso (el crudo tiene
+0). Con el formato declarado, el panel v1 conserva filas, etiquetas y emparejado, pero
+cambian 13 features en hasta 102 filas: las temporales de `trips` y, por el dedupe de
+fila completa, las de `signals` (2.420 mensajes distintos se descartaban como
+repetidos). **Pendiente:** regenerar y volver a publicar `panel-v1` con el arreglo.
+
+---
+
 ## 2026-09-19 · Los modelos secuenciales entran por un panel secuencial, no por un entrypoint aparte
 
 **Decidió:** Octavio (pedido: la solución de la tutora como baseline).

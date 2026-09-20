@@ -145,6 +145,7 @@ src/features/signals.py  una booleana por nivel de Message; regen_marker solo co
 src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agregadores (per_1000km, half_*, gap_*, km_since_last…)
 src/features/sequences.py  la ventana en T bins de km × C canales (entrada de modelos secuenciales), aplanada a feat_seq_*
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
+src/models/timesfm_zeroshot.py  series por km + TimesFM 3.0 zero-shot sobre los cortes del panel (no es del registry)
 src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia + rama estática (torch, opcional)
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo
 src/eval/splits.py       splits antileakage + serialización a splits.json
@@ -162,6 +163,8 @@ scripts/log_panel_artifact.py  publica panel.parquet + splits.json + panel_meta.
 scripts/build_seq_panel.py  panel secuencial: mismas filas que el panel v1, feat_seq_* en vez de agregados
                          (+ _meta.json con T y C); mismo splits.json
 scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambiar folds no es reconstruir el panel)
+scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
+scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/train.py         entrypoint único de entrenamiento
 scripts/compare.py       tabla comparativa de corridas (markdown)
 scripts/results.py       registro versionado en results/: métricas + config completa por corrida (log/table/show)
@@ -195,6 +198,11 @@ revisar el YAML para no duplicar con otro nombre. Resumen:
   zero-inflated, `msg_abnormal_frac`, `msgs_per_1000km`, `oil_life_mean` y su pendiente
   (el delta intra-viaje es 0 siempre), consumo por 100 km.
 - **Control de ventana (2):** `n_trips_window`, `window_km_covered`.
+
+Medidos como variante del panel (mismas filas, mismos folds) y **fuera** del set base porque
+no le suman al LightGBM de control: los resúmenes de TimesFM (`feat_tfm_*`,
+docs/memoria/f3-timesfm-zeroshot.md). Queda una pista: el desvío de la ventana respecto de
+la historia previa del vehículo, que el panel v1 no tiene.
 
 Lo que **no** se construye y por qué: elevación y presión de neumáticos (no hay
 columna), `accumulation_*` desde `signals` (es la misma variable que `AirRegeneration`),

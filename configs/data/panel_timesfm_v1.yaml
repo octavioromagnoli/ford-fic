@@ -1,0 +1,19 @@
+# Variante del panel v1 con los resúmenes del pronóstico de TimesFM (feat_tfm_*).
+#
+#   python scripts/eval_timesfm.py --config configs/exp_timesfm3_zeroshot.yaml              # una vez por canal
+#   python scripts/eval_timesfm.py --config configs/exp_timesfm3_zeroshot_accumulation.yaml
+#   python scripts/eval_timesfm.py --config configs/exp_timesfm3_zeroshot_badmsg.yaml
+#   python scripts/build_timesfm_panel.py --config configs/data/panel_timesfm_v1.yaml
+#
+# Mismas filas que el panel v1 ⇒ mismos folds. Se compara con configs/exp_lgbm_timesfm.yaml
+# contra configs/exp_lgbm_panel_v1.yaml.
+panel_config: configs/data/panel_v1.yaml
+
+# canal corto → pronósticos de la corrida correspondiente (todas las filas del panel)
+forecasts:
+  regen: experiments/f3-timesfm3-zeroshot-regen/forecasts.parquet
+  acc: experiments/f3-timesfm3-zeroshot-accumulation/forecasts.parquet
+  badmsg: experiments/f3-timesfm3-zeroshot-badmsg/forecasts.parquet
+
+output:
+  panel: ${DATA_DIR}/processed/panel_timesfm.parquet

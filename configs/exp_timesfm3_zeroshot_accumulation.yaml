@@ -1,0 +1,59 @@
+# F3 · TimesFM 3.0 zero-shot en los cortes del panel v1 (canal: nivel de acumulación del filtro).
+# Corre con scripts/eval_timesfm.py, NO con train.py: TimesFM pronostica series, no
+# clasifica filas de feat_* (ver src/models/timesfm_zeroshot.py). Variantes por canal:
+# exp_timesfm3_zeroshot_accumulation.yaml y exp_timesfm3_zeroshot_badmsg.yaml.
+#
+#   uv pip install -r requirements-timesfm.txt
+#   python scripts/eval_timesfm.py --config configs/exp_timesfm3_zeroshot.yaml
+#
+# Cortes, etiqueta, W/G/H, universo, emparejado de sanos (odómetro × mes) y folds salen
+# del panel v1: los números son comparables 1:1 con las corridas de train.py.
+#
+# LICENCIA: los pesos de TimesFM 3.0 son `timesfm-non-commercial-license-v1.0`
+# (no comercial, no productivo). Hasta 2.5 son Apache-2.0.
+name: f3-timesfm3-zeroshot-accumulation
+seed: 42
+
+panel_config: configs/data/panel_v1.yaml   # panel, splits.json, fuentes, dedupe, umbrales
+
+splits:
+  test_split: ${DATA_DIR}/processed/test_split.json   # obligatoria (regla 2): solo dev se mide
+
+series:
+  bin_km: 100                    # W, G, H y Δ del panel tienen que ser múltiplos
+  # Niveles "malos" de Message (slugs de src/features/signals.py). F1: ratio fallados/sanos
+  # 1,8–2,6. "At Limit" queda afuera: ratio 0,5.
+  bad_messages: [full, overloaded, over_limit]
+  cache_dir: ${DATA_DIR}/interim/timesfm_series
+  chunksize: 500000
+
+model:
+  name: timesfm3
+  backend: mlx                   # Apple silicon; `torch` + `device` en otra máquina
+  checkpoint: google/timesfm-3.0-pytorch
+  max_context_bins: 256          # 25.600 km de historia hacia atrás
+  batch_size: 64
+  forecast_kwargs: {}            # ej.: {use_znorm: true}; lo que acepte predict_batch
+
+score:
+  # Nivel medio de AirRegenerationEnd por bin (trips; == signals.Acumulation, 99,8%).
+  target: accumulation           # accumulation | regen_count | bad_msg_frac
+  quantile: 0.9                  # cola alta: "¿puede empeorar?"
+  agg: max                       # nivel pronosticado: el peor bin en [G, G+H]
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-foundation
+  job_type: eval
+  tags: [f3, timesfm, zero-shot, panel-v1]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments
