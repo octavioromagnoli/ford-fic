@@ -1,14 +1,16 @@
-run: f3-ordinal-horizon-ext
+run: f3-ordinal-horizon-ext-regen15
 logged_on: '2026-09-20'
-note: 'Target ordinal con bins EXTENDIDOS más allá de G+H (2.000/3.500/6.000/10.000
-  km), la formulación de SCANIA donde la clase 0 es ''lejos del fallo'' y no ''sano'':
-  394 filas que hoy son label=0 pero vienen de vehículos que fallan pasan a las clases
-  intermedias. Por fila PR-AUC 0.157 (bins restringidos 0.152, control 0.165) y el
-  mejor Brier de las tres (0.152 vs 0.173 del control); por vehículo con mean el lift
-  BAJA a 1.31x (control 1.51x). No gana en ninguno de los dos ejes. Lo que deja: el
-  barrido de costo (paga a C_FN/C_FP ~7x, 14% de ahorro) y la auditoría de permutación
-  intra-vehículo, que dice que ni este modelo ni el control binario le ganan a su
-  propio nulo de cohorte. Corrida local con WANDB_MODE=disabled.'
+note: 'RE-CORRIDA de f3-ordinal-horizon-ext (bins extendidos) contra el panel POST-1eab4a1;
+  el registro sin sufijo (0,1567) es del panel pre-fix y NO se compara con este. Misma
+  config, solo --run-name. Por fila 0,1498, la mas baja de las tres post-fix (control
+  0,1612, ordinal restringido 0,1568): post-fix la extendida pasa a ser la peor, al
+  revés de lo que daba el panel viejo. Conserva el mejor Brier (0,1533 contra 0,1727
+  del control), que era su otro rasgo. Por vehiculo con mean el lift baja a 1,29x
+  contra 1,54x del control: el eje de vehiculo tampoco la salva. Ojo con un numero:
+  (a'') = +0,0118, POSITIVO, el unico positivo fuera de survival stacking en todo
+  el registro. Esta medido con R=1 y nada mas, asi que no es comparable con el +0,0162
+  +/- 0,0033 de survival, que esta confirmado con R=3; queda anotado como pista sin
+  medir, no como resultado. Contra el techo de cohorte de 0,2627 no llega.'
 source:
   config_path: configs/exp_ordinal_horizon_ext.yaml
   config_versioned: true
@@ -17,32 +19,32 @@ source:
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm_ordinal
-  pr_auc: 0.156741202964082
-  cohort_ceiling: null
-  cohort_lift: null
-  within_failed: null
-  within_failed_lift: null
-  when_delta: null
+  pr_auc: 0.14976161405917512
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2800167784454245
+  within_failed_lift: 1.066048128963486
+  when_delta: 0.011771744578606774
   vehicle_agg: mean
-  vehicle_pr_auc: 0.4053744473085339
-  vehicle_lift: 1.3079062356558357
+  vehicle_pr_auc: 0.40046667416547144
+  vehicle_lift: 1.2920717223074645
   vehicle_base_rate: 0.30994152046783624
-  pr_auc_lo: 0.1416529606630248
-  pr_auc_hi: 0.2540226245109259
+  pr_auc_lo: 0.13629818227217189
+  pr_auc_hi: 0.22181203389855378
   base_rate: 0.1251848201084278
-  lift: 1.2520783496618992
-  roc_auc: 0.5785050460241765
-  brier: 0.1518665964693672
-  detection_rate: 0.07547169811320754
-  median_lead_km: 12322.470813159141
+  lift: 1.1963240745120722
+  roc_auc: 0.5690140845070423
+  brier: 0.15327134157249772
+  detection_rate: 0.03773584905660377
+  median_lead_km: 13071.470813159141
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel.parquet
-  panel_generation: '2026-09-19'
+  panel_generation: '2026-09-20'
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
   cost_per_1000: null
   cost_best_ratio: 7.0
-  cost_best_savings_frac: 0.13746478873239437
+  cost_best_savings_frac: 0.11549295774647887
   cost_matrix: null
 config:
   name: f3-ordinal-horizon-ext

@@ -1,32 +1,15 @@
-run: f3-lgbm-panel-v1-regen15
+run: f3-lgbm-panel-v1-mil-regen15
 logged_on: '2026-09-20'
-note: 'El control de f3-lgbm-panel-v1 recorrido sobre el panel RECONSTRUIDO despues
-  del umbral de regeneraciones de 15 puntos (commit 1eab4a1): el panel con el que
-  se midio el 0,165 historico es anterior al arreglo. Mismo modelo, mismas filas,
-  mismos folds: 0,1612. Es contra este numero, no contra el 0,165, que se comparan
-  las corridas nuevas. Re-auditado con los criterios nuevos: (a0) 0,1251 vs tasa base
-  0,1252 PASS, (a'') -0,0067 FALLA -> NO APROBADA. El orden dentro del vehiculo le
-  resta: colapsar el score al promedio del vehiculo sube el PR-AUC de 0,1612 a 0,1679.
-  Con R=3 se confirma: -0,0055 +/- 0,0040, negativo en las tres pasadas. No llega
-  al techo de cohorte de 0,2627.
-
-
-  [AUDITORIA · anotado al revisar los criterios] La auditoria (a) —permutar features
-
-  dentro de cada vehiculo esperando que el PR-AUC cayera a la tasa base— NO es un
-  null en
-
-  este panel: deja intacto que vehiculos fallan, que es de donde sale casi todo el
-  PR-AUC,
-
-  y sube a 0,17-0,21. Cualquier lectura de esta corrida que la haya citado como aprobada
-
-  paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
-  el
-
-  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
+note: 'RE-CORRIDA de f3-lgbm-panel-v1-mil contra el panel POST-1eab4a1 (el registro
+  sin sufijo, PR-AUC 0,1653 / lift vehiculo 1,51x, es del panel pre-fix y NO se compara
+  con este). Misma config, solo --run-name. Por fila 0,1612, exactamente el control
+  post-fix f3-lgbm-panel-v1-regen15: el eje de evaluacion no cambia el PR-AUC por
+  fila, que es el punto de MIL. Por vehiculo con mean el lift es 1,54x (pre-fix daba
+  1,51x): el hallazgo de MIL sobrevive al arreglo del umbral. (a'') = -0,0067, negativo,
+  igual que el control. noisy_or sigue dando mas lift y sigue perdiendo contra un
+  nulo que conserva el tamano de bolsa. Contra el techo de cohorte de 0,2627 no llega.'
 source:
-  config_path: configs/exp_lgbm_panel_v1.yaml
+  config_path: configs/exp_lgbm_panel_v1_mil.yaml
   config_versioned: true
   branch: integracion/f3
   commit: 532f82c
@@ -57,11 +40,11 @@ summary:
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
   cost_per_1000: null
-  cost_best_ratio: null
-  cost_best_savings_frac: null
+  cost_best_ratio: 7.0
+  cost_best_savings_frac: 0.14309859154929577
   cost_matrix: null
 config:
-  name: f3-lgbm-panel-v1
+  name: f3-lgbm-panel-v1-mil
   seed: 42
   data:
     panel: ${DATA_DIR}/processed/panel.parquet
@@ -85,6 +68,21 @@ config:
     k_consecutive: 2
     n_thresholds: 50
     max_false_alarms_per_1000: 50
+    vehicle_aggregation:
+    - max
+    - mean
+    - topk
+    - noisy_or
+    vehicle_topk: 3
+    cost_ratios:
+    - 2
+    - 3
+    - 5
+    - 7
+    - 10
+    - 20
+    - 50
+    cost_fp: 1.0
   wandb:
     enabled: true
     project: ford-fic
@@ -99,4 +97,4 @@ config:
     mode: online
     log_artifacts: false
   output_dir: experiments
-  _config_path: configs/exp_lgbm_panel_v1.yaml
+  _config_path: configs/exp_lgbm_panel_v1_mil.yaml

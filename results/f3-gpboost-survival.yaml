@@ -28,8 +28,8 @@ note: 'GPBoost (efecto aleatorio por vehiculo) contra el panel POST-1eab4a1. PR-
 source:
   config_path: configs/exp_gpboost_survival.yaml
   config_versioned: true
-  branch: exp/survival-stacking
-  commit: 02ee0a5
+  branch: integracion/f3
+  commit: 532f82c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: gpboost_survival
@@ -53,8 +53,13 @@ summary:
   median_lead_km: 19058.217292725283
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel_survival.parquet
+  panel_generation: '2026-09-20'
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f3-gpboost-survival
   seed: 42

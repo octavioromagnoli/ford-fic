@@ -52,12 +52,21 @@ note: 'Mismo LightGBM y mismos folds que f3-lgbm-panel-v1: lo único que cambia 
 source:
   config_path: configs/exp_lgbm_panel_v1_mil.yaml
   config_versioned: true
-  branch: exp/ordinal-horizon
-  commit: cb35d65
+  branch: integracion/f3
+  commit: 532f82c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm
   pr_auc: 0.16532514687898425
+  cohort_ceiling: null
+  cohort_lift: null
+  within_failed: null
+  within_failed_lift: null
+  when_delta: null
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.4689731679421328
+  vehicle_lift: 1.513102107888768
+  vehicle_base_rate: 0.30994152046783624
   pr_auc_lo: 0.17269865333226178
   pr_auc_hi: 0.22085401956801082
   base_rate: 0.1251848201084278
@@ -68,6 +77,7 @@ summary:
   median_lead_km: 10408.0
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel.parquet
+  panel_generation: '2026-09-19'
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
   cost_per_1000: null

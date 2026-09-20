@@ -19,6 +19,7 @@ import argparse
 import json
 import math
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,32 @@ def _fmt(value: Any, digits: int = 3) -> str:
     except (TypeError, ValueError):
         return str(value)
     return "—" if math.isnan(number) else f"{number:.{digits}f}"
+
+
+PANEL_BUILDS_CONFIG = "configs/data/panel_builds.yaml"
+
+
+@lru_cache(maxsize=1)
+def _declared_panel_builds() -> dict[str, str]:
+    """Generación del panel declarada para las corridas que no la traen en metrics.json.
+
+    Desde el 20-09-2026 `train.py` la escribe sola. Las corridas anteriores se declaran
+    en `configs/data/panel_builds.yaml`, con la evidencia de cómo se atribuyó cada una.
+    """
+    try:
+        path = resolve_path(PANEL_BUILDS_CONFIG)
+    except Exception:  # noqa: BLE001
+        return {}
+    if not path.exists():
+        return {}
+    declared = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return {str(k): str(v) for k, v in (declared.get("runs") or {}).items()}
+
+
+def _panel_generation(run: str, metrics: dict[str, Any]) -> str | None:
+    """Qué build del panel midió esta corrida. Lo propio manda sobre lo declarado."""
+    recorded = (metrics.get("panel_build") or {}).get("generation")
+    return str(recorded) if recorded else _declared_panel_builds().get(run)
 
 
 def _panel_mtime(panel: Any) -> float | None:
@@ -104,6 +131,7 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
         "median_lead_km": point.get("median_lead_km"),
         "budget": metrics.get("operating_point_budget_per_1000"),
         "panel": (config.get("data") or {}).get("panel"),
+        "panel_generation": _panel_generation(run_dir.name, metrics),
         "splits": (config.get("splits") or {}).get("path"),
         "n_positive": oof.get("n_positive"),
         "cost_per_1000": target.get("cost_per_1000"),
@@ -137,6 +165,21 @@ def comparability_warnings(runs: list[dict[str, Any]]) -> list[str]:
     # así que la única señal que queda es cuándo se midió cada corrida contra cuándo se
     # escribió el panel. Importa: el control se movió de 0,165 a 0,1612 y la tabla
     # separa corridas por menos que eso.
+    generations: dict[str, list[str]] = {}
+    for r in runs:
+        if r.get("panel_generation"):
+            generations.setdefault(r["panel_generation"], []).append(r["run"])
+    if len(generations) > 1:
+        detalle = " · ".join(
+            f"{gen}: {', '.join(sorted(names))}" for gen, names in sorted(generations.items())
+        )
+        warnings.append(
+            "la tabla mezcla corridas medidas contra distintos builds del mismo panel "
+            f"({detalle}). Las de antes de 1eab4a1 (umbral de regeneraciones) no se "
+            "comparan con las de después: el control se movió de 0,1653 a 0,1612, más "
+            "que lo que separa filas de esta tabla. Ver configs/data/panel_builds.yaml"
+        )
+
     stale = sorted(
         r["run"]
         for r in runs

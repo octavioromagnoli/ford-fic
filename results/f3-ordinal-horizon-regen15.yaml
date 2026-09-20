@@ -1,13 +1,14 @@
-run: f3-ordinal-horizon
+run: f3-ordinal-horizon-regen15
 logged_on: '2026-09-20'
-note: 'Target ordinal 5 clases con bins RESTRINGIDOS a [G, G+H] = [500, 3500]. Defecto
-  de diseño: ese intervalo es exactamente el que ya era label=1, así que clase>0 <=>
-  label==1 y el target no aporta nada sobre las 1.775 filas negativas (87% del panel).
-  Mide el costo de varianza de partir 254 positivas en cuatro baldes de ~60 sin el
-  beneficio de información: PR-AUC 0.152 < control 0.165 y Brier 0.207 > 0.173. Se
-  conserva como evidencia; la variante corregida es f3-ordinal-horizon-ext. Costo
-  OOF 18.872 con la matriz de SCANIA, que resultó degenerada a esta tasa base (el
-  barrido de C_FN/C_FP la reemplaza). Corrida local con WANDB_MODE=disabled.'
+note: 'RE-CORRIDA de f3-ordinal-horizon (bins restringidos) contra el panel POST-1eab4a1;
+  el registro sin sufijo (0,1524) es del panel pre-fix y NO se compara con este. Misma
+  config, solo --run-name. Por fila 0,1568 contra 0,1612 del control post-fix: sigue
+  perdiendo, la decision no cambia. Lo que SI cambia es el orden entre las dos variantes
+  ordinales: pre-fix la extendida le ganaba a la restringida (0,1567 vs 0,1524) y
+  post-fix es al revés (0,1568 vs 0,1498). Era justo lo que la nota de no-comparabilidad
+  advertia: la diferencia entre las dos variantes es del mismo orden que el movimiento
+  del panel, asi que ese ranking nunca fue solido. (a'') = -0,0092, negativo. Contra
+  el techo de cohorte de 0,2627 no llega.'
 source:
   config_path: configs/exp_ordinal_horizon.yaml
   config_versioned: true
@@ -16,32 +17,32 @@ source:
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm_ordinal
-  pr_auc: 0.15242324253379358
-  cohort_ceiling: null
-  cohort_lift: null
-  within_failed: null
-  within_failed_lift: null
-  when_delta: null
+  pr_auc: 0.15682403797022929
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.280677468732112
+  within_failed_lift: 1.0685634341100485
+  when_delta: -0.009181021266817385
   vehicle_agg: mean
-  vehicle_pr_auc: 0.4403592656649981
-  vehicle_lift: 1.420781781673862
+  vehicle_pr_auc: 0.4698670484972268
+  vehicle_lift: 1.5159861376042603
   vehicle_base_rate: 0.30994152046783624
-  pr_auc_lo: 0.15145870570157485
-  pr_auc_hi: 0.20409370270707167
+  pr_auc_lo: 0.1512482214762258
+  pr_auc_hi: 0.20384802418066697
   base_rate: 0.1251848201084278
-  lift: 1.217585665752233
-  roc_auc: 0.5778950870577798
-  brier: 0.20655329493164468
-  detection_rate: 0.09433962264150944
-  median_lead_km: 10408.0
+  lift: 1.252740051344863
+  roc_auc: 0.5913430187423755
+  brier: 0.20464732662140608
+  detection_rate: 0.11320754716981132
+  median_lead_km: 10846.5
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel.parquet
-  panel_generation: '2026-09-19'
+  panel_generation: '2026-09-20'
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
-  cost_per_1000: 9301.13356333169
+  cost_per_1000: 9340.068999507146
   cost_best_ratio: 7.0
-  cost_best_savings_frac: 0.14140845070422536
+  cost_best_savings_frac: 0.15211267605633802
   cost_matrix: '[[0, 7, 8, 9, 10], [200, 0, 7, 8, 9], [300, 200, 0, 7, 8], [400, 300,
     200, 0, 7], [500, 400, 300, 200, 0]]'
 config:

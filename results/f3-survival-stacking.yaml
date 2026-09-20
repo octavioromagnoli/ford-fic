@@ -26,8 +26,8 @@ note: 'Survival stacking R=1 contra el panel POST-1eab4a1. PR-AUC 0,1613: EMPATA
 source:
   config_path: configs/exp_survival_stacking.yaml
   config_versioned: true
-  branch: exp/survival-stacking
-  commit: 02ee0a5
+  branch: integracion/f3
+  commit: 532f82c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: survival_stacking
@@ -51,8 +51,13 @@ summary:
   median_lead_km: 8333.272973485362
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel_survival.parquet
+  panel_generation: '2026-09-20'
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f3-survival-stacking
   seed: 42

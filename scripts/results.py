@@ -136,6 +136,14 @@ def cmd_table(args: argparse.Namespace) -> int:
         "PR-AUC out-of-fold. Solo son comparables las corridas con la misma tasa base (mismas filas), splits y presupuesto de falsas alarmas:",
         "un PR-AUC más bajo con otra tasa base puede ser un lift mayor. Las corridas `timesfm3` (zero-shot) no producen estas métricas.",
         "",
+        "**La columna `Panel` trae el build, no solo el archivo.** `panel.parquet` se reescribe en cada reconstrucción, así que dos",
+        "corridas que declaran el mismo path pueden estar midiendo paneles distintos. Las marcadas `2026-09-19` se midieron ANTES del",
+        "commit 1eab4a1 (umbral de regeneraciones: caídas de 5 puntos, que son ruido) y las `2026-09-20` DESPUÉS, con el umbral de 15.",
+        "Mismas filas, mismos vehículos y mismos folds; otros valores en las columnas `feat_*regen*`. El mismo",
+        "`configs/exp_lgbm_panel_v1.yaml` da 0,1653 en un build y 0,1612 en el otro, y esta tabla separa filas por ~0,005: **una corrida",
+        "`2026-09-19` no se compara con una `2026-09-20`**, aunque estén una al lado de la otra ordenadas por PR-AUC. La atribución de",
+        "cada corrida y su evidencia están en `configs/data/panel_builds.yaml`; desde el 20-09 `scripts/train.py` la registra sola.",
+        "",
         "| Corrida | Modelo | Panel | Tasa base | PR-AUC [IC fold] | Lift | Ahorro máx. | Detección | Anticip. mediana | Config | Nota |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
@@ -148,6 +156,8 @@ def cmd_table(args: argparse.Namespace) -> int:
         lead = s.get("median_lead_km")
         lead = "—" if lead is None or math.isnan(float(lead)) else f"{float(lead):,.0f} km"
         panel = Path(str(s.get("panel") or "—")).name
+        if s.get("panel_generation"):
+            panel += f"<br>`{s['panel_generation']}`"
         cfg = r["source"]["config_path"] or "—"
         cfg_cell = f"`{cfg}`" + ("" if r["source"]["config_versioned"] else " ⚠")
         lines.append(

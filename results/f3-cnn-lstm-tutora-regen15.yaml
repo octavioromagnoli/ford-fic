@@ -12,8 +12,8 @@ note: 'RE-CORRIDA del CNN-LSTM contra el panel secuencial RECONSTRUIDO despues d
 source:
   config_path: configs/exp_cnn_lstm.yaml
   config_versioned: true
-  branch: exp/survival-stacking
-  commit: 02ee0a5
+  branch: integracion/f3
+  commit: 532f82c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: cnn_lstm
@@ -37,8 +37,13 @@ summary:
   median_lead_km: 10559.59371452705
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  panel_generation: '2026-09-20'
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f3-cnn-lstm-tutora
   seed: 42

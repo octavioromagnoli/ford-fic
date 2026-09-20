@@ -1,5 +1,5 @@
 run: f3-baserate-panel-v1
-logged_on: '2026-09-19'
+logged_on: '2026-09-20'
 note: '
 
 
@@ -39,12 +39,21 @@ note: '
 source:
   config_path: configs/exp_baserate.yaml
   config_versioned: true
-  branch: feat/model-cnn-lstm
-  commit: 36dad79
+  branch: integracion/f3
+  commit: 532f82c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: baserate
   pr_auc: 0.12139555574321928
+  cohort_ceiling: null
+  cohort_lift: null
+  within_failed: null
+  within_failed_lift: null
+  when_delta: null
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.3061354579025606
+  vehicle_lift: 0.9877200622893936
+  vehicle_base_rate: 0.30994152046783624
   pr_auc_lo: 0.11976403332725172
   pr_auc_hi: 0.13004926108374384
   base_rate: 0.1251848201084278
@@ -55,8 +64,13 @@ summary:
   median_lead_km: .nan
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel.parquet
+  panel_generation: '2026-09-19'
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f3-baserate-panel-v1
   seed: 42

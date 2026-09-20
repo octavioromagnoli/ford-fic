@@ -92,6 +92,46 @@ def cost_block(predictions: pd.DataFrame, eval_cfg: dict) -> dict | None:
     return {"sweep": sweep, **cost_ratio_breakeven(sweep)}
 
 
+def panel_build(panel_path: Path) -> dict | None:
+    """Con qué *build* del panel se midió esta corrida, leído de su `*_meta.json`.
+
+    El path del panel no alcanza para saber contra qué se midió: `panel.parquet` se
+    reescribe cada vez que se reconstruye el dataset, y dos corridas que declaran el
+    mismo archivo pueden estar midiendo paneles distintos (pasó con 1eab4a1, el umbral
+    de regeneraciones: el control se movió de 0,165 a 0,1612, más que lo que separa
+    filas de la tabla de `results/`). Por eso la corrida se queda con el `created_at`
+    del panel, que sí distingue los builds, y `scripts/compare.py` avisa cuando la
+    tabla mezcla dos.
+
+    Los paneles derivados (`panel_survival`, `panel_timesfm`…) no emiten su propio
+    meta: se cae al del panel base del mismo directorio, que es de donde salieron.
+    """
+    candidates = [
+        panel_path.with_name(f"{panel_path.stem}_meta.json"),
+        panel_path.with_name("panel_meta.json"),
+    ]
+    for meta_path in candidates:
+        if not meta_path.exists():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        created = meta.get("created_at")
+        if not created:
+            continue
+        return {
+            "created_at": str(created),
+            # `2026-09-19` alcanza para la columna de la tabla; el timestamp queda
+            # entero para poder ordenar dos builds del mismo día.
+            "generation": str(created)[:10],
+            "meta": meta_path.name,
+            "config": meta.get("config"),
+            "features_spec": meta.get("features_spec"),
+        }
+    return None
+
+
 def select_dev(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Recorta el panel a dev con el holdout congelado. El test nunca llega a la CV.
 
@@ -490,7 +530,8 @@ def main() -> None:
         "operating_point": point,
         "operating_point_budget_per_1000": budget,
         "k_consecutive": k_consecutive,
-        "target": cfg.get("target"),
+        "panel": str(panel_path),
+        "panel_build": panel_build(panel_path),
         "stratify": splits.get("stratify"),
         "min_valid_positives": splits.get("min_valid_positives"),
         "target": target_cfg or None,
