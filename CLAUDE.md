@@ -49,8 +49,8 @@ que las reproduce. Nueve que cambian cómo se escribe el código:
 - **El 77% de las filas positivas cae en el último cuarto de la serie de su vehículo**,
   contra el 30% de las sanas, y **eso no se arregla emparejando**: odómetro, mes y
   posición son estructuralmente incompatibles (un sano no puede estar en el mismo
-  odómetro, el mismo mes y el final de su serie). Cerrar posición abre calendario, y el
-  **eso ya está resuelto** (19-09): con `pseudo_event.enabled` (a cada sano se le sortea
+  odómetro, el mismo mes y el final de su serie), porque cerrar posición abre calendario.
+  **Eso ya está resuelto** (19-09): con `pseudo_event.enabled` (a cada sano se le sortea
   un evento ficticio y se le corta la serie ahí) **más** `label.window_only` (de todos
   los vehículos se conservan solo los `H/Δ` cortes previos al evento real o ficticio), la
   posición cae a **P = 0,49** y el modelo sube a **ROC 0,703** contra 0,617 del v1. Las
