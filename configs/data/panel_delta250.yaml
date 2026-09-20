@@ -1,6 +1,13 @@
-# Config del panel REAL (F2).
+# Panel Δ=250: misma terna que panel_v1 salvo el paso de la grilla de cortes.
 #
-#   python scripts/build_dataset.py --config configs/data/panel_v1.yaml
+#   python scripts/build_dataset.py --config configs/data/panel_delta250.yaml
+#
+# Por qué existe: con Δ=500 la serie de cortes por vehículo tiene mediana 7 en dev
+# (p25 = 3), y las features de secuencia (`sequence:`) necesitan historial del propio
+# vehículo para significar algo — con 3 cortes previos no hay nada que acumular. Δ=250
+# duplica los cortes sin inventar información: son más ventanas solapadas del mismo
+# historial, y la CV agrupada por vehículo impide que se filtren entre folds.
+# Lo que NO cambia: W, G, H, el universo, el holdout y el emparejado.
 #
 # Los valores de W, G, H y Δ salen de la factibilidad medida sobre dev
 # (`python scripts/eda_gaps.py`, bloque 1) y del perfil alineado al evento; el
@@ -24,7 +31,7 @@ label:
   window_km: 1000         # W · ventana móvil hacia atrás sobre la que se agregan las features
   gap_km: 500             # G · blanking. Sin esto el modelo detecta en vez de anticipar
   horizon_km: 3000        # H · el evento cuenta si cae en [corte+G, corte+G+H]
-  cut_step_km: 500        # Δ · cada cuántos km se genera un punto de corte (grilla de múltiplos)
+  cut_step_km: 250        # Δ · la mitad que panel_v1: el doble de cortes por vehículo
   # Sanos: un corte solo es un negativo verificable si el vehículo se observó hasta
   # corte+G+H. `drop` los descarta; `keep_as_negative` los deja como 0 asumiendo que
   # no hubo evento (más filas, etiqueta con ruido).
@@ -56,10 +63,15 @@ sequence:
   # desvío muestral es una diferencia disfrazada. Los cortes que no llegan salen NaN y
   # los imputa el `Pipeline` de cada fold.
   min_history: 3
-  # Holgura del CUSUM, en unidades de desvío del propio vehículo: cuánto se considera
-  # ruido y no se acumula. Con k = 0,5 un corte aislado a +0,3 no mueve nada y hacen
-  # falta ~4 cortes consecutivos a +0,75 para juntar 1,0 de evidencia.
-  k: 0.5
+  # Holgura del CUSUM, en unidades de desvío del propio vehículo. Medido sobre el panel
+  # Δ=500: con k = 0,5 solo el 37% de las filas llega a S > 0 y el acumulador separa
+  # menos (P = 0,526) que con k = 0 (P = 0,554). Con Δ=250 hay el doble de cortes, así
+  # que se arranca en k = 0,25 y el barrido de k queda para el experimento.
+  k: 0.25
+  # Mediana e IQR en vez de media y desvío. Las features son asimétricas
+  # (`idle_per_1000km` tiene skew 3,47) y la z clásica sale con mediana −0,34 en vez de
+  # 0, lo que deja al CUSUM midiendo colas en lugar de tendencia.
+  robust: true
   # Columnas a las que se les calcula `_zself`. Vacío = las del índice. Ampliarlo es
   # barato en cómputo pero caro en grados de libertad: con 254 filas positivas, cada
   # columna nueva es una comparación más que el modelo puede sobreajustar.
@@ -137,16 +149,16 @@ splits:
   n_repeats: 1
 
 output:
-  panel: ${DATA_DIR}/processed/panel.parquet
-  splits: ${DATA_DIR}/processed/splits.json
-  meta: ${DATA_DIR}/processed/panel_meta.json
+  panel: ${DATA_DIR}/processed/panel_delta250.parquet
+  splits: ${DATA_DIR}/processed/splits_delta250.json
+  meta: ${DATA_DIR}/processed/panel_delta250_meta.json
 
 # Publicación como wandb Artifacts (plan §4): `python scripts/log_panel_artifact.py`.
 # Mismo team y proyecto que las corridas (regla 9); `WANDB_ENTITY`/`WANDB_MODE` lo pisan.
 wandb:
   project: ford-fic
   entity: oromagnoli-
-  artifact: panel-v1            # tipo `dataset`: panel.parquet + splits.json + panel_meta.json + YAMLs
+  artifact: panel-delta250      # tipo `dataset`: panel.parquet + splits.json + panel_meta.json + YAMLs
   holdout_artifact: test-split  # tipo `holdout`: test_split.json
-  group: f2-panel
-  tags: [f2, panel-v1]
+  group: f3-panel
+  tags: [f3, panel-delta250]

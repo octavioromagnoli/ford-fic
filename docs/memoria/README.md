@@ -35,8 +35,11 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f2-calidad-columnas-dev.md](f2-calidad-columnas-dev.md) | Tres defectos de columna que la tabla de nulos no muestra |
 | [f2-eda-revision-y-features.md](f2-eda-revision-y-features.md) | **Revisión del EDA (18-09) y panel v1**: el marcador `Regenerations` cortado, el confusor calendario, los idle de 0 km, la terna, el emparejado y cuánta señal hay de verdad |
 | [f3-cadencia-y-ventana.md](f3-cadencia-y-ventana.md) | Por qué la ventana es de km y la cadencia puede ser quincenal (no son lo mismo) |
+| [f3-posicion-en-la-serie.md](f3-posicion-en-la-serie.md) | **La posición del corte en su serie separa con P = 0,83**: el atajo que hereda cualquier feature acumulativa |
+| [f3-secuencia-zself-cusum.md](f3-secuencia-zself-cusum.md) | `_zself` + CUSUM: se construyó, se midió y no da. Qué quedó y qué no queda descartado |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
+| [../f3-features-candidatas-fisica.md](../f3-features-candidatas-fisica.md) | **Lo que sigue**: candidatas por mecanismo físico, empezando por la contradicción del catalizador |
 
 ## Cómo se reproduce todo esto
 
@@ -48,7 +51,8 @@ python scripts/eda_gaps.py         # complemento del EDA: factibilidad, perfil a
 python scripts/build_dataset.py --config configs/data/panel_v1.yaml   # panel real + splits sobre dev + panel_meta.json
 python scripts/log_panel_artifact.py --config configs/data/panel_v1.yaml  # publica panel-v1 y test-split como wandb Artifacts
 python scripts/train.py --config configs/exp_baserate.yaml            # piso contra el panel real
-python scripts/check_setup.py      # 15 chequeos del harness
+python scripts/audit_sequence.py --panel data/processed/panel.parquet  # atajo de posición + features de secuencia
+python scripts/check_setup.py      # 34 chequeos del harness
 ```
 
 > Ojo: `notebooks/eda-exhaustivo-dev.ipynb` §6.2, §6.3 y §7.4 muestran `regen_per_1000km`

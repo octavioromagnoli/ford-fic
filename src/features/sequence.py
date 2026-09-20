@@ -70,15 +70,24 @@ def self_deviation(
     *,
     min_history: int = 3,
     min_std: float = 1e-9,
+    robust: bool = True,
 ) -> pd.DataFrame:
-    """`(x_t − media(x_{<t})) / desvío(x_{<t})` por vehículo, con el pasado del vehículo.
+    """Desvío estandarizado del corte contra el pasado del mismo vehículo.
 
     `min_history` es cuántos cortes previos hace falta tener para que el desvío
     signifique algo: con 2 puntos el desvío muestral es una diferencia disfrazada y el
     z-score explota. Los cortes que no llegan salen NaN.
 
-    Un vehículo con la feature constante en todo su pasado (desvío 0) también sale NaN:
+    Un vehículo con la feature constante en todo su pasado (escala 0) también sale NaN:
     dividir por cero daría ±inf, y "no varió nunca" no es lo mismo que "se desvió mucho".
+
+    **`robust=True` (default): mediana e IQR/1,349 en vez de media y desvío.** No es un
+    gusto, es un arreglo medido: las features de este panel son asimétricas
+    —`idle_per_1000km` tiene skew 3,47 y el 72% de sus valores cae por debajo de su
+    propia media— así que la z clásica tiene mediana **−0,34** en vez de 0. Con esa
+    base, un CUSUM con holgura `k > 0` no acumula nunca salvo por un outlier: en el
+    panel Δ=500 solo el 18% de las filas llegaba a `S > 0`. Con la versión robusta la
+    mediana vuelve a ≈ 0 (−0,07) y el acumulador mide tendencia en vez de cola.
     """
     columns = [c for c in columns if c in panel.columns]
     if not columns:
@@ -88,12 +97,18 @@ def self_deviation(
     grouped = ordered.groupby(ID_COL, observed=True, sort=False)[columns]
     # shift(1): el corte actual NO entra en su propia referencia (regla 3).
     past = grouped.shift(1)
-    past_grouped = past.groupby(ordered[ID_COL].to_numpy(), sort=False)
-    mean = past_grouped.expanding().mean().reset_index(level=0, drop=True)
-    std = past_grouped.expanding().std().reset_index(level=0, drop=True)
-    count = past_grouped.expanding().count().reset_index(level=0, drop=True)
+    expanding = past.groupby(ordered[ID_COL].to_numpy(), sort=False).expanding()
+    if robust:
+        centre = expanding.median().reset_index(level=0, drop=True)
+        q1 = expanding.quantile(0.25).reset_index(level=0, drop=True)
+        q3 = expanding.quantile(0.75).reset_index(level=0, drop=True)
+        scale = (q3 - q1) / 1.349          # IQR -> desvío equivalente de una normal
+    else:
+        centre = expanding.mean().reset_index(level=0, drop=True)
+        scale = expanding.std().reset_index(level=0, drop=True)
+    count = expanding.count().reset_index(level=0, drop=True)
 
-    z = (ordered[columns] - mean) / std.where(std > min_std)
+    z = (ordered[columns] - centre) / scale.where(scale > min_std)
     z = z.where(count >= min_history)
     z = z.replace([np.inf, -np.inf], np.nan)
     z.columns = [f"{c}{ZSELF_SUFFIX}" for c in columns]
@@ -203,7 +218,8 @@ def add_sequence_features(panel: pd.DataFrame, cfg: Mapping[str, Any] | None) ->
             "Los nombres son los del panel (`feat_*`), no los de `features_v1.yaml`."
         )
 
-    z = self_deviation(panel, columns, min_history=min_history)
+    robust = bool(cfg.get("robust", True))
+    z = self_deviation(panel, columns, min_history=min_history, robust=robust)
     idx = degradation_index(z, weights, min_components=int(index_cfg.get("min_components", 2)))
     acc = cusum(panel, idx, k=float(cfg.get("k", 0.5)))
 
@@ -217,6 +233,7 @@ def add_sequence_features(panel: pd.DataFrame, cfg: Mapping[str, Any] | None) ->
     summary = {
         "enabled": True,
         "min_history": min_history,
+        "robust": robust,
         "k": float(cfg.get("k", 0.5)),
         "zself_columns": columns,
         "index_weights": weights,

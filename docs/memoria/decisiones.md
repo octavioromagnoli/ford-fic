@@ -5,6 +5,48 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-19 · La familia E (secuencia) queda apagada, y primero se trabajan features
+
+**Decidió:** Gonzalo · **Código:** `src/features/sequence.py` (queda),
+`sequence.enabled: false` en `configs/data/panel_v1.yaml` y `panel_delta250.yaml`.
+
+**Qué cambia.** Las 7 columnas de secuencia (`_zself`, índice, CUSUM, racha) salen del
+panel. El módulo, el bloque del YAML y los 5 chequeos de `check_setup.py` quedan; poner
+`enabled: true` las reactiva. El panel canónico vuelve a 53 `feat_` y 2.507 filas, idéntico
+al de F2.
+
+**Por qué.** Se construyó, se midió sobre dev y ninguna columna de secuencia le gana a la
+feature de nivel de la que sale: el índice separa con P = 0,53 contra P = 0,59 de
+`feat_idle_per_1000km`. Peor: el gradiente hacia el evento que mostraba el CUSUM era el
+**atajo de posición** (la posición relativa del corte en su serie separa sola con
+P = 0,83); contra sanos en la misma posición, los que fallan acumulan *menos*. Son 7
+columnas débiles con un atajo de construcción adentro, compitiendo por 254 filas
+positivas.
+
+**Qué se probó antes de apagarla.** Estandarización robusta (mediana/IQR en vez de
+media/desvío: arregla un sesgo real, la z mediana pasa de −0,34 a −0,07) y Δ = 250, que
+duplica la serie de cortes por vehículo (mediana 7 → 14). Las dos mejoran los números y
+ninguna alcanza.
+
+**Qué queda.** `scripts/audit_sequence.py` y el protocolo de auditoría por estratos de
+posición, que ahora se aplica a cualquier feature acumulativa;
+`self_deviation(robust=True)` como default; y `configs/data/panel_delta250.yaml` como
+panel alternativo —mismo universo y holdout, el doble de filas, **los mismos 53
+eventos**—, que lo decida una corrida de modelo y no una intuición.
+
+**Qué sigue.** Features antes que modelos: con ROC ≈ 0,58–0,60, un modelo mejor no rescata
+un panel que no mide el mecanismo. El menú está en
+[`../f3-features-candidatas-fisica.md`](../f3-features-candidatas-fisica.md), y arranca por
+la contradicción del catalizador: los que fallan terminan los viajes con el filtro *menos*
+cargado y regeneran *menos*. La hipótesis a probar es que el nivel del DPF es una variable
+controlada, y que lo informativo es el **esfuerzo de control** (eficiencia de cada
+regeneración, residuo que no se va, distancia entre regeneraciones encogiéndose).
+
+**Detalle:** [f3-secuencia-zself-cusum.md](f3-secuencia-zself-cusum.md) ·
+[f3-posicion-en-la-serie.md](f3-posicion-en-la-serie.md)
+
+---
+
 ## 2026-09-19 · Los viajes se recorren por `TripNumber`, y la cadencia se separa de la ventana
 
 **Decidió:** Gonzalo (a partir de la auditoría del eje de odómetro sobre dev).

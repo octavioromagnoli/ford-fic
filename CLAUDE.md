@@ -15,14 +15,17 @@ construye `data/processed/panel.parquet` (W=1000, G=500, H=3000, Δ=500) con 53
 features declaradas en `configs/data/features_v1.yaml`; el panel, los splits y el
 holdout están publicados como wandb Artifacts (`panel-v1`, `test-split`; se suben con
 `scripts/log_panel_artifact.py`) y `configs/exp_baserate.yaml` es el piso contra el
-panel real. **Lo siguiente es F3 (baselines) y F4 (dashboard contra el panel real)**,
-en paralelo; las ideas de modelos están en `docs/f3-modelos-candidatos.md`. De ese menú
-ya está implementada la §2.4 (desvío contra uno mismo + CUSUM), como familia E de
-features.
+panel real. **Lo siguiente es F3 y F4 (dashboard contra el panel real)**, y dentro de F3 la decisión
+del 19-09 es **features antes que modelos**: con ROC ≈ 0,58–0,60, un modelo mejor no
+rescata un panel que no mide el mecanismo. El menú de features está en
+`docs/f3-features-candidatas-fisica.md` (arranca por la contradicción del catalizador) y
+el de modelos en `docs/f3-modelos-candidatos.md`. La §2.4 de ese menú (desvío contra uno
+mismo + CUSUM) **se implementó, se midió y quedó apagada**: no le gana al nivel y heredaba
+el atajo de posición.
 
 **Antes de tocar los datos, leer [`docs/memoria/`](docs/memoria/README.md).** Ahí
 están los hallazgos de F1/F2 y las decisiones tomadas, con la evidencia y el comando
-que las reproduce. Ocho que cambian cómo se escribe el código:
+que las reproduce. Nueve que cambian cómo se escribe el código:
 
 - Los datos vienen en **dos cohortes de muestreo** (failed / not_failed) y la
   cohorte *es* la etiqueta: `IdentificationDate` nula ⇔ sin evento. Nunca entra
@@ -53,6 +56,15 @@ que las reproduce. Ocho que cambian cómo se escribe el código:
 - **El 35% de las filas de `trips` son idle de 0 km** (motor encendido sin moverse) y
   son la señal que más anticipa. Toda fracción "de viaje" se calcula entre los que se
   mueven; `KilometerPerHour` es nulo exactamente ahí y se recalcula como km/duración.
+- **La posición de un corte dentro de la serie de su vehículo separa con P = 0,83**, más
+  que la mejor feature del panel. Es construcción, no física: las filas positivas son los
+  últimos `H/Δ` cortes de una serie que termina en `E − G`. Por eso **ninguna feature
+  puede ser monótona en el índice de corte** (acumuladores, contadores, `km_since_last_*`,
+  estadísticos con ventana expandida), y cualquier gradiente "hacia el evento" se compara
+  contra sanos **en la misma posición**. Se audita con `scripts/audit_sequence.py`.
+- **Los viajes de un vehículo se recorren por `TripNumber`, no por fecha.** El 0,67%
+  comparte `TripDatetimeStart` y ordenar por fecha baraja esos empates: el odómetro parece
+  retroceder en 231 vehículos de 290 cuando en realidad son 8.
 
 ## Contrato de datos
 
@@ -165,7 +177,8 @@ scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambia
 scripts/train.py         entrypoint único de entrenamiento
 scripts/compare.py       tabla comparativa de corridas (markdown)
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (15 chequeos)
+scripts/check_setup.py   smoke test del harness (34 chequeos)
+scripts/audit_sequence.py  ¿una feature separa, o mide la posición del corte en su serie? (dev-only, no escribe)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4
@@ -194,8 +207,9 @@ revisar el YAML para no duplicar con otro nombre. Resumen:
   zero-inflated, `msg_abnormal_frac`, `msgs_per_1000km`, `oil_life_mean` y su pendiente
   (el delta intra-viaje es 0 siempre), consumo por 100 km.
 - **Control de ventana (2):** `n_trips_window`, `window_km_covered`.
-- **E secuencia (7), desde `src/features/sequence.py` y el bloque `sequence:` del YAML
-  del panel:** un `feat_<x>_zself` por componente del índice —desvío estandarizado del
+- **E secuencia (7), `src/features/sequence.py` — APAGADA**, `sequence.enabled: false`.
+  Se midió y no le gana al nivel; el detalle está en
+  `docs/memoria/f3-secuencia-zself-cusum.md`. Reactivarla es cambiar una clave. Produce: un `feat_<x>_zself` por componente del índice —desvío estandarizado del
   corte contra los cortes **anteriores del mismo vehículo**—, más
   `feat_degradation_index` (media de los `zself` con el signo físico de cada uno),
   `feat_degradation_cusum` (evidencia acumulada, `S_t = max(0, S_{t−1} + idx_t − k)`) y
