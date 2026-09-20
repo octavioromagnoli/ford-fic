@@ -153,6 +153,17 @@ def cmd_table(args: argparse.Namespace) -> int:
         "",
         "⚠ = el YAML no estaba commiteado al anotar; la config completa está embebida en `results/<corrida>.yaml`",
         "(`python scripts/results.py show <corrida>` la imprime lista para guardarse como `configs/exp_*.yaml`).",
+        "",
+        "## Cómo se anota una corrida",
+        "",
+        "1. Entrenar: `python scripts/train.py --config configs/exp_<x>.yaml` (deja `experiments/<corrida>/`).",
+        "2. Anotar, con la nota de qué se probó y qué se concluyó:",
+        "   `python scripts/results.py log <corrida> --note \"...\"` (`--force` para reescribir; la nota se conserva).",
+        "3. Regenerar esta tabla: `python scripts/results.py table --out results/README.md`.",
+        "4. Commitear `results/<corrida>.yaml`, la tabla **y el `configs/exp_<x>.yaml`** de la corrida, en la misma rama.",
+        "",
+        "Anotar justo después de entrenar: rama y commit del registro son los del checkout donde se anota.",
+        "Para la entrega: elegir la corrida ganadora en la tabla y sacar su config con `show`.",
     ]
     text = "\n".join(lines) + "\n"
     if args.out:

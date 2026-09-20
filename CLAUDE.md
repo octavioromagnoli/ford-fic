@@ -206,3 +206,7 @@ regeneración (`Stopped Cleaning Automatically` es 1 mensaje de cada 100.000).
   evaluación (`src/eval`, dashboard).
 - Antes de cada PR, pasar el checklist de trampas técnicas del plan §9 y correr
   `python scripts/check_setup.py`.
+- Toda corrida que valga la pena se anota en `results/` (`python scripts/results.py
+  log <corrida> --note "..."`) y se commitea con su `configs/exp_*.yaml`: `experiments/`
+  y wandb no se versionan. La config del modelo final sale de ahí (`results.py show`).
+  Detalle en `results/README.md`.
