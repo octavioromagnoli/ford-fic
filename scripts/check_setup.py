@@ -29,9 +29,11 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from scripts.make_dummy import build_dummy_panel  # noqa: E402
-from src.config import set_seed  # noqa: E402
+from scripts.build_eda_cache import resolved_eda_config  # noqa: E402
+from src.config import load_config, set_seed  # noqa: E402
 from src.eval.metrics import classification_metrics, lead_time_curve, operating_point  # noqa: E402
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
+from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
 
 CONTRACT_COLUMNS = {
@@ -69,6 +71,25 @@ def check(name: str, condition: bool, detail: str = "") -> None:
 def main() -> int:
     set_seed(7)
     panel = build_dummy_panel(SMALL_PANEL)
+
+    # 0 · contrato de parsing y umbrales compartidos
+    sources = load_config("configs/data/raw_sources.yaml")
+    features = load_config("configs/data/features_v1.yaml")
+    eda_cfg = resolved_eda_config(load_config("configs/data/eda_cache.yaml"))
+    check(
+        "loader: fechas mixtas usan ISO8601",
+        all(sources["tables"][name].get("date_format") == "ISO8601" for name in ("trips", "signals")),
+    )
+    regen_threshold = float(features["thresholds"]["regen_drop_points"])
+    check(
+        "features: regeneración exige una caída de 15 puntos",
+        regen_threshold == 15.0,
+    )
+    check(
+        "EDA y fallback comparten el umbral de regeneración",
+        float(eda_cfg["regen_drop_points"]) == regen_threshold
+        and float(DEFAULT_THRESHOLDS["regen_drop_points"]) == regen_threshold,
+    )
 
     # 1 · contrato de datos
     missing = [c for c in CONTRACT_COLUMNS if c not in panel.columns]

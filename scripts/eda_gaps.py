@@ -68,6 +68,7 @@ from scripts.build_eda_cache import (  # noqa: E402
     dev_universe,
     load_eda_cache,
     read_dev_table,
+    resolved_eda_config,
     with_trip_derived,
 )
 from src.config import ensure_dir, load_config, set_seed  # noqa: E402
@@ -84,7 +85,6 @@ REGIME_C = 70.0
 URBAN_KMH = 30.0
 COLD_START_C = 40.0        # refrigerante al arrancar por debajo => motor frío
 CHAINED_MIN = 30.0         # viaje que arranca < 30 min después del anterior: motor aún caliente
-REGEN_DROP = 5.0           # caída de AirRegeneration dentro del viaje que cuenta como regeneración
 SATURATION = 95.0
 
 
@@ -123,7 +123,7 @@ def load_dev(cfg: dict[str, Any], out_dir: Path) -> tuple[pd.DataFrame, pd.DataF
     return veh, trips, signals
 
 
-def enrich_trips(trips: pd.DataFrame, veh: pd.DataFrame) -> pd.DataFrame:
+def enrich_trips(trips: pd.DataFrame, veh: pd.DataFrame, *, regen_drop_points: float) -> pd.DataFrame:
     """Columnas a nivel viaje que el EDA no había derivado."""
     out = trips
     info = veh.set_index(ID)
@@ -147,7 +147,7 @@ def enrich_trips(trips: pd.DataFrame, veh: pd.DataFrame) -> pd.DataFrame:
     out["trip_km_moving"] = out["trip_km"].where(moving)
     out["duration_moving"] = out["trip_duration_min"].where(moving)
     out["urban"] = out["speed_calc"] < URBAN_KMH
-    out["regen_drop"] = out["air_regen_delta"] < -REGEN_DROP
+    out["regen_drop"] = out["air_regen_delta"] < -float(regen_drop_points)
     out["saturated_end"] = out["AirRegenerationEnd"] >= SATURATION
     out["filter_abnormal_end"] = out["AirFilterEnd"].notna() & out["AirFilterEnd"].ne(NORMAL_MESSAGE)
     out["stopped_auto_end"] = out["AirFilterEnd"].eq(STOPPED_AUTO)
@@ -512,7 +512,13 @@ def within_vehicle_stability(trips: pd.DataFrame, signals: pd.DataFrame, *, wind
 # ======================================================================================
 # 8 · Chequeos de dato que faltaban
 # ======================================================================================
-def data_checks(veh: pd.DataFrame, trips: pd.DataFrame, signals: pd.DataFrame) -> dict[str, Any]:
+def data_checks(
+    veh: pd.DataFrame,
+    trips: pd.DataFrame,
+    signals: pd.DataFrame,
+    *,
+    regen_drop_points: float,
+) -> dict[str, Any]:
     out: dict[str, Any] = {}
     # TripNumber: ¿secuencial por vehículo?
     by_time = trips.sort_values([ID, "TripDatetimeStart"])
@@ -572,7 +578,10 @@ def data_checks(veh: pd.DataFrame, trips: pd.DataFrame, signals: pd.DataFrame) -
     out["air_regen_delta_frac_pos"] = float((delta > 0).mean())
     out["air_regen_delta_frac_zero"] = float((delta == 0).mean())
     out["air_regen_delta_frac_neg"] = float((delta < 0).mean())
-    out["air_regen_delta_frac_drop_gt5"] = float((delta < -5).mean())
+    out["air_regen_delta_frac_below_threshold"] = float(
+        (delta < -float(regen_drop_points)).mean()
+    )
+    out["regen_drop_points"] = float(regen_drop_points)
     out["air_regen_levels"] = sorted(pd.unique(trips["AirRegenerationEnd"].dropna()).astype(int).tolist())
 
     # ¿Cuántos viajes hay en 1.000 km?
@@ -638,10 +647,11 @@ def main() -> int:
     args = parser.parse_args()
     cfg = load_config(args.config)
     set_seed(int(cfg["seed"]))
+    regen_drop_points = float(resolved_eda_config(cfg)["regen_drop_points"])
     out_dir = ensure_dir(str(cfg["output"]["dir"]).rstrip("/") + "/gaps")
 
     veh, trips, signals = load_dev(cfg, out_dir)
-    trips = enrich_trips(trips, veh)
+    trips = enrich_trips(trips, veh, regen_drop_points=regen_drop_points)
     signals = enrich_signals(signals, veh)
     print(f"dev: {len(veh)} vehículos · {len(trips):,} viajes · {len(signals):,} señales")
 
@@ -712,7 +722,12 @@ def main() -> int:
         frame.to_csv(out_dir / f"calendar_{name}.csv")
 
     # 8
-    checks = data_checks(veh, trips, signals)
+    checks = data_checks(
+        veh,
+        trips,
+        signals,
+        regen_drop_points=regen_drop_points,
+    )
     _print("8 · chequeos de dato", json.dumps(checks, indent=2, ensure_ascii=False, default=str))
     (out_dir / "data_checks.json").write_text(json.dumps(checks, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     print(f"\nEscrito en {out_dir}")

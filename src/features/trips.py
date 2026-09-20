@@ -49,7 +49,7 @@ DEFAULT_THRESHOLDS: dict[str, float] = {
     "urban_speed_kmh": 30.0,     # velocidad media por debajo => uso urbano
     "cold_start_c": 40.0,        # refrigerante al arrancar por debajo => arranque en frío
     "chained_trip_min": 30.0,    # arranca a menos de X min del viaje anterior => motor aún caliente
-    "regen_drop_points": 5.0,    # caída de AirRegeneration dentro del viaje que cuenta como regeneración
+    "regen_drop_points": 15.0,   # umbral de respaldo; el valor productivo sale del YAML
     "saturation_level": 95.0,    # nivel de AirRegeneration considerado saturado
     "fuel_min_trip_km": 5.0,     # km mínimos para estimar consumo en un viaje
 }

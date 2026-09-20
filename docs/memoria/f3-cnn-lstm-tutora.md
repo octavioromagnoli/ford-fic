@@ -3,6 +3,10 @@
 **Fecha:** 2026-09-19 · **Fase:** F3 · **Alcance:** dev del panel v1 (2.029 filas, 171
 vehículos, 254 positivas, tasa base 0,125), mismos folds congelados. · **Reproduce:**
 
+> Esta corrida histórica usó el umbral anterior de 5 puntos para `regen_drops`.
+> El contrato vigente usa 15; hay que reconstruir el panel secuencial y reentrenar
+> antes de comparar el número con corridas nuevas.
+
 ```bash
 uv pip install -r requirements-dl.txt                                        # torch, opcional
 python scripts/build_seq_panel.py --config configs/data/panel_seq_v1.yaml    # ~15 s

@@ -1,5 +1,9 @@
 # `AirRegeneration*` y `AirFilter*`: el DPF estaba en `trips` con otro nombre
 
+> **Corrección del 20-09:** el umbral exploratorio de 5 puntos documentado abajo
+> cuenta ruido. El contrato vigente exige 15 puntos; ver
+> [f2-umbral-regeneraciones.md](f2-umbral-regeneraciones.md).
+
 **Fecha:** 2026-09-16 · **Fase:** F2 (previo) · **Alcance de la medición:** dev
 dev antes del recorte del universo del 17-09 (864 vehículos). **Re-medido sobre los
 290 del universo actual, el hallazgo se sostiene:** 13.919 pares alineados,

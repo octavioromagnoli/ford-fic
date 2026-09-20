@@ -338,7 +338,7 @@ def trip_aggregates(trips: pd.DataFrame, eda: dict[str, Any]) -> pd.DataFrame:
         _speed_null=trips["KilometerPerHour"].isna(),
         _regen_saturated=(trips["AirRegenerationEnd"] >= saturation),
         _regen_positive=(trips["air_regen_delta"] > 0),
-        _regen_drop=(trips["air_regen_delta"] < -5),
+        _regen_drop=(trips["air_regen_delta"] < -float(eda["regen_drop_points"])),
         _refuel=(trips["FuelLvlEndPc"] > trips["FuelLvlStartPc"]),
         _filter_abnormal=(trips["AirFilterEnd"].notna() & trips["AirFilterEnd"].ne(NORMAL_MESSAGE)),
     )
@@ -728,7 +728,7 @@ def event_odometer(vehicles: pd.DataFrame, trips: pd.DataFrame, origin_day: floa
 def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
     """Arma el cache completo y lo escribe. Devuelve la metadata."""
     rng = np.random.default_rng(int(cfg["seed"]))
-    eda = cfg["eda"]
+    eda = resolved_eda_config(cfg)
     out_dir = ensure_dir(cfg["output"]["dir"])
     dev_vehicles, test_vehicles, split = dev_universe(cfg)
     universe = split.get("universe") or {}
@@ -892,11 +892,23 @@ def build_cache(cfg: dict[str, Any]) -> dict[str, Any]:
         "signals": signal_counters,
         "probe_vehicles": sorted(probe_ids.tolist()),
         "truncation_fracs": list(eda["truncation_fracs"]),
-        "thresholds": {k: eda[k] for k in ("short_trip_km", "very_short_trip_km", "regime_temp_c", "urban_speed_kmh", "saturation_level")},
+        "thresholds": {k: eda[k] for k in ("short_trip_km", "very_short_trip_km", "regime_temp_c", "urban_speed_kmh", "regen_drop_points", "saturation_level")},
         "tables": {name: {"rows": int(len(f)), "cols": int(f.shape[1])} for name, f in tables.items()},
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return meta
+
+
+def resolved_eda_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Combina cortes exploratorios con los umbrales productivos del panel.
+
+    `features_v1.yaml` es la única fuente de verdad para definiciones compartidas
+    como una regeneración. Así el EDA no puede seguir contando con un umbral viejo
+    después de que cambie el panel.
+    """
+    panel_cfg = load_config(cfg["panel"])
+    feature_cfg = load_config(panel_cfg["features"]["spec"])
+    return {**cfg["eda"], **(feature_cfg.get("thresholds") or {})}
 
 
 def _sample(frame: pd.DataFrame, n: int, rng: np.random.Generator) -> pd.DataFrame:

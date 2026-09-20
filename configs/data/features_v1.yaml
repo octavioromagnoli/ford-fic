@@ -16,7 +16,7 @@ thresholds:
   urban_speed_kmh: 30.0       # velocidad media (recalculada) por debajo => urbano
   cold_start_c: 40.0          # CoolantTemperatureStart por debajo => arranque en frío
   chained_trip_min: 30.0      # arranca < 30 min después del viaje anterior => motor caliente
-  regen_drop_points: 5.0      # caída de AirRegeneration en el viaje que cuenta como regeneración
+  regen_drop_points: 15.0     # caída mínima validada; 5 puntos cuenta ruido como regeneración
   saturation_level: 95.0      # AirRegenerationEnd >= 95 => saturado (la escala llega a 100)
   fuel_min_trip_km: 5.0       # km mínimos para estimar consumo en un viaje
 
@@ -60,7 +60,8 @@ families:
 
   # ------------------------------------------------------------------------------
   # B · Salud del ciclo de regeneración, desde `trips.AirRegeneration*` (== signals
-  # .Acumulation, 99,8%). "Regeneración" = caída > 5 puntos dentro del viaje: el
+  # .Acumulation, 99,8%). "Regeneración" = caída > 15 puntos dentro del viaje: con
+  # 5 puntos el saldo no sigue la acumulación medida (ver memoria); el
   # marcador `Regenerations` de `signals` se corta el 25-05-2026 y queda como aux.
   # ------------------------------------------------------------------------------
   B_regeneration:

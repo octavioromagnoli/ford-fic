@@ -5,6 +5,25 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-20 · Una regeneración exige una caída mínima de 15 puntos
+
+**Qué.** `regen_drop_points` pasa de 5 a 15 en la fuente de verdad
+`configs/data/features_v1.yaml`. El panel agregado, el secuencial y los scripts de EDA
+leen ese mismo valor; no quedan copias operativas del umbral viejo.
+
+**Por qué.** Con 5 puntos, el saldo de las caídas no seguía la acumulación medida
+(correlación 0,005). Con 15, la correlación mediana dentro del vehículo sube a 0,45.
+El detector todavía cuenta ~2,5 veces más eventos que el marcador `Regeneration`, así
+que 15 queda como umbral operativo y no como ground truth definitivo.
+
+**Costo.** Hay que regenerar `panel-v1`, el panel secuencial y cualquier corrida que use
+la familia B. Los resultados anteriores siguen documentando lo que dio el umbral de 5,
+pero no se comparan como si fueran el mismo dataset.
+
+**Detalle:** [f2-umbral-regeneraciones.md](f2-umbral-regeneraciones.md).
+
+---
+
 ## 2026-09-20 · Los resultados de cada corrida se anotan en `results/`, versionados
 
 **Código:** `scripts/results.py`. **Cómo se usa:** `results/README.md`.

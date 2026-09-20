@@ -3,6 +3,11 @@
 **Fecha:** 2026-09-18 · **Fase:** F2 · **Alcance:** dev (290 vehículos, 60 eventos) para
 todo lo que se mide; el panel se construye con los 364 del universo. · **Reproduce:**
 
+> **Corrección del 20-09:** las mediciones de regeneraciones de este documento usaron
+> caídas de 5 puntos. Ese umbral cuenta ruido y fue reemplazado por 15 puntos; ver
+> [f2-umbral-regeneraciones.md](f2-umbral-regeneraciones.md). Las cifras históricas de
+> abajo se conservan para no reescribir qué se midió.
+
 ```bash
 python scripts/eda_gaps.py                                  # deja experiments/eda/dev/gaps/*.csv
 python scripts/build_dataset.py --config configs/data/panel_v1.yaml
@@ -177,7 +182,7 @@ tiene sentido. Las de mensajes raros son ruido puro por ventana.
 |---|---|
 | `src/data/subset.py` | lee `trips`/`signals` para un conjunto de vehículos: canoniza → filtra → deduplica filas exactas (la fila completa) |
 | `src/data/anchor.py` | origen del calendario (estimado sobre dev, congelado en `panel_meta.json`) y odómetro del evento por interpolación |
-| `src/features/trips.py` | derivadas a nivel viaje: idle/moving, velocidad recalculada, topes físicos, regen = caída > 5 de `AirRegeneration`, reposo, consumo |
+| `src/features/trips.py` | derivadas a nivel viaje: idle/moving, velocidad recalculada, topes físicos, regen = caída > 15 de `AirRegeneration`, reposo, consumo |
 | `src/features/signals.py` | una booleana por nivel de `Message`; `regen_marker` solo como aux |
 | `src/features/windows.py` | primitiva de ventana `(c − W, c]` sobre odómetro + agregadores (`per_1000km`, `half_*` para tendencias robustas, `gap_*`, `km_since_last`, …) |
 | `src/data/panel.py` | cortes en grilla de Δ, etiqueta, política de censura, QC de ventana, emparejado de sanos |

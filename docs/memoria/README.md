@@ -36,6 +36,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f2-eda-revision-y-features.md](f2-eda-revision-y-features.md) | **Revisión del EDA (18-09) y panel v1**: el marcador `Regenerations` cortado, el confusor calendario, los idle de 0 km, la terna, el emparejado y cuánta señal hay de verdad |
 | [f3-cnn-lstm-tutora.md](f3-cnn-lstm-tutora.md) | La solución de la tutora (CNN-LSTM, rama dinámica + estática) como baseline: cómo se interpretó, cuánto da y qué auditorías pasó |
 | [f2-fechas-formato-mixto.md](f2-fechas-formato-mixto.md) | Las fechas no tienen nulos: el 0,3% era parseo de dos formatos mezclados, y también rompía el dedupe de `signals` |
+| [f2-umbral-regeneraciones.md](f2-umbral-regeneraciones.md) | Por qué las caídas de 5 puntos son ruido y el detector pasa a exigir 15 |
 | [f3-timesfm-zeroshot.md](f3-timesfm-zeroshot.md) | TimesFM zero-shot en el panel v1: no le gana a la tasa base, pero señaló el desvío respecto de la historia del vehículo |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |

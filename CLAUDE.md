@@ -189,7 +189,7 @@ revisar el YAML para no duplicar con otro nombre. Resumen:
   `below_regime_moving_frac`, `below_regime_frac_trend`, temperaturas de motor y
   refrigerante, `cold_start_frac`, `chained_trip_frac`, distancia y duración por viaje.
 - **B regeneración (15), desde `trips.AirRegeneration*`:** `regenerations_per_1000km`
-  (caídas > 5 puntos), su tendencia, distancia entre regeneraciones y su tendencia,
+  (caídas > 15 puntos; 5 cuenta ruido), su tendencia, distancia entre regeneraciones y su tendencia,
   `km_since_last_regen`, nivel residual y de arranque de la regeneración, `dpf_end_*`,
   `dpf_positive_delta_frac`, `dpf_saturated_frac`, `filter_*`, `manual_regen_ever`.
 - **C uso (6):** velocidad recalculada, fracción urbana, viajes por 1.000 km y por día,

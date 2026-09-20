@@ -79,7 +79,10 @@ def load_source(name: str, vehicles: set[str], base_cfg: dict, spec_cfg: dict, c
     if name == "signals":
         keep = {ID, *SIGNAL_COLUMNS, "eventTimestamp", "Acumulation"}
         frame, _ = derive_signal_columns(frame[[c for c in frame.columns if c in keep]])
-        return derive_signal_sequence_columns(frame, regen_drop_points=float(thresholds.get("regen_drop_points", 5.0)))
+        return derive_signal_sequence_columns(
+            frame,
+            regen_drop_points=float(thresholds["regen_drop_points"]),
+        )
     frame = frame[[c for c in frame.columns if c in {ID, *TRIP_COLUMNS}]]
     frame, _ = derive_trip_columns(frame, thresholds=thresholds, clip=spec_cfg.get("clip"))
     return frame
