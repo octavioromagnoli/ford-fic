@@ -29,6 +29,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from src.eval.metrics import classification_metrics
 from src.eval.splits import iter_repeats
 from src.models.registry import get_model
+from src.training.targets import build_target, decode_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,7 @@ def run_cv(
     *,
     model_name: str,
     model_params: dict[str, Any] | None = None,
+    target: dict[str, Any] | None = None,
     target_column: str = TARGET_COLUMN,
     feature_prefixes: tuple[str, ...] = FEATURE_PREFIXES,
     strict_splits: bool = True,
@@ -116,6 +118,12 @@ def run_cv(
     Las predicciones traen las columnas que necesitan las métricas de anticipación
     (`vehicle_id`, `cut_odo`, `score`, `event_observed`, `time_to_event_km`), así
     F4 consume el parquet sin volver a tocar el panel.
+
+    `target` elige con qué se entrena mediante el registro de
+    `src/training/targets.py`. La etiqueta binaria `label` sigue siendo la verdad de
+    evaluación de todos los folds. El mismo registro decodifica la salida del modelo
+    a `score` y puede agregar probabilidades auxiliares sin meter ramas específicas
+    de cada modo en este loop.
     """
     if target_column not in panel.columns:
         raise KeyError(f"El panel no tiene la columna objetivo `{target_column}`")
@@ -126,8 +134,19 @@ def run_cv(
     X = panel[feature_columns]
     y = panel[target_column].astype(int).to_numpy()
 
+    target_name = (target or {}).get("name")
+    target_params = dict((target or {}).get("params") or {})
+    if target_name:
+        logger.info(
+            "Target de entrenamiento: %s%s | evaluación: %s binaria",
+            target_name,
+            f" {target_params}" if target_params else "",
+            target_column,
+        )
+
     repeat_scores: list[np.ndarray] = []
     repeat_folds: list[np.ndarray] = []
+    repeat_extras: list[dict[str, np.ndarray]] = []
     fold_metrics: list[dict[str, float]] = []
 
     for repeat, masks in iter_repeats(
@@ -135,6 +154,8 @@ def run_cv(
     ):
         oof_score = np.full(len(panel), np.nan, dtype=float)
         oof_fold = np.full(len(panel), -1, dtype=int)
+        oof_extras: dict[str, np.ndarray] = {}
+        expected_extra_names: set[str] | None = None
 
         for fold, train_mask, valid_mask in masks:
             pipeline = Pipeline(
@@ -143,8 +164,29 @@ def run_cv(
                     ("model", get_model(model_name, model_params)),
                 ]
             )
-            pipeline.fit(X.loc[train_mask], y[train_mask])
-            scores = _predict_scores(pipeline, X.loc[valid_mask])
+            fit_target = (
+                build_target(target_name, panel, train_mask, **target_params).y
+                if target_name
+                else y[train_mask]
+            )
+            pipeline.fit(X.loc[train_mask], fit_target)
+            decoded = decode_predictions(
+                target_name, pipeline, X.loc[valid_mask], **target_params
+            )
+            scores = decoded.score
+
+            extra_names = set(decoded.extras)
+            if expected_extra_names is None:
+                expected_extra_names = extra_names
+            elif extra_names != expected_extra_names:
+                raise RuntimeError(
+                    f"El decoder `{target_name}` cambió sus columnas entre folds: "
+                    f"{sorted(expected_extra_names)} vs. {sorted(extra_names)}"
+                )
+            for column, values in decoded.extras.items():
+                if column not in oof_extras:
+                    oof_extras[column] = np.full(len(panel), np.nan, dtype=float)
+                oof_extras[column][valid_mask] = values
 
             oof_score[valid_mask] = scores
             oof_fold[valid_mask] = fold
@@ -171,6 +213,13 @@ def run_cv(
             )
         repeat_scores.append(oof_score)
         repeat_folds.append(oof_fold)
+        for column, values in oof_extras.items():
+            if np.isnan(values).any():
+                raise RuntimeError(
+                    f"Repetición {repeat}: `{column}` quedó sin valor OOF en "
+                    f"{int(np.isnan(values).sum())} filas."
+                )
+        repeat_extras.append(oof_extras)
 
     if not repeat_scores:
         raise RuntimeError("Los splits no tienen ninguna repetición: no se entrenó nada")
@@ -180,6 +229,15 @@ def run_cv(
     ].copy()
     stacked = np.vstack(repeat_scores)
     predictions["score"] = stacked.mean(axis=0)
+
+    if repeat_extras and repeat_extras[0]:
+        extra_names = set(repeat_extras[0])
+        if any(set(extras) != extra_names for extras in repeat_extras[1:]):
+            raise RuntimeError("El decoder cambió sus columnas auxiliares entre repeticiones")
+        for column in sorted(extra_names):
+            predictions[column] = np.vstack(
+                [extras[column] for extras in repeat_extras]
+            ).mean(axis=0)
 
     if len(repeat_scores) == 1:
         predictions["fold"] = repeat_folds[0]
@@ -197,10 +255,4 @@ def run_cv(
 
 def _predict_scores(pipeline: Pipeline, X: pd.DataFrame) -> np.ndarray:
     """Probabilidad de la clase positiva; `decision_function` como fallback."""
-    if hasattr(pipeline, "predict_proba"):
-        proba = pipeline.predict_proba(X)
-        classes = list(pipeline.classes_)
-        if 1 in classes:
-            return proba[:, classes.index(1)].astype(float)
-        return proba[:, -1].astype(float)
-    return np.asarray(pipeline.decision_function(X), dtype=float)
+    return decode_predictions(None, pipeline, X).score

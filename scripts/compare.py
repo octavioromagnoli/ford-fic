@@ -49,6 +49,7 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
     config_path = run_dir / "config.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
     point = metrics.get("operating_point") or {}
+    target = metrics.get("target_report") or {}
     summary = metrics.get("folds_summary") or {}
     oof = metrics.get("oof", {})
     return {
@@ -67,6 +68,12 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
         "panel": (config.get("data") or {}).get("panel"),
         "splits": (config.get("splits") or {}).get("path"),
         "n_positive": oof.get("n_positive"),
+        "cost_per_1000": target.get("cost_per_1000"),
+        "cost_matrix": (
+            json.dumps((config.get("eval") or {})["cost_matrix"], sort_keys=True)
+            if "cost_matrix" in (config.get("eval") or {})
+            else None
+        ),
     }
 
 
@@ -77,6 +84,7 @@ def comparability_warnings(runs: list[dict[str, Any]]) -> list[str]:
         ("panel", "panel"),
         ("splits", "splits"),
         ("budget", "presupuesto de falsas alarmas"),
+        ("cost_matrix", "matriz de costos"),
     ):
         values = {r[field] for r in runs if r[field] is not None}
         if len(values) > 1:
@@ -92,8 +100,8 @@ def render_table(runs: list[dict[str, Any]]) -> str:
     )
     budget = next((r["budget"] for r in ranked if r["budget"] is not None), None)
     lines = [
-        f"| Corrida | Modelo | PR-AUC (oof) | Lift vs. base | ROC-AUC | Brier | Detección | Anticip. mediana |",
-        "|---|---|---|---|---|---|---|---|",
+        f"| Corrida | Modelo | PR-AUC (oof) | Lift vs. base | ROC-AUC | Brier | Costo/1000 | Detección | Anticip. mediana |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in ranked:
         detection = "—" if r["detection_rate"] is None else f"{100 * float(r['detection_rate']):.0f}%"
@@ -101,7 +109,8 @@ def render_table(runs: list[dict[str, Any]]) -> str:
             else f"{float(r['median_lead_km']):,.0f} km"
         lines.append(
             f"| `{r['run']}` | {r['model']} | {_fmt(r['pr_auc'])} | {_fmt(r['lift'], 2)}× | "
-            f"{_fmt(r['roc_auc'])} | {_fmt(r['brier'])} | {detection} | {lead} |"
+            f"{_fmt(r['roc_auc'])} | {_fmt(r['brier'])} | {_fmt(r['cost_per_1000'], 0)} | "
+            f"{detection} | {lead} |"
         )
     base = next((r["base_rate"] for r in ranked if r["base_rate"] is not None), None)
     budgets = {r["budget"] for r in ranked if r["budget"] is not None}

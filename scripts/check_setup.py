@@ -36,6 +36,7 @@ from src.config import load_config, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
     VEHICLE_AGGREGATIONS,
     classification_metrics,
+    cost_matrix_score,
     lead_time_curve,
     operating_point,
     vehicle_metrics,
@@ -44,6 +45,7 @@ from src.eval.metrics import (  # noqa: E402
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
+from src.training.targets import build_ordinal_target  # noqa: E402
 
 CONTRACT_COLUMNS = {
     "vehicle_id": "object",
@@ -115,6 +117,31 @@ def main() -> int:
     check(
         "panel: ningún label positivo dentro del gap de blanking",
         bool((panel.loc[panel["label"] == 1, "time_to_event_km"] >= panel.loc[panel["label"] == 1, "gap_km"]).all()),
+    )
+
+    # 1b · reformulación ordinal y matriz de costos, ambas gobernadas por YAML.
+    ordinal_cfg = load_config("configs/exp_ordinal_horizon.yaml")
+    ordinal_params = ordinal_cfg["target"]["params"]
+    ordinal = build_ordinal_target(
+        panel, np.ones(len(panel), dtype=bool), **ordinal_params
+    ).y
+    observed = panel["event_observed"].to_numpy(dtype=int) == 1
+    visible = ordinal > 0
+    ordered = np.argsort(panel.loc[visible, "time_to_event_km"].to_numpy(dtype=float))
+    check(
+        "target ordinal: sanos=0 y eventos en clases ordenadas por proximidad",
+        bool(
+            (ordinal[~observed] == 0).all()
+            and (np.diff(ordinal[visible][ordered]) <= 0).all()
+            and np.array_equal(ordinal > 0, panel["label"].to_numpy(dtype=int) == 1)
+        ),
+    )
+    matrix = ordinal_cfg["eval"]["cost_matrix"]
+    expected_cost = float(matrix[0][4] + matrix[4][0])
+    check(
+        "métricas: la matriz cobra por clase real/predicha y conserva la asimetría",
+        cost_matrix_score([0, 4], [4, 0], matrix) == expected_cost
+        and matrix[4][0] > matrix[0][4],
     )
 
     # 2 · splits antileakage

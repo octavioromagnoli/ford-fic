@@ -133,8 +133,8 @@ def cmd_table(args: argparse.Namespace) -> int:
         "PR-AUC out-of-fold. Solo son comparables las corridas con la misma tasa base (mismas filas), splits y presupuesto de falsas alarmas:",
         "un PR-AUC más bajo con otra tasa base puede ser un lift mayor. Las corridas `timesfm3` (zero-shot) no producen estas métricas.",
         "",
-        "| Corrida | Modelo | Panel | Tasa base | PR-AUC [IC fold] | Lift | Detección | Anticip. mediana | Config | Nota |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| Corrida | Modelo | Panel | Tasa base | PR-AUC [IC fold] | Lift | Costo/1000 | Detección | Anticip. mediana | Config | Nota |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in sorted(records, key=pr_auc, reverse=True):
         s = r["summary"]
@@ -147,7 +147,7 @@ def cmd_table(args: argparse.Namespace) -> int:
         lines.append(
             f"| `{r['run']}` | {s.get('model', '?')} | {panel} | {_fmt(s.get('base_rate'))} | {_fmt(s.get('pr_auc'))} "
             f"[{_fmt(s.get('pr_auc_lo'))}, {_fmt(s.get('pr_auc_hi'))}] | {_fmt(s.get('lift'), 2)}× | "
-            f"{det} | {lead} | {cfg_cell} | {r.get('note') or ''} |"
+            f"{_fmt(s.get('cost_per_1000'), 0)} | {det} | {lead} | {cfg_cell} | {r.get('note') or ''} |"
         )
     lines += [
         "",

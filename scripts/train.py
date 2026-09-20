@@ -61,6 +61,7 @@ from src.eval.splits import (  # noqa: E402
     test_split_masks,
 )
 from src.training.cv import run_cv  # noqa: E402
+from src.training.targets import target_report as build_target_report  # noqa: E402
 
 logger = logging.getLogger("train")
 
@@ -296,6 +297,7 @@ def main() -> None:
     splits = load_or_make_splits(panel, cfg)
 
     model_cfg = cfg["model"]
+    target_cfg = cfg.get("target") or {}
     run_name = args.run_name or cfg.get("name") or f"{model_cfg['name']}-{datetime.now():%Y%m%d-%H%M%S}"
     run = init_wandb(cfg, run_name)
 
@@ -305,12 +307,19 @@ def main() -> None:
         splits,
         model_name=model_cfg["name"],
         model_params=model_cfg.get("params", {}),
+        target=target_cfg or None,
         strict_splits=bool(cfg.get("splits", {}).get("strict", True)),
         min_valid_positives=options["min_valid_positives"],
     )
 
     eval_cfg = cfg.get("eval", {})
     k_consecutive = int(eval_cfg.get("k_consecutive", 2))
+    target_metrics = build_target_report(
+        target_cfg.get("name"),
+        predictions,
+        cost_matrix=eval_cfg.get("cost_matrix"),
+        **dict(target_cfg.get("params") or {}),
+    )
 
     n_repeats = int(splits.get("n_repeats", 1))
     by_repeat = repeat_metrics(predictions, n_repeats)
@@ -352,6 +361,8 @@ def main() -> None:
         "k_consecutive": k_consecutive,
         "stratify": splits.get("stratify"),
         "min_valid_positives": splits.get("min_valid_positives"),
+        "target": target_cfg or None,
+        "target_report": target_metrics or None,
     }
     if vehicle is not None:
         metrics["vehicle"] = vehicle
@@ -372,6 +383,13 @@ def main() -> None:
         )
     else:
         logger.info("Ningún umbral respeta el presupuesto de %.0f falsas alarmas/1000", budget)
+    if target_metrics and "cost_total" in target_metrics:
+        logger.info(
+            "Costo ordinal OOF | total=%.0f | medio=%.2f | por 1000 filas=%.0f",
+            target_metrics["cost_total"],
+            target_metrics["cost_mean"],
+            target_metrics["cost_per_1000"],
+        )
 
     if vehicle is not None and "base_rate" in vehicle:
         logger.info(
@@ -421,6 +439,13 @@ def main() -> None:
                     if isinstance(value, (int, float)) and not isinstance(value, bool)
                 }
             )
+        flat.update(
+            {
+                f"target/{key}": value
+                for key, value in target_metrics.items()
+                if isinstance(value, (int, float))
+            }
+        )
         if point:
             flat.update(
                 {

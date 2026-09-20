@@ -68,6 +68,41 @@ def classification_metrics(y_true: Sequence[int], y_score: Sequence[float]) -> d
     }
 
 
+def cost_matrix_score(
+    y_true: Sequence[int], y_pred: Sequence[int], matrix: Sequence[Sequence[float]]
+) -> float:
+    """Costo total de las decisiones, con filas reales y columnas predichas.
+
+    La escala y la asimetría pertenecen al experimento y por eso `matrix` llega
+    desde el YAML. El retorno es la suma (no una accuracy disfrazada), igual que
+    la definición del benchmark SCANIA Component X; quien necesite costo medio o
+    por 1.000 filas lo deriva conservando este total auditable.
+    """
+    truth = np.asarray(y_true)
+    predicted = np.asarray(y_pred)
+    costs = np.asarray(matrix, dtype=float)
+    if truth.ndim != 1 or predicted.ndim != 1 or len(truth) != len(predicted):
+        raise ValueError("`y_true` e `y_pred` tienen que ser vectores del mismo largo")
+    if costs.ndim != 2 or costs.shape[0] != costs.shape[1] or costs.shape[0] == 0:
+        raise ValueError("La matriz de costos tiene que ser cuadrada y no vacía")
+    if not np.isfinite(costs).all() or (costs < 0).any():
+        raise ValueError("La matriz de costos solo puede contener valores finitos no negativos")
+
+    truth_int = truth.astype(int)
+    predicted_int = predicted.astype(int)
+    if not np.array_equal(truth, truth_int) or not np.array_equal(predicted, predicted_int):
+        raise ValueError("Las clases reales y predichas tienen que ser enteros")
+    n_classes = costs.shape[0]
+    if (
+        (truth_int < 0).any()
+        or (truth_int >= n_classes).any()
+        or (predicted_int < 0).any()
+        or (predicted_int >= n_classes).any()
+    ):
+        raise ValueError(f"Las clases tienen que estar entre 0 y {n_classes - 1}")
+    return float(costs[truth_int, predicted_int].sum())
+
+
 # --------------------------------------------------------------------------- #
 # Métricas de anticipación
 # --------------------------------------------------------------------------- #
