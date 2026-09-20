@@ -24,6 +24,34 @@ paralelo y una tabla compartida se pisaría en cada merge.
 
 ---
 
+## 2026-09-19 · Los modelos secuenciales entran por un panel secuencial, no por un entrypoint aparte
+
+**Decidió:** Octavio (pedido: la solución de la tutora como baseline).
+**Código:** `src/features/sequences.py`, `scripts/build_seq_panel.py`,
+`src/models/cnn_lstm.py`. **Config:** `configs/data/panel_seq_v1.yaml`,
+`configs/exp_cnn_lstm.yaml`.
+
+**Qué.** La secuencia de cada corte (ventana en bins de odómetro × canales) se aplana a
+columnas `feat_seq_*` de un panel con **las mismas filas** que el panel v1, y el modelo
+secuencial es un builder más del registry que reconstruye el tensor con la forma que
+deja el builder en `panel_seq_v1_meta.json`. `scripts/train.py` y `src/training/cv.py`
+no se tocaron.
+
+**Por qué.** Un `train_seq.py` aparte habría duplicado el recorte a dev, los folds, las
+métricas y el logueo, que son justo lo que garantiza que dos números sean comparables.
+Así, el CNN-LSTM usa los mismos folds, el mismo holdout y el mismo preprocesado por fold
+que cualquier otro modelo, y su número se pone al lado del LightGBM sin asteriscos.
+
+**Costo.** El modelo depende de un orden de columnas (numéricas primero, en orden
+`(t, canal)`); el builder verifica que las únicas `feat_*` sean la secuencia, y el
+modelo que el ancho alcance. Un panel que mezcle `feat_seq_*` con agregados de ventana
+rompería el reshape: si hace falta un híbrido, se cambia el contrato, no se fuerza.
+PyTorch queda como dependencia opcional (`requirements-dl.txt`) hasta discutirlo.
+
+**Detalle:** [f3-cnn-lstm-tutora.md](f3-cnn-lstm-tutora.md)
+
+---
+
 ## 2026-09-18 · La CV estratifica por `label` a nivel vehículo, con guarda de positivos y CV repetida
 
 **Decidió:** Santino (auditoría de la CV sobre el universo de 364). **Código:**

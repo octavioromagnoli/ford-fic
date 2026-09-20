@@ -1,0 +1,5 @@
+# Dependencia OPCIONAL: solo para los modelos secuenciales (`cnn_lstm`, src/models/cnn_lstm.py).
+# No entra a requirements.txt (pinneado y compartido) hasta que se discuta en PR; el
+# registry la importa recién al construir el modelo, así que sin torch todo lo demás corre.
+#   uv pip install -r requirements-dl.txt
+torch==2.14.0

@@ -258,7 +258,11 @@ la normalización por mercado sale del modelo. `pymc` o `numpyro` como dependenc
 
 - **GRU/LSTM/Transformer sobre viajes o cortes.** 53 eventos. Va a perder contra el
   boosting y va a costar la semana que el dashboard necesita (plan §6, stretch goal
-  explícitamente condicionado a "más de cien").
+  explícitamente condicionado a "más de cien"). *Nota 19-09:* la solución de la tutora
+  (CNN-LSTM) se implementó igual como baseline, con ~3.000 parámetros y reusando
+  `train.py`; quedó a 0,01 de PR-AUC del LightGBM solo con `signals`
+  ([f3-cnn-lstm-tutora.md](memoria/f3-cnn-lstm-tutora.md)). La advertencia sigue
+  valiendo para arquitecturas más grandes.
 - **SMOTE o re-muestreo de positivos.** Fabrica filas sintéticas a partir de cortes
   del mismo vehículo → leakage dentro del fold. Pesos de clase, nunca re-muestreo
   (plan §6, 5a).

@@ -54,3 +54,17 @@ def _build_random(params: dict[str, Any]) -> BaseEstimator:
     params.setdefault("strategy", "uniform")
     params.setdefault("random_state", 42)
     return DummyClassifier(**params)
+
+
+@register("cnn_lstm")
+def _build_cnn_lstm(params: dict[str, Any]) -> BaseEstimator:
+    """Baseline de la tutora: Conv1D + LSTM sobre la secuencia de `signals`, y las estáticas al final.
+
+    Solo corre sobre el panel secuencial (`scripts/build_seq_panel.py`): la forma del
+    tensor sale de `sequence_meta`. Arquitectura y decisiones en `src/models/cnn_lstm.py`.
+    """
+    from src.models.cnn_lstm import CNNLSTMClassifier  # import adentro: torch es opcional
+
+    params.setdefault("class_weight", "balanced")
+    params.setdefault("random_state", 42)
+    return CNNLSTMClassifier(**params)
