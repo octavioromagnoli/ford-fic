@@ -3,13 +3,46 @@
 
     python scripts/audit_model.py --config configs/exp_survival_stacking.yaml
 
-`docs/f3-modelos-candidatos.md` §0.4 pide tres cosas de todo modelo antes de creerle un
-número. Son las tres formas conocidas de sacar PR-AUC sin haber aprendido nada:
+`docs/f3-modelos-candidatos.md` §0.4 pide auditar todo modelo antes de creerle un
+número. Lo que sigue son las formas conocidas de sacar PR-AUC sin haber aprendido nada,
+**con una corrección**: de las tres originales, la (a) resultó no ser un null en este
+panel, así que los criterios de aprobación son **(a0)** y **(a')**, y (a) quedó como
+informativa (ver `docs/memoria/decisiones.md`).
 
-**(a) Permutación dentro del vehículo.** Se barajan, entre los cortes de un mismo
-vehículo, las **features**: cada ventana queda pegada a otro corte del mismo auto.
-Queda intacto *qué* vehículos fallan y se destruye *cuándo*. El PR-AUC tiene que caer
-cerca de la tasa base.
+Antes que todo, el número contra el que se leen los demás:
+
+**El techo de cohorte.** En dev las 254 filas positivas están **todas** dentro de los
+967 cortes de vehículos fallados, así que puntuar cada fila con "¿este auto falla?" —sin
+la menor idea de *cuándo*— da PR-AUC 0,2627 y lift 2,10×. Ese es el piso contra el que se
+lee un PR-AUC por fila, no la tasa base de 0,1252: un modelo por debajo del techo no
+demostró timing, y la meta de 1,6–2× de lift del plan se alcanza sin anticipar nunca.
+Sale de `src/eval/metrics.py::cohort_ceiling` y lo reporta toda corrida de `train.py`.
+
+**(a0) El null de verdad — criterio de aprobación.** Permutar las features entre
+*todas* las filas, que rompe también el vínculo vehículo ↔ ventana. No queda nada que
+aprender, así que el PR-AUC **tiene que caer a la tasa base**. Si no cae, hay leakage y
+ningún otro número de la corrida vale.
+
+**(a') El aporte del *cuándo* — criterio de aprobación.** Tomar las predicciones de la
+referencia y reemplazar el score de cada fila por el promedio de su vehículo, sin
+reentrenar. Lo que se pierde es exactamente lo que el modelo sabía del *cuándo*, con
+todo lo demás fijo. Es la única cuenta que aísla el timing, y es la que el producto
+necesita: un delta ≤ 0 significa que el modelo no anticipa —ordena los cortes al azar o
+al revés— por más PR-AUC por fila que tenga.
+
+**(a) Permutación dentro del vehículo — informativa, NO es un null.** Se barajan, entre
+los cortes de un mismo vehículo, las **features**: cada ventana queda pegada a otro
+corte del mismo auto. La intención original era destruir el *cuándo* dejando intacto el
+*qué*, y esperar que el PR-AUC cayera a la tasa base. **No cae: sube.** No es un bug.
+Deja en pie qué vehículos fallan —que es de donde sale casi todo el PR-AUC de este
+panel— y de paso le saca a cada vehículo el ruido de qué ventana le tocó, así que lo que
+entrena es un ordenador de vehículos más limpio. Medido con tres semillas y con los dos
+modelos (`exp_lgbm_panel_v1` incluido) da siempre 0,17–0,21 contra 0,161 de referencia.
+
+Como su valor esperado bajo "el modelo no aprendió nada" no es la tasa base ni ninguna
+otra cosa que sepamos calcular, **(a) no se marca ni como pass ni como falla**: se
+imprime y se lee junto a (a'). Una corrida que "pasó (a)" pasó un test que no mide
+timing; si algún informe la cita como aprobación, hay que rehacerlo.
 
 Barajar las features y no la etiqueta es a propósito, y no es un atajo: reordenar los
 pares `(X, y)` de un vehículo es la misma reasignación de cualquiera de los dos lados,
@@ -19,21 +52,6 @@ supervivencia ni se enteraría (su objetivo sale de `time_to_event_km`, no de `l
 la referencia y la auditoría quedarían medidas contra etiquetas distintas — que fue lo
 que pasó la primera vez que se escribió esto: la permutación daba *más* PR-AUC, porque
 "¿es un vehículo que falla?" es un problema más fácil que "¿falla en los próximos H km?".
-
-Ojo con la lectura: en este panel **esta permutación no es un null y el PR-AUC sube**.
-No es un bug: deja intacto qué vehículos fallan —que es de donde sale casi todo el
-PR-AUC— y de paso le saca a cada vehículo el ruido de qué ventana le tocó, así que lo
-que entrena es un ordenador de vehículos más limpio. Medido con tres semillas y con los
-dos modelos (`exp_lgbm_panel_v1` incluido) da siempre 0,17–0,21 contra 0,161 de
-referencia. Por eso van dos auditorías más alrededor:
-
-* **(a0) el null de verdad**: permutar las features entre *todas* las filas, que rompe
-  también el vínculo vehículo ↔ ventana. Ahí sí el PR-AUC tiene que caer a la tasa base,
-  y si no cae hay leakage.
-* **(a') el aporte del *cuándo***: tomar las predicciones de la referencia y
-  reemplazar el score de cada fila por el promedio de su vehículo, sin reentrenar. Lo
-  que se pierde es exactamente lo que el modelo sabía del *cuándo*, con todo lo demás
-  fijo. Es la cuenta que la permutación no puede hacer.
 
 **(b) Las `aux_` de calendario como `feat_`.** `aux_air_temp_avg`,
 `aux_regen_marker_per_1000km` y `aux_static_ProductionDay` miden el calendario, y el
@@ -65,7 +83,13 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from src.config import ensure_dir, load_config, resolve_path, set_seed  # noqa: E402
-from src.eval.metrics import classification_metrics, concordance_index_oof  # noqa: E402
+from src.eval.metrics import (  # noqa: E402
+    classification_metrics,
+    cohort_ceiling,
+    concordance_index_oof,
+    pr_auc_within_failed,
+    when_contribution,
+)
 from src.models.registry import get_model  # noqa: E402
 from src.training.cv import build_preprocessor, run_cv, select_feature_columns  # noqa: E402
 from src.training.targets import build_target  # noqa: E402
@@ -220,7 +244,7 @@ def importances(panel: pd.DataFrame, cfg: dict, *, top: int = 20) -> pd.DataFram
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", required=True)
-    parser.add_argument("--seed", type=int, default=0, help="Semilla de la permutación (auditoría a)")
+    parser.add_argument("--seed", type=int, default=0, help="Semilla de las permutaciones de features (auditorías a0 y a)")
     parser.add_argument("--top", type=int, default=20, help="Cuántas features imprime la auditoría (c)")
     parser.add_argument("--out", default=None, help="Dónde dejar el JSON (default: experiments/<run>/audit.json)")
     args = parser.parse_args()
@@ -255,6 +279,14 @@ def main() -> int:
     results = [reference, null, permuted, collapsed, calendar]
     within = within_vehicle_auc(ref_predictions)
 
+    # El techo y las dos métricas del *cuándo* salen de `src/eval/metrics.py`, que es lo
+    # mismo que reporta `train.py`: la auditoría no puede discrepar del metrics.json.
+    ceiling = cohort_ceiling(ref_predictions["label"], ref_predictions["vehicle_id"])
+    within_failed = pr_auc_within_failed(
+        ref_predictions["label"], ref_predictions["score"], ref_predictions["vehicle_id"]
+    )
+    when = when_contribution(ref_predictions)
+
     table = pd.DataFrame(results)[
         [c for c in ("audit", "pr_auc", "pr_auc_lift", "roc_auc", "brier", "c_index", "base_rate") if c in reference]
     ]
@@ -262,34 +294,68 @@ def main() -> int:
 
     print("\n== Auditorías ==")
     print(table.round(4).to_string(index=False))
+
     delta_roc = calendar["roc_auc"] - reference["roc_auc"]
     delta_null = null["pr_auc"] - null["base_rate"]
     delta_perm = reference["pr_auc"] - permuted["pr_auc"]
-    delta_when = reference["pr_auc"] - collapsed["pr_auc"]
-    print(f"\n(a0) null: PR-AUC {null['pr_auc']:.4f} vs tasa base {null['base_rate']:.4f} "
-          f"({delta_null:+.4f}) — {'OK, no hay leakage' if abs(delta_null) < 0.02 else 'NO CAE: hay leakage'}")
-    print(f"(a) permutación dentro del vehículo: {delta_perm:+.4f} de PR-AUC. "
-          + ("El *cuándo* aporta."
-             if delta_perm > 0
-             else "Sube. En este panel esta permutación NO es un null: deja intacto el "
-                  "nivel del vehículo y le saca el ruido de la ventana, así que entrena "
-                  "un ordenador de vehículos mejor. Se lee con (a'), no sola."))
-    print(f"(a') borrar el *cuándo* del score (sin retrain): {delta_when:+.4f} de PR-AUC — "
-          + ("el orden dentro del vehículo suma" if delta_when > 0 else "el orden dentro del vehículo resta"))
+    delta_when = when["delta"]
+    passed_a0 = abs(delta_null) < 0.02
+    passed_when = delta_when > 0
+
+    print("\n== El piso: qué se saca sin anticipar nunca ==")
+    beats = reference["pr_auc"] > ceiling["pr_auc"]
+    print(f"techo de cohorte: PR-AUC {ceiling['pr_auc']:.4f} (lift {ceiling['lift']:.2f}x) — "
+          f"{ceiling['n_positive']}/{ceiling['n_failed_rows']} filas de vehículos fallados")
+    print(f"este modelo:      PR-AUC {reference['pr_auc']:.4f} (lift {reference['pr_auc_lift']:.2f}x) — "
+          + ("SUPERA el techo" if beats else
+             "NO supera el techo: identificar la cohorte daría más, este PR-AUC no "
+             "demuestra anticipación"))
+    print(f"entre fallados:   PR-AUC {within_failed['pr_auc']:.4f} "
+          f"(lift {within_failed['lift']:.2f}x sobre {within_failed['base_rate']:.4f}, "
+          f"{within_failed['n']} filas de {within_failed['n_vehicles']} vehículos)")
+
+    print("\n== Criterios de aprobación: (a0) y (a') ==")
+    print(f"(a0) null: PR-AUC {null['pr_auc']:.4f} vs tasa base {null['base_rate']:.4f} "
+          f"({delta_null:+.4f}) — {'PASS, no hay leakage' if passed_a0 else 'FALLA: NO CAE, hay leakage'}")
+    print(f"(a') aporte del *cuándo* (sin retrain): {delta_when:+.4f} de PR-AUC "
+          f"({when['pr_auc']:.4f} → {when['pr_auc_vehicle_mean']:.4f} al promediar por vehículo) — "
+          + ("PASS, el orden dentro del vehículo suma" if passed_when else
+             "FALLA: el orden dentro del vehículo resta, el modelo anda mejor colapsado"))
     print(f"     ROC dentro del vehículo: {within['within_vehicle_roc_mean']:.4f} sobre "
           f"{within['n_vehicles']} vehículos con cortes de las dos clases "
           f"({'ordena al revés' if within['within_vehicle_roc_mean'] < 0.5 else 'ordena bien'})")
+
+    print("\n== Informativas: (a), (b), (c) ==")
+    print(f"(a) permutación dentro del vehículo: {delta_perm:+.4f} de PR-AUC "
+          f"({reference['pr_auc']:.4f} → {permuted['pr_auc']:.4f}).")
+    print("    NO es un criterio: ni pass ni falla. Esta permutación no puede dar nulo —deja")
+    print("    intacto *qué* vehículos fallan, que es de donde sale casi todo el PR-AUC de")
+    print("    este panel, y encima le saca a cada auto el ruido de qué ventana le tocó—, así")
+    print("    que no hay valor esperado contra el cual leerla. El *cuándo* lo mide (a').")
     print(f"(b) las aux_ de calendario mueven el ROC {delta_roc:+.4f} "
           f"({'hay atajo, revisar' if delta_roc > 0.02 else 'no hay salto'})")
     if top is not None:
         print("\n(c) importancias sobre dev:")
         print(top.round(4).to_string(index=False))
 
+    veredicto = "APROBADA" if (passed_a0 and passed_when) else "NO APROBADA"
+    faltan = [n for n, ok in (("a0", passed_a0), ("a'", passed_when)) if not ok]
+    print(f"\n== Veredicto: {veredicto} ==" + (f" — falla {', '.join(faltan)}" if faltan else ""))
+    if not beats:
+        print("   (y el PR-AUC por fila está por debajo del techo de cohorte: aprobar (a0) y")
+        print("    (a') dice que lo poco que sabe del cuándo es real, no que sea mucho)")
+
     run_name = cfg.get("name") or Path(args.config).stem
     out = Path(args.out) if args.out else ensure_dir(Path(resolve_path(cfg.get("output_dir", "experiments"))) / run_name) / "audit.json"
     out.write_text(
         json.dumps(
             {"config": cfg.get("_config_path"), "seed": args.seed, "audits": results,
+             "passed": {"a0": bool(passed_a0), "a_prime": bool(passed_when),
+                        "verdict": veredicto,
+                        "a_within_vehicle": "informativa: no es un null, no se aprueba ni se falla"},
+             "cohort_ceiling": ceiling,
+             "pr_auc_within_failed": within_failed,
+             "when_contribution": when,
              "within_vehicle": within,
              "importances": top.to_dict("records") if top is not None else None},
             indent=2, default=float,
