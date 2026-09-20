@@ -42,12 +42,15 @@ from src.eval.metrics import (  # noqa: E402
     VEHICLE_LABEL_COLUMN,
     bootstrap_by_vehicle,
     classification_metrics,
+    cohort_ceiling,
     concordance_index_oof,
     dispersion,
     lead_time_curve,
     operating_point,
+    pr_auc_within_failed,
     summarize_folds,
     vehicle_metrics,
+    when_contribution,
 )
 from src.eval.splits import (  # noqa: E402
     MIN_VALID_POSITIVES,
@@ -345,6 +348,18 @@ def main() -> None:
     point = operating_point(curve, max_false_alarms_per_1000=budget)
     vehicle = vehicle_block(predictions, eval_cfg, n_repeats)
 
+    # Descomposición cohorte / cuándo. Va en TODA corrida, no solo en `audit_model.py`:
+    # el PR-AUC por fila de este panel está dominado por *qué* vehículo falla (el techo
+    # de cohorte es 0,2627 sobre dev, contra una tasa base de 0,1252), así que un número
+    # suelto no dice si el modelo anticipa. Las tres piezas son baratas —salen de las
+    # predicciones que ya están en memoria, sin reentrenar nada— y se guardan con claves
+    # nuevas para no tocar lo que ya leen las corridas viejas ni wandb.
+    ceiling = cohort_ceiling(predictions["label"], predictions["vehicle_id"])
+    within_failed = pr_auc_within_failed(
+        predictions["label"], predictions["score"], predictions["vehicle_id"]
+    )
+    when = when_contribution(predictions)
+
     # Secundarias. El C-index mide el orden usando a los sanos como censurados, no como
     # ceros; el bootstrap por vehículo es el intervalo que corresponde a un panel con ~5
     # filas correlacionadas por auto (el de folds mide otra cosa: el sorteo de folds).
@@ -367,6 +382,9 @@ def main() -> None:
         "folds": fold_metrics,
         "folds_summary": summary,
         "concordance": concordance,
+        "cohort_ceiling": ceiling,
+        "pr_auc_within_failed": within_failed,
+        "when_contribution": when,
         "bootstrap_by_vehicle": by_vehicle,
         "operating_point": point,
         "operating_point_budget_per_1000": budget,
@@ -380,6 +398,19 @@ def main() -> None:
 
     logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
                 oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
+    logger.info(
+        "Cohorte | techo %.4f (lift %.2fx) con %d/%d filas de vehículos fallados — "
+        "el PR-AUC de arriba %s",
+        ceiling["pr_auc"], ceiling["lift"], ceiling["n_positive"], ceiling["n_failed_rows"],
+        "lo supera" if oof["pr_auc"] > ceiling["pr_auc"] else
+        "NO lo supera: identificar la cohorte ya daría más, esto no demuestra anticipación",
+    )
+    logger.info(
+        "Cuándo | PR-AUC entre fallados=%.4f (lift %.2fx sobre %.4f, %d filas) | "
+        "(a') aporte del cuándo=%+.4f (%.4f → %.4f al promediar por vehículo)",
+        within_failed["pr_auc"], within_failed["lift"], within_failed["base_rate"],
+        within_failed["n"], when["delta"], when["pr_auc"], when["pr_auc_vehicle_mean"],
+    )
     if concordance and np.isfinite(concordance["c_index"]):
         logger.info("OOF | C-index=%.4f sobre %d filas (%d con evento)",
                     concordance["c_index"], concordance["n"], concordance["n_events"])
@@ -436,6 +467,9 @@ def main() -> None:
                      for stat, v in stats.items()})
         if concordance:
             flat["oof/c_index"] = concordance["c_index"]
+        flat.update({f"cohort/{k}": v for k, v in ceiling.items()})
+        flat.update({f"within_failed/{k}": v for k, v in within_failed.items()})
+        flat.update({f"when/{k}": v for k, v in when.items()})
         if by_vehicle:
             flat.update({f"vehicle_boot/{k}_{stat}": v
                          for k, ci in by_vehicle.items()
