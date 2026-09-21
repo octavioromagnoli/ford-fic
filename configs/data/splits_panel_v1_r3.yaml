@@ -1,0 +1,36 @@
+# Folds del panel v1 con CV REPETIDA (R = 3), en un archivo aparte.
+#
+#   python scripts/make_splits.py --config configs/data/splits_panel_v1_r3.yaml
+#   -> data/processed/splits_r3.json
+#
+# Por qué un archivo propio y no `n_repeats: 3` en `panel_v1.yaml`: `splits.json` es
+# el archivo congelado que comparten TODAS las corridas del panel v1, y `train.py`
+# falla —a propósito— si el YAML de un experimento declara un `n_repeats` distinto del
+# que trae el archivo. Cambiarlo ahí obligaría a tocar los configs de los demás y a
+# rehacer lo ya medido. Con dos archivos, cada experimento elige R declarándolo, y las
+# dos familias de números conviven sin pisarse.
+#
+# Lo único que cambia respecto de `panel_v1.yaml` es `splits.n_repeats` y dónde se
+# escribe: mismo panel, misma semilla, misma estratificación, mismo mínimo de
+# positivos. Por construcción la **repetición 0 son exactamente los folds de
+# `splits.json`** (la repetición r usa `seed + r*10000`, y r=0 es `seed`), así que las
+# corridas con R=1 no quedan invalidadas: R=3 las complementa.
+#
+# No construye ni toca el panel: `make_splits.py` lee el parquet que ya existe y
+# recorta a dev con el mismo holdout congelado (CLAUDE.md, regla 2).
+seed: 42
+
+test_split: ${DATA_DIR}/processed/test_split.json
+
+splits:
+  n_splits: 5
+  seed: 42
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+
+output:
+  panel: ${DATA_DIR}/processed/panel.parquet
+  splits: ${DATA_DIR}/processed/splits_r3.json
