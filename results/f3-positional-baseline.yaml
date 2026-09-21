@@ -10,9 +10,9 @@ note: 'Piso del eje cuando. LightGBM con UNA feature (feat_cut_odo): PR-AUC 0.14
   con agregacion mean (piso 1.018x). No es un candidato: es referencia, como baserate.'
 source:
   config_path: configs/exp_positional_baseline.yaml
-  config_versioned: false
-  branch: exp/positional-baseline
-  commit: 158293c
+  config_versioned: true
+  branch: main
+  commit: 0fef03c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm
@@ -36,8 +36,13 @@ summary:
   median_lead_km: 10210.434585450566
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel_positional.parquet
+  panel_generation: null
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f3-positional-baseline
   seed: 42
