@@ -40,6 +40,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-mil-agregacion-vehiculo.md](f3-mil-agregacion-vehiculo.md) | Medir por vehículo y no por corte (MIL): cuánto sube el lift de verdad y cuánto es el tamaño de la bolsa |
 | [f3-timesfm-zeroshot.md](f3-timesfm-zeroshot.md) | TimesFM zero-shot en el panel v1: no le gana a la tasa base, pero señaló el desvío respecto de la historia del vehículo |
 | [f3-survival-stacking.md](f3-survival-stacking.md) | Supervivencia en tiempo discreto sobre el panel: empata en PR-AUC pero calibrado y con el doble de detección; por qué el efecto aleatorio por vehículo no paga; y por qué la auditoría (a) de §0.4 no es un null en este panel |
+| [f3-piso-posicional.md](f3-piso-posicional.md) | El odómetro solo le gana a los cuatro finalistas en PR-AUC por fila y en las tres métricas del eje "cuándo": qué métricas quedan descalificadas y cuáles dos sobreviven |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 
@@ -56,6 +57,8 @@ python scripts/train.py --config configs/exp_baserate.yaml            # piso con
 python scripts/train.py --config configs/exp_lgbm_panel_v1_mil.yaml    # el mismo modelo, medido por vehículo
 python scripts/audit_mil_bagsize.py f3-lgbm-panel-v1-mil              # ¿el lift por vehículo es señal o tamaño de bolsa?
 python scripts/audit_model.py --config configs/exp_<x>.yaml           # las auditorías obligatorias de F3 §0.4
+python scripts/build_positional_panel.py --config configs/data/panel_positional.yaml  # panel de una sola feature: el odómetro
+python scripts/audit_positional_floor.py f3-survival-stacking         # ¿le gana al odómetro pelado? (piso del eje "cuándo")
 python scripts/check_setup.py      # chequeos del harness
 ```
 
