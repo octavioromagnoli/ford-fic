@@ -1,0 +1,85 @@
+run: f3-gru-seq-signals
+logged_on: '2026-09-20'
+note: 'El mismo GRU con el pooling por atencion (el default del builder). 5 semillas
+  x R=3: PR-AUC 0,1515 +- 0,0012 / ROC 0,5712. Es la PEOR de las tres variantes de
+  pooling: attention < mean (0,1588) < last (0,1645). attention_weights() explica
+  por que: la atencion aprende un peso monotono hacia el corte (1,56x el uniforme
+  en el ultimo bin, 0,63x en el mas viejo, entropia 0,885 del maximo), o sea una version
+  difusa de last, con 416 parametros mas. No hay senal en el medio de la ventana que
+  justifique la atencion.'
+source:
+  config_path: configs\exp_gru_seq.yaml
+  config_versioned: true
+  branch: feat/model-gru-seq
+  commit: 08ba21f
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: gru_seq
+  pr_auc: 0.1531933919456557
+  pr_auc_lo: 0.15872594096389778
+  pr_auc_hi: 0.20638352242289362
+  base_rate: 0.1251848201084278
+  lift: 1.223737764794234
+  roc_auc: 0.579783372148904
+  brier: 0.23363099696628517
+  detection_rate: 0.09433962264150944
+  median_lead_km: 3210.4345854505664
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 254
+config:
+  name: f3-gru-seq-signals
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: gru_seq
+    params:
+      sequence_meta: ${DATA_DIR}/processed/panel_seq_v1_meta.json
+      pooling: attention
+      hidden: 24
+      num_layers: 1
+      attention_hidden: 16
+      static_hidden: 4
+      head_hidden: 16
+      dropout: 0.3
+      epochs: 40
+      batch_size: 64
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      grad_clip: 1.0
+      class_weight: balanced
+      device: cpu
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-secuenciales
+    job_type: train
+    tags:
+    - f3
+    - gru
+    - panel-seq-v1
+    - signals
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_gru_seq.yaml

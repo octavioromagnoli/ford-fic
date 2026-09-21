@@ -1,0 +1,86 @@
+run: f3-gru-seq-last
+logged_on: '2026-09-20'
+note: 'GRU unidireccional sobre panel_seq_v1 con pooling = ultimo estado oculto: la
+  variante que gana. 5 semillas x R=3: PR-AUC 0,1645 +- 0,0047 (lift 1,31x), ROC 0,5944
+  +- 0,0110. Le gana al LightGBM de 53 agregados (0,1590 +- 0,0008 / ROC 0,5851) por
+  +0,0055 de PR-AUC, del orden de una sigma de la dispersion por semilla. Test de
+  permutacion (label permutada a nivel vehiculo, 20 permutaciones, mismos folds):
+  nulo ROC 0,517 +- 0,049 contra 0,600 real, p = 0,05. Sin la rama estatica pierde
+  solo 0,0013: el salto NO viene del mercado.'
+source:
+  config_path: configs\exp_gru_seq_last.yaml
+  config_versioned: true
+  branch: feat/model-gru-seq
+  commit: 08ba21f
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: gru_seq
+  pr_auc: 0.16812450961069644
+  pr_auc_lo: 0.17135774032006568
+  pr_auc_hi: 0.23696257166190807
+  base_rate: 0.1251848201084278
+  lift: 1.3430103543311145
+  roc_auc: 0.6034076374256035
+  brier: 0.2271217964564403
+  detection_rate: 0.05660377358490566
+  median_lead_km: 15408.0
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 254
+config:
+  name: f3-gru-seq-last
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: gru_seq
+    params:
+      sequence_meta: ${DATA_DIR}/processed/panel_seq_v1_meta.json
+      pooling: last
+      hidden: 24
+      num_layers: 1
+      attention_hidden: 16
+      static_hidden: 4
+      head_hidden: 16
+      dropout: 0.3
+      epochs: 40
+      batch_size: 64
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      grad_clip: 1.0
+      class_weight: balanced
+      device: cpu
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-secuenciales
+    job_type: train
+    tags:
+    - f3
+    - gru
+    - panel-seq-v1
+    - ablacion
+    - pooling-last
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_gru_seq_last.yaml

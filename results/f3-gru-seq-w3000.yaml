@@ -1,0 +1,84 @@
+run: f3-gru-seq-w3000
+logged_on: '2026-09-20'
+note: 'Barrido de ventana, W=3000 (T=60 bins de 50 km): la fila donde el barrido separa.
+  5 semillas: PR-AUC 0,1830 +- 0,0071 (lift 1,328 +- 0,051) / ROC 0,5910 +- 0,0220
+  contra el LightGBM de 53 agregados en el mismo panel y los mismos folds (lift 1,208
+  / ROC 0,5152). El GBM se degrada con la ventana larga —colapsa 3.000 km en un numero
+  por feature— y la recurrente se sostiene. La diferencia (+0,08 de ROC, +0,12 de
+  lift) esta muy por encima de la dispersion por semilla.'
+source:
+  config_path: configs\exp_gru_seq_w3000.yaml
+  config_versioned: true
+  branch: feat/model-gru-seq
+  commit: 08ba21f
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: gru_seq
+  pr_auc: 0.1848756687646266
+  pr_auc_lo: 0.17678601324794704
+  pr_auc_hi: 0.2415779667616389
+  base_rate: 0.13784301212507977
+  lift: 1.3412045044174532
+  roc_auc: 0.5827370671930256
+  brier: 0.22090609022432492
+  detection_rate: 0.125
+  median_lead_km: 5975.0
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_seq_w3000.parquet
+  splits: ${DATA_DIR}/processed/splits_w3000.json
+  n_positive: 216
+config:
+  name: f3-gru-seq-w3000
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_seq_w3000.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_w3000.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: gru_seq
+    params:
+      sequence_meta: ${DATA_DIR}/processed/panel_seq_w3000_meta.json
+      pooling: last
+      hidden: 24
+      num_layers: 1
+      attention_hidden: 16
+      static_hidden: 4
+      head_hidden: 16
+      dropout: 0.3
+      epochs: 40
+      batch_size: 64
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      grad_clip: 1.0
+      class_weight: balanced
+      device: cpu
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-secuenciales
+    job_type: train
+    tags:
+    - f3
+    - gru
+    - barrido-ventana
+    - w3000
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_gru_seq_w3000.yaml

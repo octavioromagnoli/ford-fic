@@ -1,35 +1,36 @@
-run: f3-lgbm-panel-v1
+run: f3-lgbm-panel-v1-r3-regen15
 logged_on: '2026-09-20'
-note: 'Par del barrido en W=1000 (R=1) sobre el panel reconstruido con umbral 15:
-  lift 1,288 / ROC 0,5862.'
+note: 'Control: LightGBM chico sobre los 53 agregados del panel v1 reconstruido (umbral
+  15) con R=3. 5 semillas: 0,1590 +- 0,0008 / ROC 0,5851 (practicamente determinista).
+  Es la referencia contra la que se mide el GRU secuencial.'
 source:
-  config_path: configs\exp_lgbm_panel_v1.yaml
+  config_path: configs\exp_lgbm_panel_v1_r3.yaml
   config_versioned: true
   branch: feat/model-gru-seq
   commit: 08ba21f
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm
-  pr_auc: 0.16121376584202757
-  pr_auc_lo: 0.1580413847744114
-  pr_auc_hi: 0.21302996625641532
+  pr_auc: 0.15950122864945912
+  pr_auc_lo: 0.1629697147668524
+  pr_auc_hi: 0.19249678301634635
   base_rate: 0.1251848201084278
-  lift: 1.2878060271396612
-  roc_auc: 0.586239325718088
-  brier: 0.1727350893576606
-  detection_rate: 0.07547169811320754
-  median_lead_km: 12322.470813159141
+  lift: 1.2741259564163485
+  roc_auc: 0.5855058962700085
+  brier: 0.17113867996514023
+  detection_rate: 0.09433962264150944
+  median_lead_km: 11802.0
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel.parquet
-  splits: ${DATA_DIR}/processed/splits.json
+  splits: ${DATA_DIR}/processed/splits_r3.json
   n_positive: 254
 config:
-  name: f3-lgbm-panel-v1
+  name: f3-lgbm-panel-v1-r3-regen15
   seed: 42
   data:
     panel: ${DATA_DIR}/processed/panel.parquet
   splits:
-    path: ${DATA_DIR}/processed/splits.json
+    path: ${DATA_DIR}/processed/splits_r3.json
     n_splits: 5
     seed: 42
     build_if_missing: false
@@ -38,7 +39,7 @@ config:
       column: label
       level: vehicle
     min_valid_positives: 5
-    n_repeats: 1
+    n_repeats: 3
     test_split: ${DATA_DIR}/processed/test_split.json
   model:
     name: lgbm
@@ -59,7 +60,9 @@ config:
     - lgbm
     - panel-v1
     - control
+    - r3
+    - regen15
     mode: online
     log_artifacts: false
   output_dir: experiments
-  _config_path: configs\exp_lgbm_panel_v1.yaml
+  _config_path: configs\exp_lgbm_panel_v1_r3.yaml
