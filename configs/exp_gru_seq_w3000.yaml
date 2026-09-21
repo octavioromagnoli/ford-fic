@@ -47,7 +47,12 @@ model:
     # las escribe el builder del panel secuencial. Nada de esto se hardcodea.
     sequence_meta: ${DATA_DIR}/processed/panel_seq_w3000_meta.json
     # Rama dinámica
-    pooling: attention      # `last` reproduce a la CNN-LSTM; `mean` ignora el orden
+    # `last` y no `attention`: la ablación de pooling sobre W = 1.000 (5 semillas, R=3)
+    # dio last 0,1645 > mean 0,1588 > attention 0,1515, y la auditoría de
+    # `attention_weights()` mostró por qué —la atención aprende a mirar el final de la
+    # ventana, difuso—. El barrido tiene que usar la variante elegida, o mide la
+    # ventana y el pooling a la vez (docs/memoria/f3-gru-secuencial.md).
+    pooling: last
     hidden: 24
     num_layers: 1
     attention_hidden: 16
