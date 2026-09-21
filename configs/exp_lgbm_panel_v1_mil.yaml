@@ -39,6 +39,11 @@ eval:
   # Lista vacía o `null` para no medir el eje de vehículo.
   vehicle_aggregation: [max, mean, topk, noisy_or]
   vehicle_topk: 3           # `topk` = media de los 3 cortes mayores del vehículo
+  # Barrido del ratio C_FN/C_FP: el control también lo reporta, porque un punto de
+  # quiebre sin línea de base no se interpreta. Es reporte, no selección
+  # (docs/memoria/f3-ordinal-horizonte.md).
+  cost_ratios: [2, 3, 5, 7, 10, 20, 50]
+  cost_fp: 1.0
 
 wandb:
   enabled: true

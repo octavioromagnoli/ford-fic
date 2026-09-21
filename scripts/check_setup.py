@@ -39,6 +39,9 @@ from src.eval.metrics import (  # noqa: E402
     VEHICLE_AGGREGATIONS,
     classification_metrics,
     cohort_ceiling,
+    cost_matrix_score,
+    cost_ratio_breakeven,
+    cost_ratio_sweep,
     lead_time_curve,
     operating_point,
     pr_auc_within_failed,
@@ -49,7 +52,7 @@ from src.eval.metrics import (  # noqa: E402
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
-from src.training.targets import build_target  # noqa: E402
+from src.training.targets import build_ordinal_target, build_target  # noqa: E402
 
 CONTRACT_COLUMNS = {
     "vehicle_id": "object",
@@ -167,6 +170,84 @@ def main() -> int:
     check(
         "target: un modo que no existe falla en vez de entrenar con `label`",
         _raises(lambda: build_target("no_existe", panel, all_rows), KeyError),
+    )
+
+    # 1b · reformulación ordinal y costo, ambos gobernados por YAML. Se verifican las
+    # DOS variantes registradas, porque la diferencia entre ellas es justamente dónde
+    # cae el último bin respecto de G+H y eso cambia qué mide el target.
+    label_array = panel["label"].to_numpy(dtype=int) == 1
+    observed = panel["event_observed"].to_numpy(dtype=int) == 1
+    ordinal_variants = {
+        "restringidos": "configs/exp_ordinal_horizon.yaml",
+        "extendidos": "configs/exp_ordinal_horizon_ext.yaml",
+    }
+    ordinal_targets = {}
+    ordered_ok, sane_ok, score_ok = True, True, True
+    for variant, path in ordinal_variants.items():
+        cfg_variant = load_config(path)
+        params = cfg_variant["target"]["params"]
+        y = build_ordinal_target(panel, np.ones(len(panel), dtype=bool), **params).y
+        ordinal_targets[variant] = (cfg_variant, y)
+        visible = y > 0
+        ordered = np.argsort(panel.loc[visible, "time_to_event_km"].to_numpy(dtype=float))
+        # Invariantes que valen para cualquier grilla de bins.
+        sane_ok &= bool((y[~observed] == 0).all())
+        ordered_ok &= bool((np.diff(y[visible][ordered]) <= 0).all())
+        # El score comparable es P(clase >= min_class) y tiene que reconstruir `label`
+        # exactamente, cualquiera sea el último bin. Es lo que hace comparable la
+        # corrida con el control binario.
+        bins = np.asarray(params["bins_km"], dtype=float)
+        min_class = len(bins) - int(np.flatnonzero(bins == params["score_max_tte_km"])[0])
+        score_ok &= bool(np.array_equal(y >= min_class, label_array))
+    check("target ordinal: los censurados son clase 0 en toda variante", sane_ok)
+    check("target ordinal: la clase crece con la proximidad al evento", ordered_ok)
+    check(
+        "target ordinal: P(clase >= min_class) reconstruye `label` en toda variante",
+        score_ok,
+    )
+    # La diferencia entre las dos variantes, medida y no supuesta: con el último bin en
+    # G+H el target vive adentro de la clase positiva y no dice nada de las negativas;
+    # extendiéndolo, las clases intermedias se llenan con filas `label = 0`.
+    restricted = ordinal_targets["restringidos"][1]
+    extended = ordinal_targets["extendidos"][1]
+    check(
+        "target ordinal: solo los bins extendidos informan sobre filas negativas",
+        bool(
+            np.array_equal(restricted > 0, label_array)
+            and ((extended > 0) & ~label_array).sum() > 0
+            # Y la clase 0 extendida conserva filas de vehículos con evento: si no,
+            # el target sería la cohorte de muestreo disfrazada de horizonte.
+            and ((extended == 0) & observed).sum() > 0
+        ),
+    )
+    matrix = ordinal_targets["restringidos"][0]["eval"]["cost_matrix"]
+    expected_cost = float(matrix[0][4] + matrix[4][0])
+    check(
+        "métricas: la matriz cobra por clase real/predicha y conserva la asimetría",
+        cost_matrix_score([0, 4], [4, 0], matrix) == expected_cost
+        and matrix[4][0] > matrix[0][4],
+    )
+    # 1c · el barrido de costo: lo que reemplaza a la matriz única en la variante nueva.
+    sweep_ratios = load_config("configs/exp_ordinal_horizon_ext.yaml")["eval"]["cost_ratios"]
+    sweep_label = np.r_[np.ones(20, dtype=int), np.zeros(140, dtype=int)]  # p = 0,125
+    oracle = cost_ratio_sweep(sweep_label, sweep_label.astype(float), sweep_ratios)
+    # Score constante: no ordena nada, así que ningún umbral separa y el óptimo es
+    # siempre una de las dos políticas triviales.
+    flat = cost_ratio_sweep(sweep_label, np.full(len(sweep_label), 0.5), sweep_ratios)
+    check(
+        "costo: el barrido cruza las políticas triviales en (1-p)/p",
+        bool(np.isclose(cost_ratio_breakeven(oracle)["always_beats_never_above_ratio"], 7.0)),
+    )
+    check(
+        "costo: el oráculo ahorra todo y un score constante no ahorra nada",
+        bool(
+            all(row["savings_frac"] == 1.0 for row in oracle)
+            and all(row["savings_vs_trivial"] == 0.0 for row in flat)
+        ),
+    )
+    check(
+        "costo: ningún modelo puede costar más que la mejor política trivial",
+        bool(all(row["model_cost"] <= row["trivial_cost"] + 1e-9 for row in oracle + flat)),
     )
 
     # 2 · splits antileakage

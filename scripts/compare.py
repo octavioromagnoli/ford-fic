@@ -19,6 +19,7 @@ import argparse
 import json
 import math
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,32 @@ def _fmt(value: Any, digits: int = 3) -> str:
     except (TypeError, ValueError):
         return str(value)
     return "—" if math.isnan(number) else f"{number:.{digits}f}"
+
+
+PANEL_BUILDS_CONFIG = "configs/data/panel_builds.yaml"
+
+
+@lru_cache(maxsize=1)
+def _declared_panel_builds() -> dict[str, str]:
+    """Generación del panel declarada para las corridas que no la traen en metrics.json.
+
+    Desde el 20-09-2026 `train.py` la escribe sola. Las corridas anteriores se declaran
+    en `configs/data/panel_builds.yaml`, con la evidencia de cómo se atribuyó cada una.
+    """
+    try:
+        path = resolve_path(PANEL_BUILDS_CONFIG)
+    except Exception:  # noqa: BLE001
+        return {}
+    if not path.exists():
+        return {}
+    declared = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return {str(k): str(v) for k, v in (declared.get("runs") or {}).items()}
+
+
+def _panel_generation(run: str, metrics: dict[str, Any]) -> str | None:
+    """Qué build del panel midió esta corrida. Lo propio manda sobre lo declarado."""
+    recorded = (metrics.get("panel_build") or {}).get("generation")
+    return str(recorded) if recorded else _declared_panel_builds().get(run)
 
 
 def _panel_mtime(panel: Any) -> float | None:
@@ -60,6 +87,10 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
     config_path = run_dir / "config.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
     point = metrics.get("operating_point") or {}
+    target = metrics.get("target_report") or {}
+    # El barrido de C_FN/C_FP reemplaza a la matriz única: el costo de una matriz no
+    # se compara entre corridas (depende de la matriz), el ahorro relativo sí.
+    cost = metrics.get("cost_ratio_sweep") or {}
     summary = metrics.get("folds_summary") or {}
     oof = metrics.get("oof", {})
     # Claves nuevas (descomposición cohorte/cuándo y eje de vehículo). Las corridas
@@ -100,8 +131,17 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
         "median_lead_km": point.get("median_lead_km"),
         "budget": metrics.get("operating_point_budget_per_1000"),
         "panel": (config.get("data") or {}).get("panel"),
+        "panel_generation": _panel_generation(run_dir.name, metrics),
         "splits": (config.get("splits") or {}).get("path"),
         "n_positive": oof.get("n_positive"),
+        "cost_per_1000": target.get("cost_per_1000"),
+        "cost_best_ratio": cost.get("best_ratio"),
+        "cost_best_savings_frac": cost.get("best_savings_frac"),
+        "cost_matrix": (
+            json.dumps((config.get("eval") or {})["cost_matrix"], sort_keys=True)
+            if "cost_matrix" in (config.get("eval") or {})
+            else None
+        ),
     }
 
 
@@ -112,6 +152,7 @@ def comparability_warnings(runs: list[dict[str, Any]]) -> list[str]:
         ("panel", "panel"),
         ("splits", "splits"),
         ("budget", "presupuesto de falsas alarmas"),
+        ("cost_matrix", "matriz de costos"),
     ):
         values = {r[field] for r in runs if r[field] is not None}
         if len(values) > 1:
@@ -124,6 +165,21 @@ def comparability_warnings(runs: list[dict[str, Any]]) -> list[str]:
     # así que la única señal que queda es cuándo se midió cada corrida contra cuándo se
     # escribió el panel. Importa: el control se movió de 0,165 a 0,1612 y la tabla
     # separa corridas por menos que eso.
+    generations: dict[str, list[str]] = {}
+    for r in runs:
+        if r.get("panel_generation"):
+            generations.setdefault(r["panel_generation"], []).append(r["run"])
+    if len(generations) > 1:
+        detalle = " · ".join(
+            f"{gen}: {', '.join(sorted(names))}" for gen, names in sorted(generations.items())
+        )
+        warnings.append(
+            "la tabla mezcla corridas medidas contra distintos builds del mismo panel "
+            f"({detalle}). Las de antes de 1eab4a1 (umbral de regeneraciones) no se "
+            "comparan con las de después: el control se movió de 0,1653 a 0,1612, más "
+            "que lo que separa filas de esta tabla. Ver configs/data/panel_builds.yaml"
+        )
+
     stale = sorted(
         r["run"]
         for r in runs
@@ -139,6 +195,19 @@ def comparability_warnings(runs: list[dict[str, Any]]) -> list[str]:
             "con los del resto — hay que re-correrlas"
         )
     return warnings
+
+
+def _fmt_savings(run: dict[str, Any]) -> str:
+    """Pico del barrido de costo: cuánto ahorra el modelo y a qué `C_FN / C_FP`.
+
+    Es el número que sí se compara entre corridas. El costo absoluto de una matriz
+    depende de la matriz, y a esta tasa base una matriz con falsos negativos 20–50
+    veces más caros hace óptimo revisar todo gane quien gane (`cost_ratio_sweep`).
+    """
+    frac, ratio = run.get("cost_best_savings_frac"), run.get("cost_best_ratio")
+    if frac is None or ratio is None or not frac:
+        return "—"
+    return f"{100 * float(frac):.1f}% @{float(ratio):g}×"
 
 
 def render_table(runs: list[dict[str, Any]]) -> str:
@@ -158,8 +227,8 @@ def render_table(runs: list[dict[str, Any]]) -> str:
     lines = [
         "| Corrida | Modelo | PR-AUC (oof) | Lift vs. base | Techo cohorte | "
         "PR-AUC entre fallados | Aporte del cuándo (a') | Vehículo (lift) | "
-        "ROC-AUC | Brier | Detección | Anticip. mediana |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "ROC-AUC | Brier | Ahorro máx. | Detección | Anticip. mediana |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in ranked:
         detection = "—" if r["detection_rate"] is None else f"{100 * float(r['detection_rate']):.0f}%"
@@ -180,7 +249,8 @@ def render_table(runs: list[dict[str, Any]]) -> str:
         lines.append(
             f"| `{r['run']}` | {r['model']} | {_fmt(r['pr_auc'])} | {_fmt(r['lift'], 2)}× | "
             f"{ceiling} | {within} | {when} | {vehicle} | "
-            f"{_fmt(r['roc_auc'])} | {_fmt(r['brier'])} | {detection} | {lead} |"
+            f"{_fmt(r['roc_auc'])} | {_fmt(r['brier'])} | {_fmt_savings(r)} | "
+            f"{detection} | {lead} |"
         )
     base = next((r["base_rate"] for r in ranked if r["base_rate"] is not None), None)
     budgets = {r["budget"] for r in ranked if r["budget"] is not None}

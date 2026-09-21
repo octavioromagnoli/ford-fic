@@ -211,6 +211,212 @@ def when_contribution(
         "n_positive": int(y.sum()),
     }
 
+
+# --------------------------------------------------------------------------- #
+# Costo de la decisión: matriz asimétrica y barrido de C_FN/C_FP
+# --------------------------------------------------------------------------- #
+def cost_matrix_score(
+    y_true: Sequence[int], y_pred: Sequence[int], matrix: Sequence[Sequence[float]]
+) -> float:
+    """Costo total de las decisiones, con filas reales y columnas predichas.
+
+    La escala y la asimetría pertenecen al experimento y por eso `matrix` llega
+    desde el YAML. El retorno es la suma (no una accuracy disfrazada), igual que
+    la definición del benchmark SCANIA Component X; quien necesite costo medio o
+    por 1.000 filas lo deriva conservando este total auditable.
+    """
+    truth = np.asarray(y_true)
+    predicted = np.asarray(y_pred)
+    costs = np.asarray(matrix, dtype=float)
+    if truth.ndim != 1 or predicted.ndim != 1 or len(truth) != len(predicted):
+        raise ValueError("`y_true` e `y_pred` tienen que ser vectores del mismo largo")
+    if costs.ndim != 2 or costs.shape[0] != costs.shape[1] or costs.shape[0] == 0:
+        raise ValueError("La matriz de costos tiene que ser cuadrada y no vacía")
+    if not np.isfinite(costs).all() or (costs < 0).any():
+        raise ValueError("La matriz de costos solo puede contener valores finitos no negativos")
+
+    truth_int = truth.astype(int)
+    predicted_int = predicted.astype(int)
+    if not np.array_equal(truth, truth_int) or not np.array_equal(predicted, predicted_int):
+        raise ValueError("Las clases reales y predichas tienen que ser enteros")
+    n_classes = costs.shape[0]
+    if (
+        (truth_int < 0).any()
+        or (truth_int >= n_classes).any()
+        or (predicted_int < 0).any()
+        or (predicted_int >= n_classes).any()
+    ):
+        raise ValueError(f"Las clases tienen que estar entre 0 y {n_classes - 1}")
+    return float(costs[truth_int, predicted_int].sum())
+
+
+DEFAULT_COST_RATIOS = (2.0, 3.0, 5.0, 7.0, 10.0, 20.0, 50.0)
+
+
+def cost_ratio_sweep(
+    y_true: Sequence[int],
+    y_score: Sequence[float],
+    ratios: Sequence[float] = DEFAULT_COST_RATIOS,
+    *,
+    cost_fp: float = 1.0,
+) -> list[dict[str, float]]:
+    """Barre `C_FN / C_FP` y mide cuánto ahorra alertar por score contra no modelar.
+
+    Una matriz de costos única no dice nada a esta tasa base: con `p = 0,125`,
+    alertar siempre le gana a no alertar nunca en cuanto `C_FN / C_FP > (1 - p) / p`
+    (≈ 7). Elegir un ratio de 20–50, como el benchmark de camiones pesados, hace que
+    la política óptima sea "revisar todo" **sin importar el modelo**, y el número
+    resultante mide la matriz, no el clasificador. El barrido evita esa trampa:
+    para cada ratio compara el mejor umbral contra las dos políticas triviales.
+
+    Las tres políticas comparadas, con el mismo costo unitario de inspección:
+
+    * **alertar siempre**: paga `n_negativos · C_FP` y nunca un falso negativo;
+    * **no alertar nunca**: paga `n_positivos · C_FN`;
+    * **umbral sobre el score**: paga `FP · C_FP + FN · C_FN`.
+
+    El mínimo sobre umbrales incluye los dos extremos degenerados, así que el costo
+    del modelo nunca supera al de la mejor política trivial y `savings_vs_trivial`
+    es cero exactamente cuando el óptimo es no modelar. Ese cero es el **punto de
+    quiebre** que se reporta.
+
+    **El umbral se elige sobre las mismas predicciones que se evalúan**, así que el
+    ahorro es una cota superior optimista del valor del modelo, no una estimación
+    honesta de lo que rendiría en producción. Se usa así a propósito: si ni con el
+    umbral oráculo el modelo le gana a alertar todo, la conclusión es firme.
+
+    Devuelve una fila por ratio; es reporte, nunca criterio de selección (regla 5).
+    """
+    truth = np.asarray(y_true, dtype=int)
+    score = np.asarray(y_score, dtype=float)
+    if truth.ndim != 1 or score.ndim != 1 or len(truth) != len(score):
+        raise ValueError("`y_true` e `y_score` tienen que ser vectores del mismo largo")
+    if not len(truth):
+        raise ValueError("No hay filas para barrer el costo")
+    if not np.isin(truth, (0, 1)).all():
+        raise ValueError("`cost_ratio_sweep` es una decisión binaria: `y_true` solo admite 0/1")
+    if not np.isfinite(score).all():
+        raise ValueError("`y_score` tiene valores no finitos")
+    if cost_fp <= 0:
+        raise ValueError("`cost_fp` tiene que ser positivo")
+    ratios_arr = np.asarray(list(ratios), dtype=float)
+    if ratios_arr.size == 0 or not np.isfinite(ratios_arr).all() or (ratios_arr <= 0).any():
+        raise ValueError("`ratios` tiene que ser una lista no vacía de positivos finitos")
+
+    n = len(truth)
+    n_pos = int(truth.sum())
+    n_neg = n - n_pos
+    if not n_pos or not n_neg:
+        raise ValueError("El barrido necesita positivos y negativos para tener sentido")
+
+    # Umbrales candidatos: alertar las k filas de score más alto, para cada k que
+    # cae en un cambio de score (los empates alertan juntos o no alertan).
+    order = np.argsort(-score, kind="stable")
+    ranked_truth = truth[order]
+    ranked_score = score[order]
+    edges = np.flatnonzero(np.diff(ranked_score)) if n > 1 else np.array([], dtype=int)
+    cuts = np.append(edges, n - 1)
+    tp = np.cumsum(ranked_truth)[cuts]
+    fp = np.cumsum(1 - ranked_truth)[cuts]
+    thresholds = ranked_score[cuts]
+    n_alerts = cuts + 1
+
+    always_cost = float(n_neg * cost_fp)
+    rows: list[dict[str, float]] = []
+    for ratio in ratios_arr:
+        cost_fn = float(ratio) * cost_fp
+        never_cost = float(n_pos * cost_fn)
+        costs = fp * cost_fp + (n_pos - tp) * cost_fn
+        best = int(np.argmin(costs))
+        model_cost = float(costs[best])
+        # "No alertar nunca" no está entre los cortes de arriba (todo corte alerta al
+        # menos una fila), así que entra acá como candidato explícito.
+        if never_cost <= model_cost:
+            model_cost = never_cost
+            threshold = float("inf")
+            alerts, hits, misses = 0, 0, n_pos
+        else:
+            threshold = float(thresholds[best])
+            alerts = int(n_alerts[best])
+            hits = int(tp[best])
+            misses = n_pos - hits
+        trivial_cost = min(always_cost, never_cost)
+        best_trivial = "always" if always_cost <= never_cost else "never"
+        savings = trivial_cost - model_cost
+        rows.append(
+            {
+                "ratio": float(ratio),
+                "cost_fp": float(cost_fp),
+                "cost_fn": cost_fn,
+                "threshold": threshold,
+                "n_alerts": alerts,
+                "alert_rate": float(alerts / n),
+                "detection_rate": float(hits / n_pos),
+                "false_alarm_rate": float((alerts - hits) / n_neg),
+                "n_false_negative": int(misses),
+                "model_cost": model_cost,
+                "always_cost": always_cost,
+                "never_cost": never_cost,
+                "trivial_cost": float(trivial_cost),
+                "best_trivial": best_trivial,
+                "savings_vs_trivial": float(savings),
+                "savings_frac": float(savings / trivial_cost) if trivial_cost else 0.0,
+                "beats_trivial": bool(savings > 0),
+            }
+        )
+    return rows
+
+
+MATERIAL_SAVINGS_FRAC = 0.05
+
+
+def cost_ratio_breakeven(
+    sweep: Sequence[dict[str, float]], *, material_frac: float = MATERIAL_SAVINGS_FRAC
+) -> dict[str, Any]:
+    """Resume el barrido: en qué tramo de `C_FN / C_FP` el modelo todavía paga.
+
+    El ahorro no es monótono en el ratio, y por eso no alcanza con un solo número.
+    Abajo del cruce de las dos políticas triviales —`always_beats_never_above_ratio`,
+    que vale `(1 - p) / p`— no alertar nunca ya es barato y el modelo casi no tiene
+    dónde ahorrar; muy por encima, un falso negativo es tan caro que la política
+    óptima se corre hacia alertar todo y el ahorro se desvanece otra vez. El valor
+    del modelo se concentra alrededor del cruce, y eso es lo que hay que reportar:
+
+    * `best_ratio` / `best_savings_frac`: el pico del barrido;
+    * `material_ratios`: los ratios donde el ahorro supera `material_frac`. Un ahorro
+      del 2% sobre revisar todo es indistinguible de revisar todo y **no** cuenta como
+      "el modelo paga", aunque `beats_trivial` sea cierto;
+    * `saturates_at_grid_edge`: el último ratio de la grilla todavía ahorra, así que
+      de esta grilla no se puede leer un punto de quiebre superior.
+
+    Es un resumen de la grilla barrida, no una raíz interpolada: fuera de esa grilla
+    no se afirma nada.
+    """
+    rows = list(sweep)
+    if not rows:
+        raise ValueError("El barrido está vacío")
+    winners = [row for row in rows if row["beats_trivial"]]
+    ratios = [row["ratio"] for row in winners]
+    material = [row["ratio"] for row in rows if row["savings_frac"] > material_frac]
+    best = max(winners, key=lambda row: row["savings_frac"], default=None)
+    return {
+        "ratios": [row["ratio"] for row in rows],
+        "material_frac": float(material_frac),
+        "n_ratios_with_savings": len(winners),
+        "min_ratio_with_savings": min(ratios) if ratios else None,
+        "max_ratio_with_savings": max(ratios) if ratios else None,
+        "min_material_ratio": min(material) if material else None,
+        "max_material_ratio": max(material) if material else None,
+        "best_ratio": best["ratio"] if best else None,
+        "best_savings_frac": best["savings_frac"] if best else 0.0,
+        "best_savings_vs_trivial": best["savings_vs_trivial"] if best else 0.0,
+        "saturates_at_grid_edge": bool(rows[-1]["savings_frac"] > material_frac),
+        "always_beats_never_above_ratio": float(
+            rows[0]["always_cost"] / (rows[0]["never_cost"] / rows[0]["ratio"])
+        ),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Métricas de anticipación
 # --------------------------------------------------------------------------- #

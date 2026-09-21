@@ -15,8 +15,18 @@ construye `data/processed/panel.parquet` (W=1000, G=500, H=3000, Δ=500) con 53
 features declaradas en `configs/data/features_v1.yaml`; el panel, los splits y el
 holdout están publicados como wandb Artifacts (`panel-v1`, `test-split`; se suben con
 `scripts/log_panel_artifact.py`) y `configs/exp_baserate.yaml` es el piso contra el
-panel real. **Lo siguiente es F3 (baselines) y F4 (dashboard contra el panel real)**,
-en paralelo; las ideas de modelos están en `docs/f3-modelos-candidatos.md`.
+panel real. **F3 cerrada el 20-09**: los candidatos medidos están en `results/`, y la
+lectura conjunta —qué mide en realidad el PR-AUC por fila de este panel, y por qué el
+finalista es survival stacking— es la primera entrada de
+[`docs/memoria/decisiones.md`](docs/memoria/decisiones.md). Hay que leerla antes de
+volver a comparar modelos: cambia el criterio. **Lo siguiente es F4 (dashboard contra el
+panel real)**; las ideas que quedaron sin probar siguen en
+`docs/f3-modelos-candidatos.md`.
+
+**El presupuesto de comparaciones está agotado** (§0, punto 2 de ese doc): con ~12
+eventos por fold, agregar candidatos sobre la marcha garantiza que "el mejor" sea ruido.
+Una corrida nueva se justifica por hacer comparable una fila que ya existe, no por sumar
+un modelo.
 
 **Antes de tocar los datos, leer [`docs/memoria/`](docs/memoria/README.md).** Ahí
 están los hallazgos de F1/F2 y las decisiones tomadas, con la evidencia y el comando
@@ -118,8 +128,12 @@ folds. Agregar un modo es una función con `@register_target` y cero líneas en 
    traducir al eje de km —para los vehículos del universo cae en una mediana de
    7.987 km con el 39% del historial por delante—. Eso no asciende al eje de días:
    sigue siendo reporte secundario, y el origen se estima una vez y se congela.
-5. **Métricas.** PR-AUC out-of-fold para seleccionar modelo, curva de
-   anticipación vs. falsas alarmas para el pitch, accuracy nunca.
+5. **Métricas.** PR-AUC out-of-fold **para ordenar**, curva de anticipación vs.
+   falsas alarmas para el pitch, accuracy nunca. **No elige el finalista**: por la
+   regla 6, por debajo del techo de cohorte un PR-AUC por fila mide *qué auto* y no
+   *cuándo*, así que el finalista se elige por **(a')** y por la **estabilidad entre
+   repeticiones** (CV repetida). La lectura completa es la primera entrada de
+   `docs/memoria/decisiones.md`.
 6. **Un PR-AUC se audita antes de celebrarse, y el piso es el techo de cohorte.**
    Dos mitades. (i) Uno **sospechosamente alto**: variables como el nivel del DPF
    son casi la definición del evento; sin gap, el modelo memoriza en vez de
@@ -131,6 +145,11 @@ folds. Agregar un modo es una función con `@register_target` y cero líneas en 
    no demuestra anticipación**, y el objetivo de 1,6–2× de lift del plan se
    alcanza sin anticipar nunca. Para el *cuándo* se miran `pr_auc_within_failed`
    (lift sobre 0,2627) y **(a')**, y las dos las reporta toda corrida.
+
+   Y **toda métrica que dependa del tamaño de la bolsa o del largo del historial se
+   compara contra un nulo que conserve esa magnitud**, nunca contra la tasa base: el
+   panel le deja 18,25 cortes por vehículo fallado y 9,00 por sano, y el tamaño solo,
+   como score, ya da lift 1,79× (`scripts/audit_mil_bagsize.py`).
 
    Las auditorías obligatorias son `scripts/audit_model.py`. Aprueban **(a0)**
    —features permutadas entre todas las filas, el PR-AUC cae a la tasa base o hay
@@ -173,12 +192,16 @@ src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia +
 src/models/survival_stacking.py  supervivencia en tiempo discreto: apila (fila × bin de km), hazard por bin,
                          score = 1 − S(H|x). Backend lightgbm o gpboost (efecto aleatorio por vehículo, opcional)
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo; hook `target:`
-src/training/targets.py  con qué se entrena: una función por modo, registro por nombre (`discrete_survival`).
-                         Lo que se evalúa sigue siendo `label`
+src/training/targets.py  con qué se entrena (no con qué se mide) y cómo la salida del modelo vuelve a un
+                         score comparable: registro por nombre, `discrete_survival` y `ordinal_horizon`.
+                         Lo que se evalúa sigue siendo `label`; cv.py no sabe qué modos hay
 src/eval/splits.py       splits antileakage + serialización a splits.json
                          estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
-                         (por folds y por vehículo) + C-index out-of-fold
+                         (por folds y por vehículo) + C-index out-of-fold +
+                         cohort_ceiling()/pr_auc_within_failed()/when_contribution() (el piso real y la
+                         descomposición cohorte/cuándo), vehicle_scores()/vehicle_metrics() (la decisión
+                         por vehículo, MIL) y cost_ratio_sweep() (C_FN/C_FP: reporte, nunca selección)
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
@@ -197,10 +220,13 @@ scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambia
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/train.py         entrypoint único de entrenamiento
+scripts/audit_mil_bagsize.py  ¿el lift por vehículo es señal o tamaño de bolsa? (nulo de permutación)
+scripts/audit_ordinal_horizon.py  las tres auditorías obligatorias de cualquier corrida: permutación
+                         (nulo global y nulo intra-vehículo), aux_ de calendario como feat_, importancias
 scripts/compare.py       tabla comparativa de corridas (markdown)
 scripts/results.py       registro versionado en results/: métricas + config completa por corrida (log/table/show)
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (36 chequeos)
+scripts/check_setup.py   smoke test del harness (62 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4
