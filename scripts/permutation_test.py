@@ -12,10 +12,11 @@ esto dice qué pasa **sin señal**, que no es lo mismo.
 Por qué hace falta acá y no en cualquier proyecto: con 53 vehículos con evento el ruido
 de estimación es grande, y además el panel tiene estructura propia (las filas positivas
 son los últimos `H/Δ` cortes de su vehículo). Las dos cosas pueden levantar el nulo por
-encima de 0,50, y entonces un ROC de 0,62 no significa lo que parece. Medido sobre dev:
+encima de 0,50, y entonces un ROC de 0,62 no significa lo que parece. Lo que se midió
+sobre dev del panel v1 (el nulo depende del panel y del modelo, no solo del panel):
 
-    panel v1 canónico       nulo ROC 0,555 ± 0,059 · real 0,617 → p = 0,20
-    panel del evento fict.  nulo ROC 0,501 ± 0,057 · real 0,703 → p < 0,001
+    LightGBM, 53 agregados    nulo ROC 0,555 ± 0,059 · real 0,617 → p = 0,20
+    panel del evento ficticio nulo ROC 0,501 ± 0,057 · real 0,703 → p < 0,001
 
 Cómo se permuta, y por qué así: se sortea **qué vehículos** son positivos (no fila a
 fila: las filas de un vehículo no son independientes y permutarlas destruiría la
@@ -85,12 +86,8 @@ def main() -> int:
 
     model = cfg["model"]["name"]
     params = cfg["model"].get("params", {})
-    features_cfg = cfg.get("features") or {}
-    extra = tuple(features_cfg.get("extra_prefixes") or ())
-    exclude = tuple(features_cfg.get("exclude_prefixes") or ())
 
-    preds, _ = run_cv(panel, splits, model_name=model, model_params=params,
-                      extra_prefixes=extra, exclude_prefixes=exclude)
+    preds, _ = run_cv(panel, splits, model_name=model, model_params=params)
     real = classification_metrics(preds["label"], preds["score"])
 
     by_vehicle = panel.groupby(ID)["label"].max()
@@ -100,7 +97,7 @@ def main() -> int:
 
     rng = np.random.default_rng(args.seed)
     null_roc: list[float] = []
-    null_norm: list[float] = []
+    null_lift: list[float] = []
     for _ in range(args.n_perm):
         fake = panel.copy()
         fake["label"] = relabel(fake, set(rng.choice(vehicles, size=n_positive_vehicles, replace=False)), tail)
@@ -108,24 +105,24 @@ def main() -> int:
             continue
         # `strict_splits=False`: los folds son los del panel real y la guarda de positivos
         # por fold no aplica a una etiqueta sorteada.
-        p, _ = run_cv(fake, splits, model_name=model, model_params=params, strict_splits=False,
-                      extra_prefixes=extra, exclude_prefixes=exclude)
+        p, _ = run_cv(fake, splits, model_name=model, model_params=params, strict_splits=False)
         m = classification_metrics(p["label"], p["score"])
         null_roc.append(m["roc_auc"])
-        null_norm.append(m["pr_auc_norm"])
+        null_lift.append(m["pr_auc_lift"])
 
-    roc, norm = np.array(null_roc), np.array(null_norm)
+    roc, lift = np.array(null_roc), np.array(null_lift)
     print(f"\n== {cfg.get('name')} · modelo `{model}` ==")
     print(f"panel: {cfg['data']['panel']} · folds: {splits_path.name} · {len(panel)} filas dev · "
           f"{n_positive_vehicles} vehículos positivos · cola de {tail} cortes")
-    print(f"\n  real            ROC {real['roc_auc']:.3f} · PR-AUC norm {real['pr_auc_norm']:.3f}")
+    print(f"\n  real            ROC {real['roc_auc']:.3f} · PR-AUC {real['pr_auc']:.3f} "
+          f"(lift {real['pr_auc_lift']:.2f}x sobre la tasa base)")
     print(f"  nulo (n={len(roc)})     ROC {roc.mean():.3f} ± {roc.std():.3f} · "
           f"p95 {np.percentile(roc, 95):.3f} · max {roc.max():.3f}")
-    print(f"                  PR-AUC norm {norm.mean():.3f} ± {norm.std():.3f} · "
-          f"p95 {np.percentile(norm, 95):.3f}")
+    print(f"                  lift {lift.mean():.2f}x ± {lift.std():.2f} · "
+          f"p95 {np.percentile(lift, 95):.2f}x")
     p_roc = float((roc >= real["roc_auc"]).mean())
-    p_norm = float((norm >= real["pr_auc_norm"]).mean())
-    print(f"\n  p-valor         ROC {p_roc:.4f} · PR-AUC norm {p_norm:.4f}")
+    p_lift = float((lift >= real["pr_auc_lift"]).mean())
+    print(f"\n  p-valor         ROC {p_roc:.4f} · lift {p_lift:.4f}")
     if roc.mean() > 0.55:
         print("\n  OJO: el nulo está por encima de 0,55. El panel tiene estructura que el modelo "
               "aprende sin señal: es el atajo de posición —las filas positivas son los últimos H/Δ "

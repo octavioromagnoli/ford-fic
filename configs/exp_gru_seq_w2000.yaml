@@ -1,0 +1,86 @@
+# F3 · BARRIDO DE VENTANA: el mismo GRU, los mismos canales y los mismos
+# hiperparámetros sobre el panel de W = 2000 km.
+#
+# La pregunta del barrido: ¿la recurrente aprovecha la ventana larga mejor que los 53
+# agregados? El GBM colapsa 2000 km en un número por feature; la red los ve en orden,
+# en T = 40 bins de 50 km. Su par es `exp_lgbm_w2000.yaml`: mismo panel, mismos folds.
+#
+#   python scripts/build_dataset.py --config configs/data/panel_w2000.yaml
+#   python scripts/build_seq_panel.py --config configs/data/panel_seq_w2000.yaml
+#   python scripts/train.py --config configs/exp_gru_seq_w2000.yaml
+#   python scripts/seed_spread.py --config configs/exp_gru_seq_w2000.yaml --seeds 5
+#
+# R = 1: son los folds congelados que dejó `build_dataset.py` para este panel
+# (`splits_w2000.json`). La comparación contra W = 1.000 se hace con la repetición 0 de
+# las corridas de R = 3, que son exactamente esos mismos folds.
+#
+# La tasa base de este panel NO es la del panel v1 (menos filas y menos vehículos:
+# hacen falta 2000 km de historia antes del primer corte). Entre ventanas se comparan
+# ROC-AUC y PR-AUC normalizado, nunca el PR-AUC crudo.
+#
+# Necesita PyTorch (opcional): `uv pip install -r requirements-dl.txt`.
+name: f3-gru-seq-w2000
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel_seq_w2000.parquet
+
+splits:
+  # Los folds congelados de ESTE panel (`build_dataset.py` los deja al construirlo):
+  # el panel secuencial de W = 2000 tiene sus mismas filas, así que la huella coincide.
+  path: ${DATA_DIR}/processed/splits_w2000.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 1
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+model:
+  name: gru_seq
+  params:
+    # Forma del tensor (T bins × C canales) y geometría de la ventana (L, bin_km):
+    # las escribe el builder del panel secuencial. Nada de esto se hardcodea.
+    sequence_meta: ${DATA_DIR}/processed/panel_seq_w2000_meta.json
+    # Rama dinámica
+    pooling: attention      # `last` reproduce a la CNN-LSTM; `mean` ignora el orden
+    hidden: 24
+    num_layers: 1
+    attention_hidden: 16
+    # Rama estática (hoy solo el one-hot de SalesCountry_cd); 0 la apaga
+    static_hidden: 4
+    # Cabeza después de la fusión
+    head_hidden: 16
+    dropout: 0.3
+    # Entrenamiento: épocas fijas, sin early stopping (ver docstring del modelo)
+    epochs: 40
+    batch_size: 64
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    grad_clip: 1.0
+    class_weight: balanced  # pos_weight = negativos/positivos del train del fold
+    device: cpu
+    # Una semilla no es un resultado: la media y el rango sobre >= 5 semillas salen de
+    # `python scripts/seed_spread.py --config configs/exp_gru_seq_trips.yaml`.
+    random_state: 42
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-secuenciales
+  job_type: train
+  tags: [f3, gru, barrido-ventana, w2000]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

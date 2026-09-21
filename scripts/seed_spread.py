@@ -43,7 +43,7 @@ from src.eval.metrics import classification_metrics  # noqa: E402
 from src.eval.splits import load_test_split, test_split_masks  # noqa: E402
 from src.training.cv import run_cv  # noqa: E402
 
-METRICS = ("pr_auc", "pr_auc_norm", "roc_auc", "brier")
+METRICS = ("pr_auc", "pr_auc_lift", "roc_auc", "brier")
 
 
 def parse_args() -> argparse.Namespace:
@@ -103,7 +103,7 @@ def main() -> int:
         by_repeat = repeat_metrics(preds, n_repeats)
         row = {"seed": seed, **{k: float(np.mean([m[k] for m in by_repeat])) for k in METRICS}}
         rows.append(row)
-        print(f"  seed {seed:>5} | PR-AUC {row['pr_auc']:.4f} | PR-AUC norm {row['pr_auc_norm']:.4f} | "
+        print(f"  seed {seed:>5} | PR-AUC {row['pr_auc']:.4f} | lift {row['pr_auc_lift']:.2f}x | "
               f"ROC {row['roc_auc']:.4f} | Brier {row['brier']:.4f} | {time.time() - started:.0f}s")
 
     table = pd.DataFrame(rows)

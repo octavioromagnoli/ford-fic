@@ -1,0 +1,81 @@
+# Panel SECUENCIAL con ventana W = 3000 km: los mismos canales que
+# `panel_seq_trips.yaml` (9 de `signals` + 6 de `trips`) sobre la ventana larga.
+#
+#   python scripts/build_dataset.py --config configs/data/panel_w3000.yaml       # antes, si no existe
+#   python scripts/build_seq_panel.py --config configs/data/panel_seq_w3000.yaml
+#
+# Es la pata secuencial del barrido de la terna (plan §5): mismo G, H, Δ y mismo
+# emparejado de sanos que el panel de referencia, solo cambia W. La pregunta es si la
+# recurrente aprovecha la ventana larga MEJOR que los 53 agregados —que es donde una
+# GRU debería ganarle a un GBM: el agregado colapsa 2.000 o 3.000 km en un número y la
+# red los ve en orden—. `bin_km` se mantiene en 50 km a propósito: la resolución en km
+# es la misma que en W = 1.000 y lo único que cambia es CUÁNTA historia entra
+# (T = 60 bins en vez de 20). Si cambiara también el bin, no se sabría cuál de las dos
+# cosas movió el número.
+#
+# Ojo con la tasa base: el panel de W larga tiene menos filas y menos vehículos (un
+# vehículo necesita 3000 km de historia antes del primer corte), así que su tasa base es
+# otra. Entre ventanas solo se comparan ROC-AUC y PR-AUC normalizado.
+seed: 42
+
+# Universo, cortes, etiqueta, G/H/Δ, sanos emparejados, fuentes, dedupe y umbrales
+# de las derivadas: todo sale del panel base (que es el que fija W). Acá no se decide
+# nada del problema.
+base_panel: configs/data/panel_w3000.yaml
+
+sequence:
+  # L = W del panel base, nunca mayor: con L > W los bins previos al primer registro
+  # codifican el odómetro del corte, y cuántos hay depende del corte (un atajo que el
+  # emparejado de sanos existe para cerrar). Por eso la ventana larga se mide con el
+  # panel que la tiene, no estirando el lookback sobre un panel de W = 1.000.
+  lookback_km: 3000
+  bin_km: 50              # T = 60 bins. Tiene que dividir a Δ = 500 (grilla de cortes)
+
+  channels:
+    # --- signals: los mismos 9 de panel_seq_v1.yaml, en el mismo orden -------------
+    - {name: n_records, source: signals, column: "*", agg: count, fill: zero, transform: log1p}
+    - {name: observed, source: signals, column: "*", agg: any, fill: zero}
+    - {name: acum_mean, source: signals, column: Acumulation, agg: mean, fill: carry}
+    - {name: acum_max, source: signals, column: Acumulation, agg: max, fill: carry}
+    - {name: acum_rise, source: signals, column: acum_rise, agg: sum, fill: zero}
+    - {name: regen_drops, source: signals, column: acum_regen_drop, agg: sum, fill: zero}
+    - {name: msg_full_frac, source: signals, column: msg_full, agg: mean, fill: zero}
+    - {name: msg_severe_frac, source: signals, column: msg_severe, agg: mean, fill: zero}
+    - {name: msg_cleaning_auto_frac, source: signals, column: msg_cleaning_auto, agg: mean, fill: zero}
+
+    # --- trips: lo que más anticipa según el EDA, en orden de km ------------------
+    # Las derivadas salen de src/features/trips.py con los umbrales de features_v1.yaml
+    # (`regime_temp_c: 70`, `urban_speed_kmh: 30`, ...): el bin las agrega, no las
+    # redefine. Un viaje cae en el bin de su `OdometerTripEnd`.
+    #
+    # Cobertura: `n_trips` es la única de conteo, y es la que le deja ver a la red que
+    # un bin sin viajes no es un bin con valores en cero. Por eso las demás son `carry`
+    # (último valor DENTRO de la misma secuencia, todo anterior al corte) y no `zero`:
+    # un bin sin viajes que entra como `idle_frac = 0` diría "no hubo idle", que es
+    # falso; el arrastre dice "lo último que se sabe del vehículo".
+    - {name: n_trips, source: trips, column: "*", agg: count, fill: zero, transform: log1p}
+    # El 35% de las filas de `trips` es motor encendido sin desplazamiento, y es la
+    # señal que más anticipa el evento. Fracción sobre TODAS las filas del bin.
+    - {name: idle_frac, source: trips, column: idle, agg: mean, fill: carry}
+    # Las tres siguientes son fracciones/medias ENTRE LOS QUE SE MUEVEN: las columnas
+    # `*_moving` traen NaN en los idle, así que el `mean` del bin ya los ignora.
+    - {name: below_regime_frac, source: trips, column: below_regime_moving, agg: mean, fill: carry}
+    - {name: speed_kmh, source: trips, column: speed_kmh_moving, agg: mean, fill: carry}
+    - {name: trip_km, source: trips, column: trip_km_moving, agg: mean, fill: carry}
+    - {name: trip_duration_min, source: trips, column: trip_duration_min_moving, agg: mean, fill: carry}
+
+# Fuera, por construcción (src/features/sequences.py::FORBIDDEN_COLUMNS): el marcador
+# `signals.Regenerations` y `DistanceBetweenRegenerations`, cortados el 25-05-2026 para
+# toda la flota (miden el calendario, y el calendario mide la etiqueta). Las
+# regeneraciones se cuentan desde las caídas del nivel (`acum_regen_drop`).
+#
+# Tampoco entran canales de temperatura ambiente ni nada con deriva de calendario:
+# `aux_`, no `feat_` (CLAUDE.md, hallazgo del emparejado por odómetro × mes).
+
+# Las `aux_*` del panel v1 viajan (no entran al modelo: cv.py selecciona por prefijo),
+# para poder auditar atajos sin reconstruir nada.
+keep_aux: true
+
+output:
+  panel: ${DATA_DIR}/processed/panel_seq_w3000.parquet
+  meta: ${DATA_DIR}/processed/panel_seq_w3000_meta.json
