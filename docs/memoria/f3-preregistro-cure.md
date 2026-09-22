@@ -238,7 +238,15 @@ Si nada cumple, el resultado es negativo y se documenta así.
 - seguimiento suficiente (Maller & Zhou 1996);
 - D2 con `E_min` 60 y 120;
 - D2 sobre los 60 eventos de dev, contando como perdidos los que no tienen fila;
-- la curva detección / falsas alarmas.
+- la curva detección / falsas alarmas;
+- **D1 solo con las filas que entran en L + G** (enmienda del 22-09, antes de cualquier
+  corrida). Es la sensibilidad a la aproximación de la entrada tardía:
+  - en los hitos de 30 y 60 días entra a la ventana después de L + G el 25% de las filas en
+    riesgo (41 y 39), y en el de 90 el 9% (12);
+  - para ellas la verosimilitud usa el mismo π_L, aunque parte de sus susceptibles pudo haber
+    tenido el evento antes de que existiera el registro;
+  - se recalcula D1 con las mismas predicciones, sin reentrenar, con los pares donde las dos
+    filas entran en L + G. No decide.
 
 **No aplican en este panel y no deciden:**
 - PR-AUC por fila juntando hitos;
