@@ -25,6 +25,13 @@ columna `feat_`/`aux_raw_` (regla 3).
 - δ = 1 si el evento cae en `(e, x]`. Una fila con `x ≤ e` no informa sobre el evento,
   pero se conserva: entra a la referencia de flota y se puntúa.
 
+**Ventana de features fija (opcional).** Con `feature_window_days` las features salen de
+`(venta, venta + min(L, feature_window_days)]` en vez de `(venta, venta + L]`: el rasgo
+temprano de los primeros días, igual en todos los hitos. Qué fila existe, `window_km`,
+`aux_n_trips_window` y la temperatura ambiente siguen midiéndose hasta el hito, así las
+filas y los pisos del cure model no cambian (F5 §3.2, la incidencia externa se entrena
+con 30 días y se aplica con 30 días).
+
 **Features para la normalización contra la flota.** Por cada feature de
 `fleet_features` y cada mes calendario de la ventana, el valor del vehículo en ese mes
 (`feat_fm__<feature>__<YYYY-MM>`) y su peso (`feat_fm__w_<feature>__<YYYY-MM>`). El valor
@@ -92,6 +99,10 @@ class LandmarkConfig:
     resolved_from_landmark_days: float
     e_min_days: float
     e_min_sensitivity_days: tuple[float, ...] = ()
+    # Ventana de features fija en días desde la venta (None: hasta el hito).
+    feature_window_days: float | None = None
+    # `feat_log1p_km_per_day`: log(1 + km/día) en la ventana de features (control de uso).
+    usage_feature: bool = False
 
 
 def landmark_config(cfg: dict[str, Any], event_window: dict[str, Any]) -> LandmarkConfig:
@@ -107,6 +118,8 @@ def landmark_config(cfg: dict[str, Any], event_window: dict[str, Any]) -> Landma
         resolved_from_landmark_days=float(rn["from_landmark_days"]),
         e_min_days=float(rn["e_min_days"]),
         e_min_sensitivity_days=tuple(float(x) for x in rn.get("sensitivity_days") or ()),
+        feature_window_days=float(lm["feature_window_days"]) if lm.get("feature_window_days") is not None else None,
+        usage_feature=bool(lm.get("usage_feature", False)),
     )
 
 
@@ -206,7 +219,11 @@ def build_landmark_panel(
     has_event = v["event_observed"].eq(1)
     # Exposición del vehículo desde el hito de referencia: define al negativo resuelto (D2).
     resolved_entry = np.maximum(cfg.resolved_from_landmark_days + cfg.gap_days, v["dss_w0"])
-    v["resolved_exposure_days"] = (v["dss_w1"] - resolved_entry).clip(lower=0).where(~has_event & has_sale)
+    potential = (v["dss_w1"] - resolved_entry).clip(lower=0).where(has_sale)
+    v["resolved_exposure_days"] = potential.where(~has_event)
+    # La misma cuenta sin mirar el desenlace: cuánta ventana del registro tuvo por delante
+    # el vehículo según su fecha de venta. Es la elegibilidad simétrica del conjunto externo.
+    v["potential_exposure_days"] = potential
 
     t = trips.loc[trips[ID_COL].isin(v.index)].join(v[["sale_date"]], on=ID_COL)
     t = t.loc[t["sale_date"].notna() & (t["TripDatetimeStart"] > t["sale_date"])]
@@ -231,6 +248,12 @@ def build_landmark_panel(
         }
         ids = v.index[keep]
         win = win.loc[win[ID_COL].isin(ids)]
+        if cfg.feature_window_days is None:
+            fwin, feature_days = win, landmark
+        else:
+            feature_days = min(landmark, cfg.feature_window_days)
+            feature_end = v["sale_date"] + pd.Timedelta(days=feature_days)
+            fwin = win.loc[win["TripDatetimeEnd"] <= win[ID_COL].map(feature_end)]
         d = v.loc[ids].copy()
         d["cut_date"] = land.loc[ids]
         # Odómetro del corte: el último viaje (de toda la historia) terminado a más tardar en el hito.
@@ -241,8 +264,8 @@ def build_landmark_panel(
         d["window_km"] = g["trip_km"].sum()
         d["n_trips"] = g.size()
         d["air_temp"] = g["AirTemperatureAvg"].mean()
-        raw = _cells(win, features, [ID_COL])
-        monthly = _cells(win, features, [ID_COL, "month"])
+        raw = _cells(fwin, features, [ID_COL])
+        monthly = _cells(fwin, features, [ID_COL, "month"])
 
         entry = np.maximum(landmark + cfg.gap_days, d["dss_w0"])
         exit_ = np.minimum(d["event_dss"].where(d["event_observed"].eq(1), np.inf), d["dss_w1"])
@@ -261,6 +284,9 @@ def build_landmark_panel(
             "event_observed": d["event_observed"].astype(int),
             "feat_landmark_day": float(landmark),
         }
+        if cfg.usage_feature:
+            feature_km = fwin.groupby(ID_COL, observed=True)["trip_km"].sum().reindex(ids, fill_value=0.0)
+            cols["feat_log1p_km_per_day"] = np.log1p(feature_km.clip(lower=0) / feature_days)
         cols.update({c: d[c] for c in passthrough if c.startswith("static_")})
         for f in features:
             values = monthly[(f.name, "value")].unstack("month")
@@ -281,6 +307,7 @@ def build_landmark_panel(
             "aux_dss_window_start": d["dss_w0"],
             "aux_dss_window_end": d["dss_w1"],
             "aux_resolved_exposure_days": d["resolved_exposure_days"],
+            "aux_potential_exposure_days": d["potential_exposure_days"],
             "aux_resolved_negative": d["resolved_exposure_days"].ge(cfg.e_min_days).astype(int),
         })
         for e_min in cfg.e_min_sensitivity_days:
@@ -290,6 +317,7 @@ def build_landmark_panel(
         month_index = ((d["cut_date"].dt.year - cfg.window_start.year) * 12
                        + d["cut_date"].dt.month - cfg.window_start.month)
         cols.update({
+            "aux_feature_window_days": float(feature_days),
             "aux_n_trips_window": d["n_trips"].astype(int),
             "aux_air_temp_window_mean": d["air_temp"],
             "aux_landmark_month": month_index.astype(int),
