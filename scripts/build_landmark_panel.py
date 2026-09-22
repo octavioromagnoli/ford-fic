@@ -244,6 +244,10 @@ def main() -> int:
         "rows": report["rows"],
         "duplicated_vehicle_cut_odo": report["duplicated_vehicle_cut_odo"],
         "dev": {"rows": int(dev_mask.sum()), "vehicles": int(dev_panel[ID].nunique()),
+                # Los fallados de dev con y sin fila: D2 sobre todos los eventos cuenta como
+                # perdidos a los que no llegan a ningún hito (preregistro §5).
+                "event_vehicles": int(dev_vehicles_frame["event_observed"].eq(1).sum()),
+                "event_vehicles_with_row": int(dev_panel.loc[dev_panel["event_observed"].eq(1), ID].nunique()),
                 "by_landmark": counts.to_dict(orient="records"), "discards": discards.to_dict(orient="records"),
                 "cells": cell_nan},
         # Del test solo cuántas filas y vehículos: es el holdout.

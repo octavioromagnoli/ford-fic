@@ -27,6 +27,9 @@ import pandas as pd
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 
 REQUIRED_COLUMNS = ("vehicle_id", "cut_odo", "score", "event_observed", "time_to_event_km")
+# Defaults de las métricas de anticipación: km hasta el evento, cortes ordenados por odómetro.
+LEAD_COLUMN = "time_to_event_km"
+ORDER_COLUMN = "cut_odo"
 
 
 # --------------------------------------------------------------------------- #
@@ -420,12 +423,16 @@ def cost_ratio_breakeven(
 # --------------------------------------------------------------------------- #
 # Métricas de anticipación
 # --------------------------------------------------------------------------- #
-def _validate_predictions(predictions: pd.DataFrame) -> None:
-    missing = [c for c in REQUIRED_COLUMNS if c not in predictions.columns]
+def _validate_predictions(
+    predictions: pd.DataFrame, *, lead_column: str = LEAD_COLUMN, order_column: str = ORDER_COLUMN
+) -> None:
+    required = [c for c in REQUIRED_COLUMNS if c not in (LEAD_COLUMN, ORDER_COLUMN)]
+    required += [order_column, lead_column]
+    missing = [c for c in required if c not in predictions.columns]
     if missing:
         raise KeyError(
             f"Faltan columnas para las métricas de anticipación: {missing}. "
-            f"Se esperan {list(REQUIRED_COLUMNS)}."
+            f"Se esperan {required}."
         )
 
 
@@ -441,44 +448,60 @@ def _first_sustained_index(flags: np.ndarray, k: int) -> int | None:
     return int(hits[0]) if hits.size else None
 
 
-def _vehicle_sequences(predictions: pd.DataFrame) -> dict[str, dict[str, np.ndarray | int]]:
-    """Agrupa por vehículo y ordena por odómetro (una sola vez, se reusa por umbral)."""
-    _validate_predictions(predictions)
+def _vehicle_sequences(
+    predictions: pd.DataFrame, *, lead_column: str = LEAD_COLUMN, order_column: str = ORDER_COLUMN
+) -> dict[str, dict[str, np.ndarray | int]]:
+    """Agrupa por vehículo y ordena por `order_column` (una sola vez, se reusa por umbral).
+
+    El default es el odómetro del corte; el panel de hitos ordena por el hito, porque un
+    auto quieto puede tener el mismo odómetro en dos hitos.
+    """
+    _validate_predictions(predictions, lead_column=lead_column, order_column=order_column)
 
     # Un corte repetido rompe la regla de alerta sostenida: la misma fila contada dos
     # veces hace que un pico aislado parezca una racha de K, y la anticipación sale
     # inflada. Pasa si alguien serializa las R repeticiones de la CV repetida en
     # formato largo (`run_cv` guarda el promedio justamente para evitarlo) o si el
     # panel tiene varios horizontes por corte. Falla acá, no en el número del pitch.
-    duplicated = predictions.duplicated(subset=["vehicle_id", "cut_odo"]).sum()
+    duplicated = predictions.duplicated(subset=["vehicle_id", order_column]).sum()
     if duplicated:
         raise ValueError(
-            f"{duplicated} fila(s) con `(vehicle_id, cut_odo)` repetido. Las métricas de "
+            f"{duplicated} fila(s) con `(vehicle_id, {order_column})` repetido. Las métricas de "
             "anticipación necesitan una fila por corte: promediá las repeticiones (ver "
             "`src/training/cv.py::run_cv`) o filtrá un solo horizonte antes de llamar."
         )
 
-    ordered = predictions.sort_values(["vehicle_id", "cut_odo"])
+    ordered = predictions.sort_values(["vehicle_id", order_column])
     sequences: dict[str, dict[str, np.ndarray | int]] = {}
     for vehicle_id, group in ordered.groupby("vehicle_id", observed=True, sort=False):
         sequences[str(vehicle_id)] = {
             "score": group["score"].to_numpy(dtype=float),
-            "time_to_event_km": group["time_to_event_km"].to_numpy(dtype=float),
+            "lead": group[lead_column].to_numpy(dtype=float),
+            "order": group[order_column].to_numpy(dtype=float),
             "event_observed": int(group["event_observed"].max()),
         }
     return sequences
 
 
 def first_alert_lead_times(
-    predictions: pd.DataFrame, threshold: float, *, k_consecutive: int = 2
+    predictions: pd.DataFrame,
+    threshold: float,
+    *,
+    k_consecutive: int = 2,
+    lead_column: str = LEAD_COLUMN,
+    lead_unit: str = "km",
+    order_column: str = ORDER_COLUMN,
 ) -> dict[str, Any]:
     """Para un umbral: quién se alerta y con cuánta anticipación.
 
-    Devuelve los km de anticipación de la primera alerta sostenida en cada
-    vehículo con evento y cuántos vehículos sanos se alertaron (falsas alarmas).
+    Devuelve la anticipación de la primera alerta sostenida en cada vehículo con evento
+    (en `lead_column`: km hasta el evento por default, días en el panel de hitos) y
+    cuántos vehículos sanos se alertaron (falsas alarmas). `alert_order_values` dice en
+    qué corte (o hito) fue la primera alerta de cada detectado, en el mismo orden.
     """
-    sequences = _vehicle_sequences(predictions)
+    sequences = _vehicle_sequences(predictions, lead_column=lead_column, order_column=order_column)
     leads: list[float] = []
+    alert_at: list[float] = []
     n_event, n_healthy, n_false_alarm = 0, 0, 0
 
     for info in sequences.values():
@@ -488,10 +511,11 @@ def first_alert_lead_times(
             n_event += 1
             if idx is None:
                 continue
-            lead = float(info["time_to_event_km"][idx])
+            lead = float(info["lead"][idx])
             # Una alerta posterior al evento (o sin km hasta el evento) no anticipa nada.
             if np.isfinite(lead) and lead > 0:
                 leads.append(lead)
+                alert_at.append(float(info["order"][idx]))
         else:
             n_healthy += 1
             if idx is not None:
@@ -500,7 +524,8 @@ def first_alert_lead_times(
     return {
         "threshold": float(threshold),
         "k_consecutive": int(k_consecutive),
-        "lead_times_km": np.asarray(leads, dtype=float),
+        f"lead_times_{lead_unit}": np.asarray(leads, dtype=float),
+        "alert_order_values": np.asarray(alert_at, dtype=float),
         "n_event_vehicles": n_event,
         "n_detected": len(leads),
         "n_healthy_vehicles": n_healthy,
@@ -525,6 +550,9 @@ def lead_time_curve(
     n_thresholds: int = 50,
     k_consecutive: int = 2,
     per: int = 1000,
+    lead_column: str = LEAD_COLUMN,
+    lead_unit: str = "km",
+    order_column: str = ORDER_COLUMN,
 ) -> pd.DataFrame:
     """Curva de anticipación vs. falsas alarmas: la figura central del pitch.
 
@@ -532,8 +560,10 @@ def lead_time_curve(
     Eje y: mediana de km de anticipación de la primera alerta sostenida entre los
     vehículos con evento detectados (y `detection_rate`, que es la otra mitad de
     la frase: *a X falsas alarmas cada 1.000, detectamos el R% con mediana de N km*).
+    Con `lead_column`/`lead_unit` la anticipación se mide en otra unidad (días en el
+    panel de hitos) y las columnas pasan a llamarse `median_lead_<unidad>`.
     """
-    _validate_predictions(predictions)
+    _validate_predictions(predictions, lead_column=lead_column, order_column=order_column)
     if thresholds is None:
         scores = predictions["score"].to_numpy(dtype=float)
         grid = np.quantile(scores, np.linspace(0.0, 1.0, n_thresholds))
@@ -544,8 +574,10 @@ def lead_time_curve(
 
     rows = []
     for threshold in thresholds:
-        stats = first_alert_lead_times(predictions, threshold, k_consecutive=k_consecutive)
-        leads = stats["lead_times_km"]
+        stats = first_alert_lead_times(predictions, threshold, k_consecutive=k_consecutive,
+                                       lead_column=lead_column, lead_unit=lead_unit,
+                                       order_column=order_column)
+        leads = stats[f"lead_times_{lead_unit}"]
         n_event = stats["n_event_vehicles"]
         n_healthy = stats["n_healthy_vehicles"]
         rows.append(
@@ -558,9 +590,9 @@ def lead_time_curve(
                     else float("nan")
                 ),
                 "detection_rate": float(stats["n_detected"] / n_event) if n_event else float("nan"),
-                "median_lead_km": float(np.median(leads)) if leads.size else float("nan"),
-                "p25_lead_km": float(np.percentile(leads, 25)) if leads.size else float("nan"),
-                "p75_lead_km": float(np.percentile(leads, 75)) if leads.size else float("nan"),
+                f"median_lead_{lead_unit}": float(np.median(leads)) if leads.size else float("nan"),
+                f"p25_lead_{lead_unit}": float(np.percentile(leads, 25)) if leads.size else float("nan"),
+                f"p75_lead_{lead_unit}": float(np.percentile(leads, 75)) if leads.size else float("nan"),
                 "n_detected": stats["n_detected"],
                 "n_event_vehicles": n_event,
                 "n_false_alarm_vehicles": stats["n_false_alarm_vehicles"],
@@ -955,3 +987,533 @@ def bootstrap_by_vehicle(
             "n_vehicles": int(len(per_vehicle)),
         }
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Panel de hitos post-venta (cure model): D1 y D2 del preregistro
+# --------------------------------------------------------------------------- #
+#: Lo que lee `landmark_metrics`, con sus defaults. El bloque `eval.landmark` del YAML
+#: pisa cualquiera. Los valores son los del preregistro (`docs/memoria/f3-preregistro-cure.md`
+#: §5); las columnas, las del panel de hitos y las del decoder de `cure_window`.
+LANDMARK_DEFAULTS: dict[str, Any] = {
+    # `score_column` ordena (D1, D2, AUC); `probability_column` es la probabilidad que se
+    # calibra. En P1 son la misma; en P0 se ordena con `unit_weight_score` (preregistro §4).
+    "score_column": "score",
+    "probability_column": "score",
+    "landmark_column": "aux_landmark_day",
+    "entry_column": "aux_dss_entry",
+    "exit_column": "aux_dss_exit",
+    "event_column": "aux_event_in_window",
+    "resolved_column": "aux_resolved_negative",
+    "gap_column": "aux_gap_days",
+    "window_end_column": "aux_dss_window_end",
+    "pi_column": "pi_incidence",
+    "shape_column": "latency_shape",
+    "scale_column": "latency_scale",
+    "lead_columns": {"days": "aux_days_to_event_after_cut", "km": "time_to_event_km"},
+    # D2: a lo sumo el 5% de los negativos resueltos alerta; el 10% se reporta al lado.
+    "max_false_alarms_per_1000": 50,
+    "extra_false_alarms_per_1000": [100],
+    "e_min_days_sensitivity": [60, 120],
+    "n_boot": 2000,
+    "alpha": 0.05,
+}
+
+
+def landmark_eval_config(cfg: dict[str, Any] | None) -> dict[str, Any]:
+    """El bloque `eval.landmark` con los defaults completados; falla con claves desconocidas."""
+    cfg = dict(cfg or {})
+    unknown = sorted(set(cfg) - set(LANDMARK_DEFAULTS))
+    if unknown:
+        raise KeyError(f"`eval.landmark` trae claves que no existen: {unknown}. Válidas: {sorted(LANDMARK_DEFAULTS)}")
+    merged = {**LANDMARK_DEFAULTS, **cfg}
+    merged["lead_columns"] = {**LANDMARK_DEFAULTS["lead_columns"], **dict(cfg.get("lead_columns") or {})}
+    return merged
+
+
+def _repeat_columns(predictions: pd.DataFrame, column: str, n_repeats: int) -> list[str]:
+    """La columna de cada repetición: `column` con R = 1, `column_r{i}` con R > 1."""
+    columns = [column] if n_repeats <= 1 else [f"{column}_r{r}" for r in range(n_repeats)]
+    missing = [c for c in columns if c not in predictions]
+    if missing:
+        raise KeyError(f"Las predicciones no traen {missing}")
+    return columns
+
+
+def _landmark_vehicles(predictions: pd.DataFrame, cfg: dict[str, Any], resolved_column: str) -> pd.DataFrame:
+    """Por vehículo (ordenados): positivo = δ = 1 en alguna fila; negativo = resuelto y no positivo."""
+    groups = predictions.groupby(predictions["vehicle_id"].astype(str), sort=True)
+    positive = groups[cfg["event_column"]].max().astype(int).eq(1)
+    negative = groups[resolved_column].max().astype(int).eq(1) & ~positive
+    return pd.DataFrame({"positive": positive, "negative": negative})
+
+
+def _comparable_pairs(entry: np.ndarray, exit_: np.ndarray, event: np.ndarray) -> np.ndarray:
+    """`comp[i, j]`: el par es comparable para el C con entrada tardía (preregistro §5, D1).
+
+    i tiene evento y j estaba en riesgo en x_i: `e_j < x_i` y además `x_j > x_i`, o
+    `x_j = x_i` sin evento. Una fila con `x ≤ e` nunca entra.
+    """
+    entry, exit_, event = (np.asarray(a, dtype=float) for a in (entry, exit_, event))
+    at_risk = exit_ > entry
+    xi, xj = exit_[:, None], exit_[None, :]
+    later = (xj > xi) | ((xj == xi) & (event[None, :] == 0))
+    comp = (event[:, None] == 1) & at_risk[:, None] & at_risk[None, :] & (entry[None, :] < xi) & later
+    np.fill_diagonal(comp, False)
+    return comp
+
+
+def _concordant(comp: np.ndarray, score: np.ndarray) -> np.ndarray:
+    score = np.asarray(score, dtype=float)
+    return comp * ((score[:, None] > score[None, :]) + 0.5 * (score[:, None] == score[None, :]))
+
+
+def late_entry_concordance(
+    entry: Sequence[float],
+    exit_: Sequence[float],
+    event: Sequence[int],
+    score: Sequence[float],
+    *,
+    weights: Sequence[float] | None = None,
+) -> dict[str, float]:
+    """C de Harrell con conjuntos de riesgo que respetan la entrada tardía (D1, un hito).
+
+    Reloj en días desde la venta; concordante si `score_i > score_j`, empates ½. Con
+    `weights` (multiplicidad de cada fila en un remuestreo) el par pesa `w_i·w_j`: es lo
+    mismo que duplicar las filas, porque dos copias de un evento nunca son comparables
+    entre sí.
+    """
+    comp = _comparable_pairs(entry, exit_, event)
+    conc = _concordant(comp, score)
+    w = np.ones(len(comp)) if weights is None else np.asarray(weights, dtype=float)
+    denominator = float(w @ comp @ w)
+    event = np.asarray(event, dtype=int)
+    at_risk = np.asarray(exit_, dtype=float) > np.asarray(entry, dtype=float)
+    return {
+        "c_index": float(w @ conc @ w) / denominator if denominator > 0 else float("nan"),
+        "n_pairs": int(comp.sum()),
+        "n_events": int((event[at_risk] == 1).sum()),
+        "n_at_risk": int(at_risk.sum()),
+    }
+
+
+def _d1_parts(
+    predictions: pd.DataFrame, cfg: dict[str, Any], score_columns: list[str], vehicles: pd.Index,
+    *, on_time_only: bool = False,
+) -> list[dict[str, Any]]:
+    """Por hito: las filas en riesgo, su vehículo, los pares comparables y los concordantes por repetición."""
+    parts = []
+    for landmark, frame in predictions.groupby(cfg["landmark_column"], sort=True):
+        entry = frame[cfg["entry_column"]].to_numpy(dtype=float)
+        exit_ = frame[cfg["exit_column"]].to_numpy(dtype=float)
+        event = frame[cfg["event_column"]].to_numpy(dtype=int)
+        keep = exit_ > entry
+        if on_time_only:
+            keep &= np.isclose(entry, float(landmark) + frame[cfg["gap_column"]].to_numpy(dtype=float))
+        comp = _comparable_pairs(entry[keep], exit_[keep], event[keep])
+        parts.append({
+            "landmark": float(landmark),
+            "vehicle": vehicles.get_indexer(frame["vehicle_id"].astype(str))[keep],
+            "comparable": comp.astype(float),
+            "concordant": [_concordant(comp, frame[c].to_numpy(dtype=float)[keep]) for c in score_columns],
+            "n_pairs": int(comp.sum()),
+            "n_events": int(event[keep].sum()),
+            "n_at_risk": int(keep.sum()),
+        })
+    return parts
+
+
+def _d1_values(parts: list[dict[str, Any]], weights: np.ndarray) -> np.ndarray:
+    """C por (remuestreo, hito, repetición). `weights`: (B, V) multiplicidad de cada vehículo."""
+    out = np.full((len(weights), len(parts), len(parts[0]["concordant"]) if parts else 0), np.nan)
+    for h, part in enumerate(parts):
+        w = weights[:, part["vehicle"]]
+        denominator = ((w @ part["comparable"]) * w).sum(axis=1)
+        for r, conc in enumerate(part["concordant"]):
+            numerator = ((w @ conc) * w).sum(axis=1)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                out[:, h, r] = np.where(denominator > 0, numerator / denominator, np.nan)
+    return out
+
+
+def _vehicle_max(predictions: pd.DataFrame, score_columns: list[str], vehicles: pd.Index) -> np.ndarray:
+    """Máximo del score de cada vehículo sobre sus hitos, por repetición: (V, R)."""
+    maxima = predictions.groupby(predictions["vehicle_id"].astype(str))[score_columns].max()
+    return maxima.reindex(vehicles).to_numpy(dtype=float)
+
+
+def _alerts_allowed(budget: float, n_negatives: np.ndarray | float) -> np.ndarray:
+    """m = ⌊presupuesto · N⌋ (el épsilon evita que 0,05 · 60 quede en 2,9999…)."""
+    return np.floor(budget * np.asarray(n_negatives, dtype=float) + 1e-9).astype(int)
+
+
+def _d2_values(
+    maxima: np.ndarray, positive: np.ndarray, negative: np.ndarray, budget: float, weights: np.ndarray
+) -> np.ndarray:
+    """Detección por (remuestreo, repetición) con el umbral τ = (m+1)-ésimo mayor de los negativos.
+
+    Un vehículo alerta en algún hito si y solo si su máximo supera τ, así que la detección
+    sale de los máximos por vehículo sin recorrer los hitos (la anticipación sí los necesita:
+    `landmark_detection`).
+    """
+    out = np.full((len(weights), maxima.shape[1]), np.nan)
+    w_pos, w_neg = weights[:, positive], weights[:, negative]
+    total_neg = w_neg.sum(axis=1)
+    allowed = _alerts_allowed(budget, total_neg)
+    for r in range(maxima.shape[1]):
+        neg_scores = maxima[negative, r]
+        order = np.argsort(-neg_scores, kind="stable")
+        cumulative = np.cumsum(w_neg[:, order], axis=1)
+        index = np.argmax(cumulative >= (allowed + 1)[:, None], axis=1)
+        tau = neg_scores[order][index]
+        valid = (allowed + 1) <= total_neg
+        detected = ((maxima[positive, r][None, :] > tau[:, None]) * w_pos).sum(axis=1)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out[:, r] = np.where(valid, detected / w_pos.sum(axis=1), np.nan)
+    return out
+
+
+def _quantiles(values: np.ndarray) -> dict[str, float]:
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return {"median": float("nan"), "p25": float("nan"), "p75": float("nan"), "n": 0}
+    return {"median": float(np.median(values)), "p25": float(np.percentile(values, 25)),
+            "p75": float(np.percentile(values, 75)), "n": int(values.size)}
+
+
+def landmark_detection(
+    predictions: pd.DataFrame,
+    cfg: dict[str, Any],
+    *,
+    score_column: str,
+    budget: float,
+    resolved_column: str | None = None,
+    n_event_vehicles_total: int | None = None,
+) -> dict[str, Any]:
+    """D2 de una repetición: primera alerta sobre los hitos con k = 1 (preregistro §5).
+
+    Positivos: vehículos con δ = 1 en alguna fila. Negativos: los resueltos. Con
+    m = ⌊presupuesto · N_neg⌋, el umbral τ es el (m+1)-ésimo mayor valor, entre los
+    negativos, de su score máximo sobre sus hitos, y un vehículo alerta en el primer hito
+    con score > τ: alertan a lo sumo m negativos. La anticipación es evento − hito de la
+    alerta, en días y en km (`lead_columns`), con la misma `first_alert_lead_times` del
+    panel v1, ordenada por hito.
+    """
+    resolved_column = resolved_column or cfg["resolved_column"]
+    vehicles = _landmark_vehicles(predictions, cfg, resolved_column)
+    keep = predictions["vehicle_id"].astype(str).map(vehicles["positive"] | vehicles["negative"]).to_numpy()
+    frame = predictions.loc[keep].assign(
+        score=predictions.loc[keep, score_column].to_numpy(dtype=float),
+        event_observed=predictions.loc[keep, "vehicle_id"].astype(str).map(vehicles["positive"]).astype(int).to_numpy(),
+    )
+    negative_max = frame.loc[frame["event_observed"].eq(0)].groupby("vehicle_id")["score"].max().to_numpy()
+    n_negative, n_positive = int(vehicles["negative"].sum()), int(vehicles["positive"].sum())
+    allowed = int(_alerts_allowed(budget, n_negative))
+    out: dict[str, Any] = {"budget": float(budget), "n_positive": n_positive, "n_negative": n_negative,
+                           "alerts_allowed": allowed}
+    if n_negative == 0 or allowed + 1 > n_negative or n_positive == 0:
+        return {**out, "detection_rate": float("nan")}
+    tau = float(np.sort(negative_max)[::-1][allowed])
+    threshold = float(np.nextafter(tau, np.inf))
+    days_column, km_column = cfg["lead_columns"]["days"], cfg["lead_columns"]["km"]
+    by_days = first_alert_lead_times(frame, threshold, k_consecutive=1, lead_column=days_column,
+                                     lead_unit="days", order_column=cfg["landmark_column"])
+    by_km = first_alert_lead_times(frame, threshold, k_consecutive=1, lead_column=km_column,
+                                   lead_unit="km", order_column=cfg["landmark_column"])
+    alert_at = pd.Series(by_days["alert_order_values"]).value_counts().sort_index()
+    out.update({
+        "threshold": tau,
+        "n_detected": int(by_days["n_detected"]),
+        "detection_rate": float(by_days["n_detected"] / n_positive),
+        "n_false_alarms": int(by_days["n_false_alarm_vehicles"]),
+        "false_alarm_rate": float(by_days["n_false_alarm_vehicles"] / n_negative),
+        "lead_days": _quantiles(by_days["lead_times_days"]),
+        # Sin odómetro del evento (dos fallados de dev se identificaron sin telemetría) no
+        # hay km: `n` dice sobre cuántos detectados se mide.
+        "lead_km": _quantiles(by_km["lead_times_km"]),
+        "first_alert_landmark": {f"{k:g}": int(v) for k, v in alert_at.items()},
+    })
+    if n_event_vehicles_total:
+        out["n_event_vehicles_total"] = int(n_event_vehicles_total)
+        out["detection_rate_all_events"] = float(by_days["n_detected"] / n_event_vehicles_total)
+    return out
+
+
+def landmark_detection_curve(predictions: pd.DataFrame, cfg: dict[str, Any], *, score_column: str) -> pd.DataFrame:
+    """Detección y anticipación contra la fracción de negativos resueltos que alerta (la figura)."""
+    vehicles = _landmark_vehicles(predictions, cfg, cfg["resolved_column"])
+    index = pd.Index(vehicles.index)
+    maxima = _vehicle_max(predictions, [score_column], index)[:, 0]
+    positive, negative = vehicles["positive"].to_numpy(), vehicles["negative"].to_numpy()
+    if not positive.any() or not negative.any():
+        return pd.DataFrame()
+    keep = predictions["vehicle_id"].astype(str).map(vehicles["positive"] | vehicles["negative"]).to_numpy()
+    frame = predictions.loc[keep].assign(
+        score=predictions.loc[keep, score_column].to_numpy(dtype=float),
+        event_observed=predictions.loc[keep, "vehicle_id"].astype(str).map(vehicles["positive"]).astype(int).to_numpy(),
+    )
+    rows = []
+    for tau in np.r_[np.inf, np.unique(maxima[negative])[::-1]]:
+        threshold = tau if np.isinf(tau) else float(np.nextafter(tau, np.inf))
+        stats = first_alert_lead_times(frame, threshold, k_consecutive=1, lead_unit="days",
+                                       lead_column=cfg["lead_columns"]["days"], order_column=cfg["landmark_column"])
+        leads = _quantiles(stats["lead_times_days"])
+        rows.append({
+            "threshold": float(tau),
+            "false_alarm_rate": float((maxima[negative] > tau).mean()),
+            "detection_rate": float((maxima[positive] > tau).mean()),
+            "median_lead_days": leads["median"], "p25_lead_days": leads["p25"], "p75_lead_days": leads["p75"],
+            "n_false_alarms": int((maxima[negative] > tau).sum()), "n_detected": int((maxima[positive] > tau).sum()),
+            "n_negative": int(negative.sum()), "n_positive": int(positive.sum()),
+        })
+    return pd.DataFrame(rows)
+
+
+def _logistic_slope(y: np.ndarray, probability: np.ndarray, *, max_iter: int = 100) -> float:
+    """Pendiente de calibración: y ~ a + b·logit(p) por máxima verosimilitud (Steyerberg 2019)."""
+    p = np.clip(np.asarray(probability, dtype=float), 1e-12, 1 - 1e-12)
+    X = np.column_stack([np.ones(len(p)), np.log(p / (1 - p))])
+    y = np.asarray(y, dtype=float)
+    if len(np.unique(y)) < 2 or np.ptp(X[:, 1]) == 0:
+        return float("nan")
+    beta = np.zeros(2)
+    for _ in range(max_iter):
+        mu = 1 / (1 + np.exp(-(X @ beta)))
+        info = (X * (mu * (1 - mu))[:, None]).T @ X
+        try:
+            step = np.linalg.solve(info, X.T @ (y - mu))
+        except np.linalg.LinAlgError:
+            return float("nan")
+        beta = beta + step
+        if np.max(np.abs(step)) < 1e-10:
+            break
+    return float(beta[1])
+
+
+def _landmark_informative(
+    predictions: pd.DataFrame, cfg: dict[str, Any], n_repeats: int, score_columns: list[str]
+) -> dict[str, Any]:
+    """Lo que se reporta y no decide: discriminación por hito, calibración, latencia y seguimiento."""
+    vehicles = _landmark_vehicles(predictions, cfg, cfg["resolved_column"])
+    resolved = predictions["vehicle_id"].astype(str).map(vehicles["negative"]).to_numpy()
+    event = predictions[cfg["event_column"]].to_numpy(dtype=int)
+    landmarks = predictions[cfg["landmark_column"]].to_numpy(dtype=float)
+    entry = predictions[cfg["entry_column"]].to_numpy(dtype=float)
+    exit_ = predictions[cfg["exit_column"]].to_numpy(dtype=float)
+    at_risk = exit_ > entry
+
+    discrimination: dict[str, Any] = {}
+    for landmark in np.unique(landmarks):
+        rows = (landmarks == landmark) & ((event == 1) | resolved)
+        y = event[rows]
+        base_rate = float(y.mean()) if len(y) else float("nan")
+        # Sin Brier: el score que ordena puede no ser una probabilidad (P0 ordena con s).
+        runs = []
+        for column in score_columns:
+            score = predictions.loc[rows, column].to_numpy(dtype=float)
+            ap = pr_auc(y, score)
+            runs.append({"roc_auc": roc_auc(y, score), "pr_auc": ap,
+                         "pr_auc_lift": ap / base_rate if base_rate else float("nan")})
+        discrimination[f"{landmark:g}"] = {
+            "n_positive": int(y.sum()), "n_negative": int((y == 0).sum()), "base_rate": base_rate,
+            **{key: dispersion([r[key] for r in runs]) for key in ("roc_auc", "pr_auc", "pr_auc_lift")},
+        }
+    out: dict[str, Any] = {"discrimination_resolved": discrimination}
+
+    needed = [cfg["pi_column"], cfg["shape_column"], cfg["scale_column"], cfg["probability_column"]]
+    try:
+        pi_cols, shape_cols, scale_cols, prob_cols = (_repeat_columns(predictions, c, n_repeats) for c in needed)
+        fold_cols = _repeat_columns(predictions, "fold", n_repeats)
+    except KeyError as exc:
+        out["cure"] = {"skipped": f"sin las columnas del cure model: {exc}"}
+        return out
+
+    window_end = predictions[cfg["window_end_column"]].to_numpy(dtype=float)
+    calibration: dict[str, Any] = {}
+    latency_rows = []
+    for landmark in np.unique(landmarks):
+        at_landmark = landmarks == landmark
+        resolved_rows = at_landmark & ((event == 1) | resolved)
+        slopes, briers, terciles = [], [], []
+        for r in range(len(pi_cols)):
+            pi = predictions[pi_cols[r]].to_numpy(dtype=float)
+            shape = predictions[shape_cols[r]].to_numpy(dtype=float)
+            scale = predictions[scale_cols[r]].to_numpy(dtype=float)
+            prob = predictions[prob_cols[r]].to_numpy(dtype=float)
+            risk = at_landmark & at_risk
+            # Lo esperado es la probabilidad de un evento en la exposición real (e, fin de la ventana].
+            expected = pi * (1 - np.exp((entry / scale) ** shape - (window_end / scale) ** shape))
+            cuts = pd.qcut(pd.Series(pi[risk]).rank(method="first"), 3, labels=False).to_numpy()
+            terciles.append([(float(event[risk][cuts == t].sum()), float(expected[risk][cuts == t].sum()),
+                              int((cuts == t).sum())) for t in range(3)])
+            slopes.append(_logistic_slope(event[resolved_rows], prob[resolved_rows]))
+            briers.append(float(np.mean((prob[resolved_rows] - event[resolved_rows]) ** 2)))
+            folds = predictions[fold_cols[r]].to_numpy()
+            for fold in np.unique(folds[at_landmark]):
+                in_fold = at_landmark & (folds == fold)
+                k, lam = float(shape[in_fold][0]), float(scale[in_fold][0])
+                t90 = lam * np.log(10.0) ** (1.0 / k)
+                healthy = in_fold & at_risk & (event == 0)
+                latency_rows.append({
+                    "landmark": f"{landmark:g}", "shape": k, "scale_days": lam,
+                    "median_days": lam * np.log(2.0) ** (1.0 / k), "p90_days": t90,
+                    "susceptible_fraction": float(pi[in_fold & at_risk].mean()) if (in_fold & at_risk).any() else np.nan,
+                    "sufficient_follow_up": float((exit_[healthy] >= t90).mean()) if healthy.any() else np.nan,
+                })
+        calibration[f"{landmark:g}"] = {
+            "slope_resolved": dispersion(slopes),
+            "brier_resolved": dispersion(briers),
+            "observed_vs_expected_by_tercile": [
+                {"tercile": t + 1, "observed": float(np.mean([run[t][0] for run in terciles])),
+                 "expected": float(np.mean([run[t][1] for run in terciles])), "n": terciles[0][t][2]}
+                for t in range(3)
+            ],
+        }
+    latency = pd.DataFrame(latency_rows)
+    out["calibration"] = calibration
+    out["calibration_note"] = ("Muestreo por cohorte: lo absoluto no se declara sin la prevalencia real de "
+                               "la flota (Prentice & Pyke 1979). La pendiente y el orden por tercil sí se leen.")
+    out["latency_by_fold"] = {
+        landmark: {key: dispersion(group[key].tolist())
+                   for key in ("shape", "scale_days", "median_days", "p90_days",
+                               "susceptible_fraction", "sufficient_follow_up")}
+        for landmark, group in latency.groupby("landmark", sort=False)
+    }
+    return out
+
+
+def landmark_bootstrap_draws(
+    predictions: pd.DataFrame, cfg: dict[str, Any], *, n_repeats: int = 1, n_boot: int, seed: int
+) -> dict[str, Any]:
+    """D1 (promedio de hitos) y D2 por remuestreo de vehículos, promediados entre repeticiones.
+
+    Los remuestreos dependen solo de la semilla y de la lista ordenada de vehículos, así que
+    dos corridas sobre el mismo panel reciben **los mismos**: la diferencia de sus draws es
+    el bootstrap pareado del preregistro §5.
+    """
+    cfg = landmark_eval_config(cfg)
+    score_columns = _repeat_columns(predictions, cfg["score_column"], n_repeats)
+    table = _landmark_vehicles(predictions, cfg, cfg["resolved_column"])
+    vehicles = pd.Index(table.index)
+    rng = np.random.default_rng(seed)
+    weights = np.stack([np.bincount(rng.integers(0, len(vehicles), len(vehicles)), minlength=len(vehicles))
+                        for _ in range(int(n_boot))]).astype(float)
+    parts = _d1_parts(predictions, cfg, score_columns, vehicles)
+    d1 = _d1_values(parts, weights).mean(axis=1).mean(axis=1)
+    budget = float(cfg["max_false_alarms_per_1000"]) / 1000.0
+    maxima = _vehicle_max(predictions, score_columns, vehicles)
+    d2 = _d2_values(maxima, table["positive"].to_numpy(), table["negative"].to_numpy(), budget, weights).mean(axis=1)
+    return {"vehicles": list(vehicles), "d1": d1, "d2": d2}
+
+
+def _interval(draws: np.ndarray, alpha: float) -> dict[str, float]:
+    clean = draws[np.isfinite(draws)]
+    if clean.size == 0:
+        return {"lo": float("nan"), "hi": float("nan"), "n_boot": 0}
+    return {"lo": float(np.quantile(clean, alpha / 2)), "hi": float(np.quantile(clean, 1 - alpha / 2)),
+            "n_boot": int(clean.size)}
+
+
+def landmark_metrics(
+    predictions: pd.DataFrame,
+    cfg: dict[str, Any] | None = None,
+    *,
+    n_repeats: int = 1,
+    seed: int = 42,
+    n_event_vehicles_total: int | None = None,
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    """Las métricas del panel de hitos: `(bloque para metrics.json, curva detección/falsas alarmas)`.
+
+    **Deciden** D1 y D2, con media ± desvío poblacional entre las R repeticiones (preregistro
+    §5), y cada una trae su intervalo por bootstrap de vehículos:
+
+    - **D1**: C con entrada tardía por hito, y su promedio simple sobre los hitos;
+    - **D2**: detección con primera alerta sobre los hitos, con a lo sumo el 5% de los
+      negativos resueltos alertando, más la anticipación en días y en km.
+
+    Lo demás es informativo (`informative`): D2 al 10%, con `E_min` 60 y 120 y sobre todos
+    los fallados de dev; D1 con las filas que entran en L + G; AUC y PR-AUC por hito entre
+    resueltos; calibración; (k, λ), fracción susceptible y seguimiento suficiente por fold.
+
+    Nada de esto promedia filas entre hitos: todo se calcula por hito o por vehículo.
+    """
+    cfg = landmark_eval_config(cfg)
+    required = ["vehicle_id", cfg["landmark_column"], cfg["entry_column"], cfg["exit_column"],
+                cfg["event_column"], cfg["resolved_column"], cfg["gap_column"], *cfg["lead_columns"].values(),
+                *(f"{cfg['resolved_column']}_e{d:g}" for d in cfg["e_min_days_sensitivity"])]
+    missing = [c for c in required if c not in predictions]
+    if missing:
+        raise KeyError(
+            f"Las predicciones no traen {missing}: agregalas a `eval.carry_columns` del YAML para que "
+            "`run_cv` las arrastre desde el panel."
+        )
+    score_columns = _repeat_columns(predictions, cfg["score_column"], n_repeats)
+    budget = float(cfg["max_false_alarms_per_1000"]) / 1000.0
+    vehicles = _landmark_vehicles(predictions, cfg, cfg["resolved_column"])
+    index = pd.Index(vehicles.index)
+    ones = np.ones((1, len(index)))
+
+    # D1: por hito y promedio, repetición por repetición.
+    parts = _d1_parts(predictions, cfg, score_columns, index)
+    values = _d1_values(parts, ones)[0]  # (hitos, repeticiones)
+    d1 = {
+        "mean": dispersion(values.mean(axis=0).tolist()),
+        "by_landmark": {
+            f"{part['landmark']:g}": {"c_index": dispersion(values[h].tolist()), "n_pairs": part["n_pairs"],
+                                      "n_events": part["n_events"], "n_at_risk": part["n_at_risk"]}
+            for h, part in enumerate(parts)
+        },
+        "by_repeat": values.mean(axis=0).tolist(),
+    }
+    on_time = _d1_parts(predictions, cfg, score_columns, index, on_time_only=True)
+    on_time_values = _d1_values(on_time, ones)[0]
+
+    # D2: la cuenta completa (con anticipación) por repetición.
+    def detection(budget_: float, resolved_column: str | None = None) -> dict[str, Any]:
+        runs = [landmark_detection(predictions, cfg, score_column=c, budget=budget_, resolved_column=resolved_column,
+                                   n_event_vehicles_total=n_event_vehicles_total) for c in score_columns]
+        block = {
+            "budget": budget_,
+            "n_positive": runs[0]["n_positive"], "n_negative": runs[0]["n_negative"],
+            "alerts_allowed": runs[0]["alerts_allowed"],
+            "detection_rate": dispersion([r["detection_rate"] for r in runs]),
+            "median_lead_days": dispersion([r.get("lead_days", {}).get("median", np.nan) for r in runs]),
+            "median_lead_km": dispersion([r.get("lead_km", {}).get("median", np.nan) for r in runs]),
+            "by_repeat": runs,
+        }
+        if n_event_vehicles_total:
+            block["detection_rate_all_events"] = dispersion([r.get("detection_rate_all_events", np.nan) for r in runs])
+        return block
+
+    d2 = detection(budget)
+    draws = landmark_bootstrap_draws(predictions, cfg, n_repeats=n_repeats, n_boot=int(cfg["n_boot"]), seed=seed)
+    alpha = float(cfg["alpha"])
+    d1["bootstrap_by_vehicle"] = _interval(draws["d1"], alpha)
+    d2["bootstrap_by_vehicle"] = _interval(draws["d2"], alpha)
+
+    informative: dict[str, Any] = {
+        "d2_other_budgets": {f"{b:g}_per_1000": detection(float(b) / 1000.0)
+                             for b in cfg["extra_false_alarms_per_1000"]},
+        "d2_e_min": {f"e{d:g}": detection(budget, f"{cfg['resolved_column']}_e{d:g}")
+                     for d in cfg["e_min_days_sensitivity"]},
+        "d1_on_time_entry": {
+            "mean": dispersion(on_time_values.mean(axis=0).tolist()),
+            "by_landmark": {f"{p['landmark']:g}": {"c_index": dispersion(on_time_values[h].tolist()),
+                                                    "n_pairs": p["n_pairs"], "n_events": p["n_events"],
+                                                    "n_at_risk": p["n_at_risk"]}
+                            for h, p in enumerate(on_time)},
+        },
+        **_landmark_informative(predictions, cfg, n_repeats, score_columns),
+    }
+    block = {
+        "decides": "d1.mean y d2.detection_rate (preregistro §5); el resto es informativo",
+        "config": cfg,
+        "n_vehicles": int(len(index)),
+        "n_positive_vehicles": int(vehicles["positive"].sum()),
+        "n_resolved_negative_vehicles": int(vehicles["negative"].sum()),
+        "d1": d1,
+        "d2": d2,
+        "informative": informative,
+    }
+    return block, landmark_detection_curve(predictions, cfg, score_column=cfg["score_column"])

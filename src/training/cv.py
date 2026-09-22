@@ -23,7 +23,7 @@ significaría nada.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import pandas as pd
@@ -107,6 +107,7 @@ def run_cv(
     strict_splits: bool = True,
     min_valid_positives: int | None = None,
     preprocessing: str = "standard",
+    carry_columns: Sequence[str] | None = None,
 ) -> tuple[pd.DataFrame, list[dict[str, float]]]:
     """Corre la CV agrupada y devuelve `(predicciones out-of-fold, métricas por fold)`.
 
@@ -124,8 +125,14 @@ def run_cv(
 
     Las R pasadas no se pierden: con R > 1 se agregan las columnas `score_r{i}` y
     `fold_r{i}` (una por repetición) más `score_std`, así la dispersión es auditable
-    desde el mismo archivo. Con R = 1 las columnas son exactamente las de siempre
-    (`score`, `fold`).
+    desde el mismo archivo. Lo mismo con las columnas auxiliares del decoder
+    (`<columna>_r{i}`): el cure model mide P0 con `unit_weight_score`, repetición por
+    repetición. Con R = 1 las columnas son exactamente las de siempre (`score`, `fold`).
+
+    **`carry_columns`** son columnas del panel que viajan a las predicciones además de
+    `CARRY_COLUMNS` (el default no cambia). Las pide el YAML en `eval.carry_columns`
+    —el panel de hitos necesita sus `aux_` de exposición para medir D1 y D2— y una que
+    el panel no tenga es un error, no una columna que falta en silencio.
 
     Ojo con qué se compara: el PR-AUC de selección es el **promedio de los PR-AUC de
     cada repetición** (`scripts/train.py`), no el PR-AUC de los scores promediados.
@@ -160,6 +167,11 @@ def run_cv(
             f" {target_params}" if target_params else "",
             target_column,
         )
+
+    extra_carry = [c for c in (carry_columns or []) if c not in CARRY_COLUMNS]
+    missing_carry = [c for c in extra_carry if c not in panel.columns]
+    if missing_carry:
+        raise KeyError(f"`eval.carry_columns` pide columnas que el panel no tiene: {missing_carry}")
 
     if preprocessing not in PREPROCESSING_MODES:
         raise ValueError(f"`preprocessing` tiene que ser uno de {PREPROCESSING_MODES}, no `{preprocessing}`")
@@ -247,7 +259,7 @@ def run_cv(
         raise RuntimeError("Los splits no tienen ninguna repetición: no se entrenó nada")
 
     predictions = panel[
-        [c for c in (*ID_COLUMNS, *CARRY_COLUMNS, target_column) if c in panel]
+        list(dict.fromkeys(c for c in (*ID_COLUMNS, *CARRY_COLUMNS, *extra_carry, target_column) if c in panel))
     ].copy()
     stacked = np.vstack(repeat_scores)
     predictions["score"] = stacked.mean(axis=0)
@@ -268,6 +280,8 @@ def run_cv(
         for repeat, (scores_r, folds_r) in enumerate(zip(repeat_scores, repeat_folds)):
             predictions[f"score_r{repeat}"] = scores_r
             predictions[f"fold_r{repeat}"] = folds_r
+            for column in sorted(repeat_extras[repeat]):
+                predictions[f"{column}_r{repeat}"] = repeat_extras[repeat][column]
         logger.info(
             "CV repetida: %d repeticiones | `score` es el promedio (ver docstring de run_cv)",
             len(repeat_scores),

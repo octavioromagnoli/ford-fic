@@ -674,7 +674,12 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         return self
 
     def predict_components(self, X: pd.DataFrame) -> dict[str, np.ndarray]:
-        """`score`, `pi_incidence`, `p_horizon` (y `unit_weight_score` con P0) por fila."""
+        """`score`, `pi_incidence`, `p_horizon` y la latencia del hito (y `unit_weight_score` con P0).
+
+        `latency_shape` y `latency_scale` son constantes dentro de cada hito y fold: viajan
+        por fila para que las métricas recalculen S_u sobre la exposición real de cada
+        vehículo (calibración, seguimiento suficiente) sin reabrir el modelo.
+        """
         if not isinstance(X, pd.DataFrame):
             raise TypeError("`cure_mixture` predice sobre el panel crudo: `preprocessing: none`")
         landmarks = X[self.landmark_column].to_numpy(dtype=float)
@@ -682,7 +687,8 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         if unknown:
             raise ValueError(f"Hitos que no estaban en train: {unknown}")
         normalized = self.normalizer_.transform(X)
-        out = {name: np.full(len(X), np.nan) for name in ("score", "pi_incidence", "p_horizon")}
+        out = {name: np.full(len(X), np.nan)
+               for name in ("score", "pi_incidence", "p_horizon", "latency_shape", "latency_scale")}
         if self.incidence == "unit_weight":
             out[UNIT_WEIGHT_SCORE] = np.full(len(X), np.nan)
         for landmark in np.unique(landmarks):
@@ -694,6 +700,8 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
             p_horizon = 1.0 - float(model.fit.latency.conditional_survival(start, end))
             out["pi_incidence"][rows] = pi
             out["p_horizon"][rows] = p_horizon
+            out["latency_shape"][rows] = model.fit.latency.shape
+            out["latency_scale"][rows] = model.fit.latency.scale
             out["score"][rows] = pi * p_horizon
             if self.incidence == "unit_weight":
                 out[UNIT_WEIGHT_SCORE][rows] = standardized @ self.signs_

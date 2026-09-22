@@ -23,6 +23,9 @@ fallan, invalidan todo lo que venga después:
 9. El cure model: Firth contra referencias independientes, el EM sobre datos simulados
    con ventana (monótono, en el máximo de la verosimilitud, recuperando la verdad) y el
    par `cure_window` / `cure_mixture` por el loop de CV.
+10. D1 y D2 del panel de hitos: el C con entrada tardía contra un caso a mano y contra
+    lifelines, el umbral de la primera alerta, el bootstrap por vehículo y el bloque
+    `eval` (`landmark`, `legacy_blocks`, `carry_columns`) de punta a punta.
 """
 
 from __future__ import annotations
@@ -44,7 +47,7 @@ if hasattr(sys.stdout, "reconfigure"):
 from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from scripts.build_eda_cache import resolved_eda_config  # noqa: E402
 from scripts.audit_model import CALENDAR_AUX, promote_aux  # noqa: E402
-from scripts.train import vehicle_block  # noqa: E402
+from scripts.train import evaluate_predictions, vehicle_block  # noqa: E402
 from src.config import load_config, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
     VEHICLE_AGGREGATIONS,
@@ -53,6 +56,13 @@ from src.eval.metrics import (  # noqa: E402
     cost_matrix_score,
     cost_ratio_breakeven,
     cost_ratio_sweep,
+    _d2_values,
+    _landmark_vehicles,
+    _vehicle_max,
+    landmark_bootstrap_draws,
+    landmark_eval_config,
+    landmark_detection,
+    late_entry_concordance,
     lead_time_curve,
     operating_point,
     pr_auc_within_failed,
@@ -494,7 +504,9 @@ def _cure_panel(seed: int = 5, n: int = 160) -> pd.DataFrame:
     Cada feature es un corrimiento por mercado × mes más el rasgo latente del vehículo: el
     normalizador tiene que sacar el corrimiento y dejar el rasgo. El riesgo sube con `a` y
     baja con `b`. Los eventos caen después de 90 d (ninguno dentro del gap) y solo se
-    registran dentro de una ventana de 300 d.
+    registran dentro de una ventana de 300 d. Trae también lo que miden D1 y D2: negativo
+    resuelto (exposición ≥ 90 d desde max(venta + 60, apertura)), días y km al evento
+    (40 km/d) y el fin de la ventana.
     """
     rng = np.random.default_rng(seed)
     markets = np.where(np.arange(n) % 2 == 0, "X", "Y")
@@ -504,6 +516,7 @@ def _cure_panel(seed: int = 5, n: int = 160) -> pd.DataFrame:
     window = 300.0
     t = 200.0 * ((90.0 / 200.0) ** 2 - np.log(rng.random(n))) ** 0.5  # Weibull(2, 200) | T > 90
     registered = susceptible & (t >= -sale) & (t <= window - sale)
+    resolved_exposure = (window - sale) - np.maximum(60.0, -sale)
     shift = {("X", "2025-09"): 10.0, ("X", "2025-10"): 12.0, ("Y", "2025-09"): 30.0, ("Y", "2025-10"): 33.0}
     rows = []
     for landmark in (30.0, 60.0):
@@ -519,8 +532,13 @@ def _cure_panel(seed: int = 5, n: int = 160) -> pd.DataFrame:
                 "feat_landmark_day": landmark, "static_SalesCountry_cd": markets[i],
                 "aux_landmark_day": landmark, "aux_gap_days": 30.0, "aux_horizon_days": 240.0,
                 "aux_dss_entry": entry[i], "aux_dss_exit": t[i] if in_window[i] else end[i],
-                "aux_event_in_window": int(in_window[i]),
+                "aux_event_in_window": int(in_window[i]), "aux_dss_window_end": end[i],
+                "aux_days_to_event_after_cut": t[i] - landmark if registered[i] else np.nan,
+                "aux_resolved_negative": int(not registered[i] and resolved_exposure[i] >= 90.0),
+                "aux_resolved_negative_e60": int(not registered[i] and resolved_exposure[i] >= 60.0),
+                "aux_resolved_negative_e120": int(not registered[i] and resolved_exposure[i] >= 120.0),
             }
+            row["time_to_event_km"] = 40.0 * row["aux_days_to_event_after_cut"]
             for month in ("2025-09", "2025-10"):
                 base = shift[(markets[i], month)]
                 row[f"feat_fm__a__{month}"] = base + 2.0 * latent[i, 0] + rng.normal(scale=0.5)
@@ -718,6 +736,186 @@ def cure_model_checks() -> None:
     check(
         "cure por run_cv: con `preprocessing: standard` falla (necesita el panel crudo)",
         _raises(lambda: run_cv(panel, splits, preprocessing="standard", **cv_args), TypeError),
+    )
+
+
+LANDMARK_CARRY = ["aux_landmark_day", "aux_dss_entry", "aux_dss_exit", "aux_event_in_window", "aux_gap_days",
+                  "aux_dss_window_end", "aux_days_to_event_after_cut", "aux_resolved_negative",
+                  "aux_resolved_negative_e60", "aux_resolved_negative_e120"]
+
+
+def _landmark_frame(n_neg: int = 20) -> pd.DataFrame:
+    """Predicciones a mano para D2: 20 negativos resueltos, 5 positivos y 1 sano sin resolver.
+
+    Dos hitos (30 y 60). El máximo de los negativos va de 0,01 a 0,20, así que con el 5%
+    (m = 1) el umbral es el segundo mayor, 0,19. P1 alerta en 30, P2 recién en 60, P3 no
+    llega, P4 empata con el umbral (no alerta: tiene que superarlo) y P5 cae entre el
+    primero y el segundo negativo (alerta solo si τ es el segundo).
+    """
+    rows = []
+    for i in range(n_neg):
+        for landmark in (30.0, 60.0):
+            rows.append({"vehicle_id": f"N{i:02d}", "aux_landmark_day": landmark,
+                         "score": (i + 1) / 100 - (0.005 if landmark == 30.0 else 0.0),
+                         "aux_event_in_window": 0, "aux_resolved_negative": 1, "event_dss": np.nan})
+    positives = {"P1": (0.50, 0.40, 200.0), "P2": (0.10, 0.30, 180.0), "P3": (0.05, 0.10, 150.0),
+                 "P4": (0.19, 0.18, 170.0), "P5": (0.195, 0.10, 160.0)}
+    for vid, (s30, s60, event_dss) in positives.items():
+        for landmark, score in ((30.0, s30), (60.0, s60)):
+            rows.append({"vehicle_id": vid, "aux_landmark_day": landmark, "score": score,
+                         "aux_event_in_window": 1, "aux_resolved_negative": 0, "event_dss": event_dss})
+    rows += [{"vehicle_id": "S0", "aux_landmark_day": landmark, "score": 0.99, "aux_event_in_window": 0,
+              "aux_resolved_negative": 0, "event_dss": np.nan} for landmark in (30.0, 60.0)]
+    frame = pd.DataFrame(rows)
+    frame["aux_days_to_event_after_cut"] = frame["event_dss"] - frame["aux_landmark_day"]
+    frame["time_to_event_km"] = 40.0 * frame["aux_days_to_event_after_cut"]
+    return frame
+
+
+def landmark_metric_checks() -> None:
+    """10 · D1 y D2 del panel de hitos, y el bloque `eval` que los activa."""
+    # D1 a mano. (0,1) concordante; (0,2) no es comparable (2 entró después del evento de 0);
+    # (0,3) comparable por el empate en tiempo sin evento, con empate de score (½); 4 nunca
+    # estuvo en riesgo; (0,5) y (5,1) concordantes; (5,2) discordante. C = 3,5 / 5.
+    entry = np.array([10, 10, 60, 10, 40, 10], dtype=float)
+    exit_ = np.array([50, 80, 100, 50, 30, 70], dtype=float)
+    event = np.array([1, 0, 0, 0, 0, 1])
+    score = np.array([0.9, 0.1, 0.95, 0.9, 0.0, 0.5])
+    hand = late_entry_concordance(entry, exit_, event, score)
+    check(
+        "D1: el C con entrada tardía cuenta solo los pares en riesgo en x_i, con empates ½",
+        hand["n_pairs"] == 5 and np.isclose(hand["c_index"], 0.7),
+        f"{hand['n_pairs']} pares, C = {hand['c_index']:.3f} (esperado 5 y 0,700)",
+    )
+
+    from lifelines.utils import concordance_index
+
+    rng = np.random.default_rng(8)
+    times = rng.exponential(100.0, 80)
+    events = (rng.random(80) < 0.6).astype(int)
+    scores = rng.normal(size=80) - times / 100.0
+    ours = late_entry_concordance(np.zeros(80), times, events, scores)["c_index"]
+    reference = concordance_index(times, -scores, events)
+    check(
+        "D1: sin entrada tardía es el C de Harrell de lifelines",
+        np.isclose(ours, reference, atol=1e-12),
+        f"{ours:.6f} vs. {reference:.6f}",
+    )
+    late = rng.uniform(0.0, 60.0, 80)
+    counts = rng.integers(0, 4, 80)
+    weighted = late_entry_concordance(late, times + late, events, scores, weights=counts)["c_index"]
+    copies = np.repeat(np.arange(80), counts)
+    duplicated = late_entry_concordance(late[copies], (times + late)[copies], events[copies], scores[copies])["c_index"]
+    check(
+        "D1: pesar los pares por multiplicidad es duplicar las filas (el bootstrap por vehículo)",
+        np.isclose(weighted, duplicated, atol=1e-12),
+        f"{weighted:.6f} vs. {duplicated:.6f}",
+    )
+
+    frame = _landmark_frame()
+    cfg = landmark_eval_config({"lead_columns": {"days": "aux_days_to_event_after_cut", "km": "time_to_event_km"}})
+    d2 = landmark_detection(frame, cfg, score_column="score", budget=0.05, n_event_vehicles_total=6)
+    check(
+        "D2: τ es el (m+1)-ésimo mayor de los negativos, alerta quien lo supera y el sano sin resolver no cuenta",
+        d2["alerts_allowed"] == 1 and np.isclose(d2["threshold"], 0.19) and d2["n_false_alarms"] == 1
+        and d2["n_detected"] == 3 and d2["n_negative"] == 20 and d2["n_positive"] == 5
+        and np.isclose(d2["detection_rate_all_events"], 3 / 6),
+        f"m = {d2['alerts_allowed']}, τ = {d2.get('threshold')}, detectados {d2['n_detected']}/5",
+    )
+    check(
+        "D2: la anticipación es evento − hito de la primera alerta, en días y en km",
+        d2["first_alert_landmark"] == {"30": 2, "60": 1}
+        and np.isclose(d2["lead_days"]["median"], np.median([200 - 30, 180 - 60, 160 - 30]))
+        and np.isclose(d2["lead_km"]["median"], 40 * np.median([200 - 30, 180 - 60, 160 - 30])),
+        f"{d2['first_alert_landmark']}, mediana {d2['lead_days']['median']:.0f} d",
+    )
+    table = _landmark_vehicles(frame, cfg, cfg["resolved_column"])
+    index = pd.Index(table.index)
+    fast = _d2_values(_vehicle_max(frame, ["score"], index), table["positive"].to_numpy(),
+                      table["negative"].to_numpy(), 0.05, np.ones((1, len(index))))[0, 0]
+    check(
+        "D2: la cuenta del bootstrap (máximo por vehículo) da lo mismo que la primera alerta",
+        np.isclose(fast, d2["detection_rate"]),
+        f"{fast:.3f} vs. {d2['detection_rate']:.3f}",
+    )
+    check(
+        "eval.landmark: una clave que no existe falla en vez de ignorarse",
+        _raises(lambda: landmark_eval_config({"budget": 0.05}), KeyError),
+    )
+
+    # De punta a punta: run_cv con R = 2 → evaluate_predictions con legacy_blocks: false.
+    panel = _cure_panel()
+    splits = make_splits(panel, n_splits=3, seed=5, min_valid_positives=1, n_repeats=2)
+    predictions, _ = run_cv(panel, splits, model_name="cure_mixture", target={"name": "cure_window"},
+                            model_params={"incidence": "unit_weight",
+                                          "unit_weight_signs": {"fleet_a": 1, "fleet_b": -1}},
+                            preprocessing="none", carry_columns=LANDMARK_CARRY)
+    check(
+        "carry_columns: viajan a las predicciones, y los extras del decoder van por repetición",
+        set(LANDMARK_CARRY) <= set(predictions.columns)
+        and {"unit_weight_score_r0", "unit_weight_score_r1", "pi_incidence_r1", "latency_shape_r0"}
+        <= set(predictions.columns),
+    )
+    check(
+        "carry_columns: una columna que el panel no tiene es un error",
+        _raises(lambda: run_cv(panel, splits, model_name="baserate", carry_columns=["aux_no_existe"]), KeyError),
+    )
+    oracle = predictions.copy()
+    truth = np.where(oracle["aux_event_in_window"].eq(1), 1.0 / oracle["aux_dss_exit"], 0.0)
+    for column in ("unit_weight_score_r0", "unit_weight_score_r1"):
+        oracle[column] = truth
+    cfg_eval = {"eval": {"legacy_blocks": False,
+                         "landmark": {"score_column": "unit_weight_score", "n_boot": 200}},
+                "target": {"name": "cure_window"}}
+    metrics, legacy_curve = evaluate_predictions(oracle, cfg_eval, n_repeats=2, seed=5)
+    block = metrics["landmark"]
+    check(
+        "landmark_metrics: un oráculo del orden de los eventos da D1 = 1 y detecta a todos al 5%",
+        np.isclose(block["d1"]["mean"]["mean"], 1.0) and np.isclose(block["d2"]["detection_rate"]["mean"], 1.0)
+        and legacy_curve.empty and metrics["cohort_ceiling"] is None,
+        f"D1 {block['d1']['mean']['mean']:.3f}, D2 {block['d2']['detection_rate']['mean']:.3f}",
+    )
+    noise = predictions.copy()
+    for r, column in enumerate(("unit_weight_score_r0", "unit_weight_score_r1")):
+        noise[column] = np.random.default_rng(100 + r).random(len(noise))
+    noise_block = evaluate_predictions(noise, cfg_eval, n_repeats=2, seed=5)[0]["landmark"]
+    check(
+        "landmark_metrics: con ruido D1 cae a ≈ 0,5 y su intervalo lo contiene",
+        abs(noise_block["d1"]["mean"]["mean"] - 0.5) < 0.1
+        and noise_block["d1"]["bootstrap_by_vehicle"]["lo"] < 0.5 < noise_block["d1"]["bootstrap_by_vehicle"]["hi"],
+        f"D1 {noise_block['d1']['mean']['mean']:.3f} "
+        f"[{noise_block['d1']['bootstrap_by_vehicle']['lo']:.3f}, {noise_block['d1']['bootstrap_by_vehicle']['hi']:.3f}]",
+    )
+    real = evaluate_predictions(predictions, cfg_eval, n_repeats=2, seed=5)[0]["landmark"]
+    check(
+        "landmark_metrics: mide P0 con `unit_weight_score` y calibra con la probabilidad del cure",
+        real["config"]["score_column"] == "unit_weight_score"
+        and {"calibration", "latency_by_fold", "d1_on_time_entry", "d2_e_min", "d2_other_budgets"}
+        <= set(real["informative"]) and len(real["curve"]) > 1,
+    )
+    at_30 = predictions["aux_landmark_day"].eq(30.0) & (predictions["aux_dss_exit"] > predictions["aux_dss_entry"])
+    on_time_30 = int((at_30 & np.isclose(predictions["aux_dss_entry"], 60.0)).sum())
+    reported = real["informative"]["d1_on_time_entry"]["by_landmark"]["30"]["n_at_risk"]
+    check(
+        "D1 con entrada en L+G: usa solo las filas en riesgo que entran en L + G (informativa)",
+        reported == on_time_30 < int(at_30.sum()),
+        f"{reported} de {int(at_30.sum())} filas en riesgo del hito 30",
+    )
+    draws_a = landmark_bootstrap_draws(predictions, cfg_eval["eval"]["landmark"], n_repeats=2, n_boot=50, seed=9)
+    draws_b = landmark_bootstrap_draws(noise, cfg_eval["eval"]["landmark"], n_repeats=2, n_boot=50, seed=9)
+    again = landmark_bootstrap_draws(predictions, cfg_eval["eval"]["landmark"], n_repeats=2, n_boot=50, seed=9)
+    check(
+        "bootstrap pareado: dos corridas del mismo panel reciben los mismos remuestreos de vehículos",
+        draws_a["vehicles"] == draws_b["vehicles"] and np.array_equal(draws_a["d1"], again["d1"])
+        and not np.allclose(draws_a["d1"], draws_b["d1"]),
+    )
+    stuck = predictions.assign(cut_odo=0.0)  # autos quietos: el mismo odómetro en los dos hitos
+    legacy_cfg = {"eval": {"landmark": {"score_column": "unit_weight_score", "n_boot": 50}},
+                  "target": {"name": "cure_window"}}
+    check(
+        "legacy_blocks: false apaga lo que no aplica (con cortes repetidos la curva vieja falla)",
+        _raises(lambda: evaluate_predictions(stuck, legacy_cfg, n_repeats=2, seed=5), ValueError)
+        and evaluate_predictions(stuck, cfg_eval, n_repeats=2, seed=5)[0]["landmark"] is not None,
     )
 
 
@@ -1262,6 +1460,7 @@ def main() -> int:
     firth_checks()
     cure_em_checks()
     cure_model_checks()
+    landmark_metric_checks()
 
     failed = [name for name, ok, _ in _checks if not ok]
     print()

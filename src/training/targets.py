@@ -640,7 +640,7 @@ def _final_step(estimator: Any, features: pd.DataFrame) -> tuple[Any, Any]:
 
 @register_decoder("cure_window")
 def decode_cure_predictions(estimator: Any, features: pd.DataFrame, **_: Any) -> TargetPredictions:
-    """`score` = π_L(x)·[1 − S_u(L+G+H)/S_u(L+G)], más `pi_incidence` y `p_horizon`.
+    """`score` = π_L(x)·[1 − S_u(L+G+H)/S_u(L+G)], más `pi_incidence`, `p_horizon` y (k, λ).
 
     Con incidencia de pesos unitarios (P0) viaja además `unit_weight_score`, el puntaje
     s con el que el preregistro mide D1 y D2 de P0.
