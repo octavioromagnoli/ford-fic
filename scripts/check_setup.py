@@ -28,6 +28,9 @@ fallan, invalidan todo lo que venga después:
     `eval` (`landmark`, `legacy_blocks`, `carry_columns`) de punta a punta.
 11. Extender folds (`extend_splits`): los vehículos del split base conservan su fold,
     los nuevos se reparten estratificados y la guarda por hito falla a tiempo.
+12. E1/E2: el bagging por vehículo sortea autos enteros y pasa por el loop de CV, y el
+    ensamble por rango alinea por clave, se niega a juntar folds distintos y aplica la
+    regla de veredicto del preregistro.
 """
 
 from __future__ import annotations
@@ -1023,6 +1026,95 @@ def extend_splits_checks() -> None:
     )
 
 
+def bagging_ensemble_checks() -> None:
+    """E1/E2: el bagging sortea autos enteros y el ensamble por rango solo junta lo comparable."""
+    from scripts.ensemble_rank import align_members, compare, rank_ensemble
+    from src.models.bagging import VehicleBaggingClassifier, vehicle_bootstrap_rows
+
+    groups = np.array(["a"] * 3 + ["b"] + ["c"] * 5 + ["d"] * 2)
+    sizes = pd.Series(groups).value_counts()
+    rows, n_distinct = vehicle_bootstrap_rows(groups, np.random.default_rng(3))
+    drawn = pd.Series(groups[rows]).value_counts()
+    check(
+        "bagging: el bootstrap sortea autos enteros, tantos como autos hay",
+        bool((drawn % sizes.loc[drawn.index] == 0).all())
+        and int((drawn / sizes.loc[drawn.index]).sum()) == len(sizes)
+        and n_distinct == len(drawn),
+        f"{dict(drawn)} sobre tamaños {dict(sizes)}",
+    )
+    again, _ = vehicle_bootstrap_rows(groups, np.random.default_rng(3))
+    check("bagging: el sorteo es determinista con la semilla", bool(np.array_equal(rows, again)))
+    X_small = np.random.default_rng(0).normal(size=(len(groups), 2))
+    check(
+        "bagging: sin el vehículo en el `y` no entrena (no remuestrea filas en silencio)",
+        _raises(lambda: VehicleBaggingClassifier(base_model="baserate").fit(X_small, np.arange(len(groups)) % 2),
+                TypeError),
+    )
+
+    panel = build_dummy_panel({**SMALL_PANEL, "seed": 13})
+    train_mask = np.zeros(len(panel), dtype=bool)
+    train_mask[: len(panel) // 2] = True
+    spec = build_target("grouped_label", panel, train_mask)
+    check(
+        "grouped_label: la etiqueta es `label` tal cual y el vehículo viaja al lado",
+        bool((spec.y["label"] == panel.loc[train_mask, "label"].to_numpy()).all()
+             and (spec.y["group"] == panel.loc[train_mask, "vehicle_id"].astype(str).to_numpy()).all()),
+    )
+    splits = make_splits(panel, n_splits=3, seed=13, min_valid_positives=1)
+    bagged, _ = run_cv(panel, splits, model_name="vehicle_bagging",
+                       model_params={"base_model": "baserate", "n_bags": 3},
+                       target={"name": "grouped_label"})
+    check(
+        "bagging: por el loop de CV, con `grouped_label`, deja una predicción OOF por fila",
+        bool(bagged["score"].notna().all() and bagged["score"].between(0, 1).all()),
+    )
+    survival, _ = run_cv(panel, splits, model_name="vehicle_bagging",
+                         model_params={"base_model": "survival_stacking", "n_bags": 2,
+                                       "base_params": {"horizon_km": 3000, "bin_km": 500}},
+                         target={"name": "discrete_survival"})
+    check(
+        "bagging: envuelve a survival stacking con su target estructurado",
+        bool(survival["score"].notna().all() and survival["score"].between(0, 1).all()),
+    )
+
+    rng = np.random.default_rng(17)
+    n = 40
+    frame = pd.DataFrame({
+        "vehicle_id": [f"v{i // 4}" for i in range(n)],
+        "cut_odo": np.tile([500.0, 1000.0, 1500.0, 2000.0], n // 4),
+        "label": rng.integers(0, 2, n),
+        "event_observed": rng.integers(0, 2, n),
+        "fold_r0": np.repeat(np.arange(5), n // 5),
+        "fold_r1": np.tile(np.repeat(np.arange(5), 4), 2),
+        "score_r0": rng.random(n),
+        "score_r1": rng.random(n),
+    })
+    same = rank_ensemble(align_members([frame, frame.copy()], ["a", "b"]), [0.5, 0.5])
+    check(
+        "ensamble: dos copias del mismo modelo dan su rango percentil",
+        bool(np.allclose(same["score_r0"].to_numpy(),
+                         frame.sort_values(["vehicle_id", "cut_odo"])["score_r0"].rank(pct=True).to_numpy())),
+    )
+    shuffled = frame.sample(frac=1.0, random_state=3)
+    check(
+        "ensamble: alinea por (vehicle_id, cut_odo), no por posición",
+        bool(np.allclose(rank_ensemble(align_members([frame, shuffled], ["a", "b"]), [0.5, 0.5])["score_r1"],
+                         same["score_r1"])),
+    )
+    other_folds = frame.assign(fold_r1=(frame["fold_r1"] + 1) % 5)
+    check(
+        "ensamble: con folds distintos no arma nada (no sería out-of-fold)",
+        _raises(lambda: align_members([frame, other_folds], ["a", "b"]), ValueError),
+    )
+    better = {"detection": [0.20, 0.21, 0.20], "vehicle_lift_mean": [1.5, 1.5, 1.5], "lead_km": [1.0, 1.0, 1.0]}
+    worse = {"detection": [0.10, 0.11, 0.10], "vehicle_lift_mean": [1.5, 1.5, 1.5], "lead_km": [1.0, 1.0, 1.0]}
+    check(
+        "ensamble: el veredicto sigue la regla del preregistro (desvío combinado)",
+        compare(better, worse)["verdict"] == "gana" and compare(worse, better)["verdict"] == "pierde"
+        and compare(better, better)["verdict"] == "empata",
+    )
+
+
 def main() -> int:
     set_seed(7)
     panel = build_dummy_panel(SMALL_PANEL)
@@ -1566,8 +1658,9 @@ def main() -> int:
     cure_model_checks()
     landmark_metric_checks()
     extend_splits_checks()
+    bagging_ensemble_checks()
 
-    failed = [name for name, ok, _ in _checks if not ok]
+    failed =[name for name, ok, _ in _checks if not ok]
     print()
     if failed:
         print(f"{len(failed)} chequeo(s) fallaron: {failed}")

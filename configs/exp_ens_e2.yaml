@@ -1,0 +1,54 @@
+# F3 · E2: el ensamble de E1 con los dos finalistas embolsados por vehículo
+#
+# Preregistro: docs/memoria/f3-preregistro-landmark-ensamble.md, E2 (commit 9b7bfb4).
+# Mismo ensamble que E1 (rango percentil 50/50 por repetición) sobre las OOF de los dos
+# modelos reentrenados con `vehicle_bagging` (10 bolsas, semilla 42, mismos
+# hiperparámetros internos). Los dos embolsados son COMPONENTES, no candidatos.
+#
+# Qué decide: el veredicto contra la referencia y, contra E1, la estabilidad (desvío de
+# detección y de anticipación entre repeticiones). Se descarta si no le gana a la
+# referencia Y no baja ninguno de los dos desvíos respecto de E1.
+#
+#   python scripts/train.py --config configs/exp_survival_stacking_r3_bag10.yaml
+#   python scripts/train.py --config configs/exp_cnn_lstm_r3_bag10.yaml
+#   python scripts/ensemble_rank.py --config configs/exp_ens_e2.yaml --audit
+name: f3-ens-e2-ss-cnnlstm-bag10
+seed: 42
+
+ensemble:
+  method: rank_mean
+  members:
+    - run: f3-survival-stacking-r3-bag10
+      config: configs/exp_survival_stacking_r3_bag10.yaml
+      weight: 0.5
+    - run: f3-cnn-lstm-r3-bag10
+      config: configs/exp_cnn_lstm_r3_bag10.yaml
+      weight: 0.5
+
+compare:
+  reference: f3-survival-stacking-r3-rebuild
+  against:
+    - f3-cnn-lstm-r3-regen15
+    - f3-lgbm-panel-v1-r3-regen15
+    - f3-survival-stacking-history-r3
+    - f3-ens-e1-ss-cnnlstm
+  stability_against: f3-ens-e1-ss-cnnlstm
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-ensamble
+  job_type: ensemble
+  tags: [f3, ensamble, e2, bagging, r3]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

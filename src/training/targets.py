@@ -313,6 +313,45 @@ def build_discrete_survival_target(
 
 
 # --------------------------------------------------------------------------- #
+# La etiqueta de siempre, con el vehículo al lado
+# --------------------------------------------------------------------------- #
+@register_target("grouped_label")
+def build_grouped_label_target(
+    panel: pd.DataFrame,
+    train_mask: np.ndarray,
+    *,
+    label_column: str = "label",
+    group_column: str = GROUP_COLUMN,
+) -> TargetSpec:
+    """`(label, vehículo)` por fila de train: **el mismo objetivo**, con el vehículo al lado.
+
+    No cambia con qué se entrena: el modelo interno recibe `label` tal cual. Existe para
+    los envoltorios que necesitan saber de qué vehículo es cada fila y no lo pueden sacar
+    de `X`, porque el `Pipeline` del fold se la pasa preprocesada y sin `vehicle_id`
+    (`vehicle_bagging`, `src/models/bagging.py`, que remuestrea autos y no filas). La
+    salida del modelo ya es P(evento en H), así que no necesita decoder propio.
+    """
+    mask = np.asarray(train_mask, dtype=bool)
+    train = panel.loc[mask]
+    missing = [c for c in (label_column, group_column) if c not in train]
+    if missing:
+        raise KeyError(f"El panel no tiene {missing}: no se puede armar `grouped_label`")
+
+    groups = train[group_column].astype(str).to_numpy()
+    width = max(1, max((len(g) for g in groups), default=1))
+    y = np.empty(len(train), dtype=[("label", "i1"), ("group", f"U{width}")])
+    y["label"] = train[label_column].astype(int).to_numpy()
+    y["group"] = groups
+    return TargetSpec(
+        y=y,
+        name="grouped_label",
+        params={"label_column": label_column, "group_column": group_column},
+        info={"n_rows": int(len(train)), "n_positive": int(y["label"].sum()),
+              "n_vehicles": int(len(np.unique(groups)))},
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Multi-horizonte ordinal
 # --------------------------------------------------------------------------- #
 @register_target("ordinal_horizon")
