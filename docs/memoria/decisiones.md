@@ -5,10 +5,12 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
-## 2026-09-22 · (Propuesta) El registro de eventos tiene ventana de calendario: la censura de un sano es su exposición dentro de ella, y el reloj arranca en la venta
+## 2026-09-22 · El registro de eventos tiene ventana de calendario: la censura de un sano es su exposición dentro de ella, y el reloj arranca en la venta
 
-**Estado: propuesta.** Es la Fase 1 del cure model y se confirma en su punto de control 1.
-No cambia el finalista ni el panel v1. Evidencia y comando:
+**Estado: confirmada en el punto de control 1 (22-09).** Es la Fase 1 del cure model. Se
+confirmó también tratar los autos quietos sin tocar las features y reportarlos aparte. Lo que
+sigue está en [f3-preregistro-cure.md](f3-preregistro-cure.md). No cambia el finalista ni el
+panel v1. Evidencia y comando:
 [f3-reloj-y-ventana-del-evento.md](f3-reloj-y-ventana-del-evento.md), con
 `python scripts/audit_event_clock.py --config configs/data/event_clock.yaml`. Solo dev.
 
