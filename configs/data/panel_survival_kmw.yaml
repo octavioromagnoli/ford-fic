@@ -1,0 +1,40 @@
+# Panel del finalista con el tramo en riesgo de la ventana del registro, en km (F6, K2).
+#
+#   python scripts/build_km_window_panel.py --config configs/data/panel_survival_kmw.yaml --counts-only
+#   python scripts/build_km_window_panel.py --config configs/data/panel_survival_kmw.yaml
+#
+# Mismas filas, las mismas 53 features + `feat_cut_odo` y los mismos folds que el finalista
+# (`panel_survival.parquet`). Solo agrega `aux_`: el odómetro al inicio y al fin de la ventana, el
+# tramo en riesgo de cada fila en km desde `c + G` (lo lee el target `window_km_survival`), la
+# fila evaluable con la etiqueta corregida y los días desde la venta en el corte (para el piso).
+# Preregistro: docs/memoria/f6-preregistro-deteccion-vehiculo.md.
+seed: 42
+
+# El panel del finalista, del build de la referencia (`FORD_DATA_DIR=data/rebuild-0921`).
+panel_in: ${DATA_DIR}/processed/panel_survival.parquet
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml
+panel_config: configs/data/panel_v1.yaml
+features_spec: configs/data/features_v1.yaml
+
+test_split: ${DATA_DIR}/processed/test_split.json
+anchor_meta: ${DATA_DIR}/processed/panel_meta.json
+event_clock: configs/data/event_clock.yaml
+splits: ${DATA_DIR}/processed/splits_r3.json
+
+# Los mismos viajes que el panel de hitos y el de F5 §3.3. `--refresh` los relee de los crudos.
+trips_cache: ${DATA_DIR}/interim/landmark_trips.parquet
+scan:
+  chunksize: 500000
+
+# Solo para el embudo: el bin y el horizonte de entrenamiento del finalista, y los horizontes
+# largos entre los que se elige el de K2 antes de entrenar (el menor que no censure ningún tramo).
+clock:
+  bin_km: 500
+  reference_max_horizon_km: 6000
+  max_horizon_km_options: [6000, 10000, 20000, 30000, 40000]
+
+output:
+  panel: ${DATA_DIR}/processed/panel_survival_kmw.parquet
+  meta: ${DATA_DIR}/processed/panel_survival_kmw_meta.json
