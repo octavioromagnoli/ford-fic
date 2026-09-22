@@ -111,10 +111,29 @@ configs/exp_cnn_lstm.yaml`), contra el panel secuencial reconstruido después de
 | **(a0)** features permutadas entre *todas* las filas | 0,1182 vs tasa base 0,1252 (−0,0070) | **PASS**, no hay leakage |
 | **(a')** score colapsado al promedio de su vehículo | 0,1553 → 0,1517 (**+0,0036**) | **PASS**, el orden dentro del vehículo suma |
 | (a) features permutadas dentro del vehículo | 0,1553 → 0,1663 (+0,0110) | informativa, ni pass ni falla |
-| (b) `aux_` de calendario | ROC +0,0101 | no hay salto |
+| ~~(b) `aux_` de calendario~~ | ~~ROC +0,0101~~ | **MAL MEDIDA · ver abajo** |
 
 **El modelo queda APROBADO**, pero por (a0) y (a'), no por lo que decía la fila vieja. Y
 el aporte del *cuándo* es +0,0036, mucho más chico que lo que sugería el 0,143-contra-0,153.
+
+### Corrección (2026-09-21): la (b) corría la secuencia, y con R=3 marca
+
+**La fila (b) de arriba no mide lo que dice.** `audit_model.py::promote_aux` renombraba
+las tres `aux_` de calendario a `feat_aux_*` en su lugar, y en `panel_seq_v1` las `aux_`
+van **antes** de las `feat_seq_*`. El preprocesador pone las numéricas en el orden del
+panel y el modelo toma las primeras `T × C = 180` como la secuencia
+(`src/models/cnn_lstm.py::_split`): la secuencia quedaba corrida tres columnas —las tres
+`aux_` adentro, los últimos tres valores del último bin afuera, en la rama estática— sin
+que nada fallara. El +0,0101 es el efecto de darle calendario *y* romperle la secuencia.
+
+Ahora las promovidas van al final del frame (en los paneles tabulares es el mismo orden
+que antes, así que ninguna (b) de un modelo tabular cambia) y `check_setup.py` lo
+verifica. Re-medida con R=3 (`f3-cnn-lstm-r3-regen15`, audit.json): **ROC 0,5799 → 0,6015,
++0,0216, marca** por encima del umbral de 0,02. Es el mismo orden que survival stacking con
+R=1 (+0,0230) y menos de la mitad que survival stacking con R=3 (+0,0493): el calendario
+es un atajo del panel, no de un modelo. El resto de la auditoría con R=3: (a0) 0,1208
+contra 0,1252, PASS; (a′) +0,0114 sobre el score promediado (+0,0080 ± 0,0051 por
+repetición), PASS. Tabla completa en [f3-piso-posicional.md](f3-piso-posicional.md).
 
 Dos números que esa lectura no tenía y que cambian la conclusión de la sección anterior:
 
@@ -136,6 +155,9 @@ Las tablas viejas se dejan como estaban; no se comparan con las corridas nuevas.
   survival stacking (`configs/exp_*_r3*.yaml`); falta la de este modelo, y es la que
   diría si su (a') de +0,0036 se distingue de cero — el control da −0,0055 ± 0,0040 y
   survival stacking +0,0162 ± 0,0033, así que +0,0036 cae justo en la zona dudosa.
+  *Medida el 21-09:* **+0,0080 ± 0,0051**, positiva en las tres repeticiones; detección
+  11,9% ± 3,6 (el 17,0% del R=1 era la repetición 0) y lift por vehículo 1,333×. Ver
+  [f3-piso-posicional.md](f3-piso-posicional.md).
 - **Primera extensión obvia: sumar `TripSummary`.** Lo que anticipa según el EDA (idle,
   régimen térmico, velocidad) vive en `trips`. El builder ya acepta `source: trips` con
   las derivadas de `src/features/trips.py` (probado: 12 canales, mismas filas); es un YAML
