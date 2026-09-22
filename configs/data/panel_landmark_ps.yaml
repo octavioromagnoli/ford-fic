@@ -63,6 +63,20 @@ scan:
 # los vuelve a leer.
 trips_cache: ${DATA_DIR}/interim/landmark_trips.parquet
 
+# Folds del cure model (preregistro §6), congelados antes de entrenar con
+#   python scripts/make_splits.py --config configs/data/panel_landmark_ps.yaml
+# Extienden splits_r3.json: los vehículos del panel v1 conservan su fold en cada repetición
+# (la comparación con el finalista queda pareada) y solo se sortean los nuevos.
+splits:
+  n_splits: 5
+  n_repeats: 3
+  seed: 42
+  stratify: {column: label, level: vehicle}
+  min_valid_positives: 5
+  extend_from: ${DATA_DIR}/processed/splits_r3.json
+  guard_by: aux_landmark_day      # ≥ 5 vehículos positivos en validación en cada hito
+
 output:
   panel: ${DATA_DIR}/processed/panel_landmark_ps.parquet
   meta: ${DATA_DIR}/processed/panel_landmark_ps_meta.json
+  splits: ${DATA_DIR}/processed/splits_landmark_ps_r3.json

@@ -71,6 +71,7 @@ python scripts/audit_positional_floor.py f3-survival-stacking         # ¿le gan
 python scripts/rescore_run.py f3-cnn-lstm-r3-regen15                # completa una corrida vieja desde sus predicciones, sin reentrenar
 python scripts/audit_event_clock.py --config configs/data/event_clock.yaml  # reloj y ventana del evento (Fase 1 del cure model)
 python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps.yaml  # panel de hitos post-venta (Fase 3 del cure model)
+python scripts/make_splits.py --config configs/data/panel_landmark_ps.yaml          # folds del cure model: extienden splits_r3.json (Fase 7)
 python scripts/check_setup.py      # chequeos del harness
 ```
 

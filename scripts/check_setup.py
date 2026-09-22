@@ -26,6 +26,8 @@ fallan, invalidan todo lo que venga después:
 10. D1 y D2 del panel de hitos: el C con entrada tardía contra un caso a mano y contra
     lifelines, el umbral de la primera alerta, el bootstrap por vehículo y el bloque
     `eval` (`landmark`, `legacy_blocks`, `carry_columns`) de punta a punta.
+11. Extender folds (`extend_splits`): los vehículos del split base conservan su fold,
+    los nuevos se reparten estratificados y la guarda por hito falla a tiempo.
 """
 
 from __future__ import annotations
@@ -78,7 +80,15 @@ from src.data.landmark import (  # noqa: E402
     parse_fleet_column,
     production_tercile_edges,
 )
-from src.eval.splits import iter_folds, iter_repeats, make_splits, test_split_masks  # noqa: E402
+from src.eval.splits import (  # noqa: E402
+    extend_splits,
+    iter_folds,
+    iter_repeats,
+    make_splits,
+    panel_fingerprint,
+    save_splits,
+    test_split_masks,
+)
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.models.cure import (  # noqa: E402
     UNIT_WEIGHT_SCORE,
@@ -919,6 +929,92 @@ def landmark_metric_checks() -> None:
     )
 
 
+def _fold_of(splits: dict, repeat: int) -> dict[str, int]:
+    return {str(v): int(f["fold"]) for f in splits["repeats"][repeat]["folds"] for v in f["valid_vehicles"]}
+
+
+def extend_splits_checks() -> None:
+    """11 · Extender folds: los del split base no se mueven y solo se reparten los nuevos."""
+    base_panel = build_dummy_panel({**SMALL_PANEL, "seed": 13})
+    base = make_splits(base_panel, n_splits=3, seed=13, min_valid_positives=1, n_repeats=2)
+    vehicles = sorted(base_panel["vehicle_id"].astype(str).unique())
+    extra = build_dummy_panel({**SMALL_PANEL, "seed": 14, "n_vehicles": 40})
+    extra["vehicle_id"] = "NEW_" + extra["vehicle_id"].astype(str)
+    panel = pd.concat([base_panel.loc[base_panel["vehicle_id"].astype(str).isin(vehicles[5:])], extra],
+                      ignore_index=True)
+    panel["grupo"] = "a"
+    extended = extend_splits(base, panel, seed=13, min_valid_positives=1, guard_by="grupo")
+
+    kept = set(vehicles[5:])
+    check(
+        "extend_splits: los vehículos del split base conservan su fold en cada repetición",
+        all(all(_fold_of(extended, r)[v] == _fold_of(base, r)[v] for v in kept) for r in range(2)),
+    )
+    panel_vehicles = sorted(panel["vehicle_id"].astype(str).unique())
+    n_folds = sum(len(masks) for _, masks in iter_repeats(panel, extended, strict=True, min_valid_positives=1))
+    check(
+        "extend_splits: cada vehículo del panel cae en un solo fold por repetición e iter_repeats lo acepta",
+        all(sorted(_fold_of(extended, r)) == panel_vehicles for r in range(2)) and n_folds == 6,
+    )
+    positive = panel.groupby(panel["vehicle_id"].astype(str))["label"].max()
+    balanced = True
+    for r in range(2):
+        folds = pd.Series(_fold_of(extended, r))
+        base_folds = folds.loc[sorted(kept)]
+        for stratum in (0, 1):
+            before = base_folds[positive.loc[base_folds.index] == stratum].value_counts().reindex(range(3), fill_value=0)
+            after = folds[positive.loc[folds.index] == stratum].value_counts().reindex(range(3), fill_value=0)
+            balanced &= int(after.max() - after.min()) <= max(1, int(before.max() - before.min()))
+    check(
+        "extend_splits: los nuevos van, dentro de su estrato, al fold con menos vehículos de ese estrato",
+        balanced and extended["extended_from"]["n_new"] == 40,
+    )
+    again = extend_splits(base, panel, seed=13, min_valid_positives=1)
+    other = extend_splits(base, panel, seed=99, min_valid_positives=1)
+    new = sorted(set(panel_vehicles) - kept)
+    check(
+        "extend_splits: la semilla solo reparte a los nuevos (misma semilla, mismo reparto)",
+        all(_fold_of(again, r) == _fold_of(extended, r) for r in range(2))
+        and any(_fold_of(other, r)[v] != _fold_of(extended, r)[v] for r in range(2) for v in new)
+        and all(_fold_of(other, r)[v] == _fold_of(extended, r)[v] for r in range(2) for v in kept),
+    )
+    import hashlib
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        base_path = Path(tmp) / "splits_base.json"
+        save_splits(base, base_path)
+        stamped = extend_splits(base, panel, seed=13, min_valid_positives=1, base_path=base_path)
+        digest = hashlib.sha256(base_path.read_bytes()).hexdigest()[:16]
+    origin = stamped["extended_from"]
+    check(
+        "extend_splits: la procedencia (archivo base, su huella, conservados, nuevos y descartados) queda en el JSON",
+        origin["file_sha256_16"] == digest and origin["n_kept"] == len(kept) and origin["n_dropped"] == 5
+        and origin["dropped_vehicles"] == vehicles[:5] and origin["panel"] == base["panel"]
+        and stamped["panel"] == panel_fingerprint(panel),
+    )
+    # Un grupo con filas solo de vehículos sanos: la guarda por grupo tiene que fallar aunque
+    # la de filas pase.
+    thin = panel.copy()
+    healthy_rows = thin.index[thin["vehicle_id"].astype(str).map(positive).eq(0)][:10]
+    thin.loc[healthy_rows, "grupo"] = "b"
+    try:
+        extend_splits(base, thin, seed=13, min_valid_positives=1, guard_by="grupo")
+        guard_message = ""
+    except ValueError as exc:
+        guard_message = str(exc)
+    check(
+        "extend_splits: la guarda por grupo (por hito) falla si un fold queda sin positivos en un grupo",
+        "grupo" in guard_message and "no pareada" in guard_message,
+        guard_message[:80],
+    )
+    check(
+        "extend_splits: pedir otros folds o repeticiones que los del base falla (no se inventan folds)",
+        _raises(lambda: extend_splits(base, panel, seed=13, n_splits=5), ValueError)
+        and _raises(lambda: extend_splits(base, panel, seed=13, n_repeats=3), ValueError),
+    )
+
+
 def main() -> int:
     set_seed(7)
     panel = build_dummy_panel(SMALL_PANEL)
@@ -1461,6 +1557,7 @@ def main() -> int:
     cure_em_checks()
     cure_model_checks()
     landmark_metric_checks()
+    extend_splits_checks()
 
     failed = [name for name, ok, _ in _checks if not ok]
     print()
