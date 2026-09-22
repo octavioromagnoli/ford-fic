@@ -18,6 +18,8 @@ fallan, invalidan todo lo que venga después:
 7. El panel de hitos post-venta (cure model): nada posterior al hito entra a una
    feature, el gap excluye la fila, el riesgo respeta la ventana del registro y los
    pesos por mes reproducen la ventana.
+8. La normalización contra la flota se ajusta solo con los sanos del train del fold,
+   y el hook `preprocessing` deja el default intacto.
 """
 
 from __future__ import annotations
@@ -64,6 +66,7 @@ from src.data.landmark import (  # noqa: E402
 from src.eval.splits import iter_folds, iter_repeats, make_splits, test_split_masks  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import build_preprocessor, run_cv, select_feature_columns  # noqa: E402
+from src.training.transformers import FleetReferenceNormalizer  # noqa: E402
 from src.training.targets import build_ordinal_target, build_target  # noqa: E402
 
 CONTRACT_COLUMNS = {
@@ -266,6 +269,138 @@ def landmark_panel_checks() -> None:
     check(
         "hitos: los terciles de producción siguen la convención de pd.qcut",
         bool((ours.to_numpy() == pd.qcut(production, 3, labels=False).to_numpy()).all()),
+    )
+
+
+def _fleet_frame() -> tuple[pd.DataFrame, np.ndarray]:
+    """Panel mínimo con una feature, dos mercados y tres meses, uno por nivel de la jerarquía.
+
+    2025-09: 11 vehículos sanos por mercado, así que la celda mercado × mes alcanza.
+    2025-10: 6 por mercado —ninguna celda llega a 10, pero el mes con los dos mercados
+    juntos sí—. 2025-11: un solo vehículo, que tiene que caer a la mediana global.
+    """
+    rows = []
+    for market, base in (("X", 10.0), ("Y", 30.0)):
+        for i in range(12):
+            rows.append({"vehicle": f"{market}{i}", "market": market, "healthy": i > 0,
+                         "v09": base + i, "w09": 100.0})
+        for i in range(6):
+            rows.append({"vehicle": f"{market}oct{i}", "market": market, "healthy": True,
+                         "v10": base + i, "w10": 50.0})
+    rows.append({"vehicle": "solo", "market": "X", "healthy": True, "v11": 7.0, "w11": 20.0})
+    # Un fallado con dos meses de peso muy distinto: es el que distingue el promedio
+    # ponderado del promedio a secas. No entra a la referencia (no es sano).
+    rows.append({"vehicle": "mix", "market": "X", "healthy": False,
+                 "v09": 5.0, "w09": 300.0, "v10": 10.0, "w10": 50.0})
+    frame = pd.DataFrame(rows).reindex(columns=["vehicle", "market", "healthy", "v09", "w09",
+                                                "v10", "w10", "v11", "w11"])
+    X = pd.DataFrame({
+        "feat_fm__a__2025-09": frame["v09"], "feat_fm__w_a__2025-09": frame["w09"],
+        "feat_fm__a__2025-10": frame["v10"], "feat_fm__w_a__2025-10": frame["w10"],
+        "feat_fm__a__2025-11": frame["v11"], "feat_fm__w_a__2025-11": frame["w11"],
+        "static_SalesCountry_cd": frame["market"], "feat_landmark_day": 30.0,
+    })
+    y = np.rec.fromarrays([frame["healthy"].to_numpy(), frame["vehicle"].to_numpy()],
+                          names="healthy,group")
+    return X, y
+
+
+def fleet_normalizer_checks() -> None:
+    """8 · La normalización contra la flota se ajusta con el train del fold y no filtra."""
+    X, y = _fleet_frame()
+    normalizer = FleetReferenceNormalizer(min_ref_vehicles=10)
+    out = normalizer.fit_transform(X, y)
+
+    # Referencia de X en 2025-09: mediana de los 11 sanos (i = 1..11) = 10 + 6 = 16.
+    expected = X.loc[0, "feat_fm__a__2025-09"] - 16.0
+    check(
+        "flota: el desvío es (valor − mediana de los sanos comparables) de ese mercado y mes",
+        np.isclose(out.loc[0, "fleet_a"], expected),
+        f"{out.loc[0, 'fleet_a']:.2f} vs. {expected:.2f}",
+    )
+    check(
+        "flota: la salida es fleet_* más lo que no es feat_fm__, y el mercado no pasa",
+        list(out.columns) == ["fleet_a", "feat_landmark_day"]
+        and list(normalizer.get_feature_names_out()) == list(out.columns),
+        f"{list(out.columns)}",
+    )
+    # 2025-10 no llega a 10 vehículos en ningún mercado (cae al mes con los dos juntos) y
+    # 2025-11 tiene uno solo (cae a la mediana global de la feature).
+    october = X.loc[y["healthy"], "feat_fm__a__2025-10"].dropna()
+    pooled = float(october.median())
+    row_10 = int(october.index[0])
+    row_11 = int(X["feat_fm__a__2025-11"].notna().to_numpy().nonzero()[0][-1])
+    check(
+        "flota: una celda sin vehículos suficientes cae al nivel de arriba, y una sola al global",
+        normalizer.levels_used_ == {"market×month": 2, "month": 2, "global": 1, "sin_referencia": 0}
+        and np.isclose(out.loc[row_10, "fleet_a"], X.loc[row_10, "feat_fm__a__2025-10"] - pooled),
+        f"{normalizer.levels_used_}",
+    )
+    mix = len(X) - 1
+    weighted = ((5.0 - 16.0) * 300.0 + (10.0 - pooled) * 50.0) / 350.0
+    check(
+        "flota: los meses se promedian ponderados por su peso, no a secas",
+        np.isclose(out.loc[mix, "fleet_a"], weighted)
+        and not np.isclose(weighted, ((5.0 - 16.0) + (10.0 - pooled)) / 2),
+        f"{out.loc[mix, 'fleet_a']:.3f} vs. {weighted:.3f}",
+    )
+
+    value_columns = [c for c in X.columns if c.startswith("feat_fm__a__")]
+    cells = pd.concat([X.loc[y["healthy"], c] for c in value_columns]).dropna()
+    check(
+        "flota: el último recurso es la mediana global de la feature entre los sanos",
+        np.isclose(out.loc[row_11, "fleet_a"], 7.0 - float(cells.median())),
+        f"{out.loc[row_11, 'fleet_a']:.2f} vs. {7.0 - float(cells.median()):.2f}",
+    )
+    check(
+        "flota: sin `y` no se puede fitear (la referencia son los sanos del train)",
+        _raises(lambda: FleetReferenceNormalizer().fit(X), ValueError),
+    )
+
+    # Un vehículo con tres hitos no puede pesar el triple en la mediana.
+    repeated = pd.concat([X, X.iloc[[1]], X.iloc[[1]]], ignore_index=True)
+    y_repeated = np.rec.fromarrays(
+        [np.append(y["healthy"], [True, True]), np.append(y["group"], ["X1", "X1"])], names="healthy,group")
+    out_repeated = FleetReferenceNormalizer(min_ref_vehicles=10).fit_transform(repeated, y_repeated)
+    check(
+        "flota: la mediana es entre vehículos, no entre filas (los hitos se deduplican)",
+        np.isclose(out_repeated.loc[0, "fleet_a"], out.loc[0, "fleet_a"]),
+        f"{out_repeated.loc[0, 'fleet_a']:.2f} vs. {out.loc[0, 'fleet_a']:.2f}",
+    )
+
+    # Fuga: ajustar con un subconjunto y perturbar las filas que NO se usaron.
+    train = np.zeros(len(X), dtype=bool)
+    train[:12] = True
+    fitted = FleetReferenceNormalizer(min_ref_vehicles=10).fit(X.loc[train], (y["healthy"][train], y["group"][train]))
+    perturbed = X.copy()
+    fm = [c for c in X.columns if c.startswith("feat_fm__")]
+    perturbed.loc[~train, fm] = perturbed.loc[~train, fm] * 100 + 1
+    after = FleetReferenceNormalizer(min_ref_vehicles=10).fit(perturbed.loc[train], (y["healthy"][train], y["group"][train]))
+    same_reference = all(a.equals(b) for a, b in zip(fitted.reference_, after.reference_))
+    same_rows = fitted.transform(X.loc[train]).equals(fitted.transform(perturbed.loc[train]))
+    check(
+        "flota: perturbar las filas que no se usaron no mueve ni la referencia ni el train",
+        same_reference and same_rows,
+    )
+
+    # El hook `preprocessing`: `none` no arma preprocesador y el default no cambia nada.
+    panel = build_dummy_panel({**SMALL_PANEL, "seed": 11})
+    splits = make_splits(panel, n_splits=3, seed=11, min_valid_positives=1)
+    default, _ = run_cv(panel, splits, model_name="baserate")
+    explicit, _ = run_cv(panel, splits, model_name="baserate", preprocessing="standard")
+    check(
+        "preprocessing: sin la clave es `standard` y da lo mismo, columna por columna",
+        default.equals(explicit),
+    )
+    check(
+        "preprocessing: un modo inventado falla en vez de entrenar otra cosa",
+        _raises(lambda: run_cv(panel, splits, model_name="baserate", preprocessing="ninguno"), ValueError),
+    )
+    # Con `none` el pipeline es solo el modelo: un estimador que no tolera NaN ni strings
+    # falla, que es la prueba de que nadie imputó ni codificó por atrás.
+    check(
+        "preprocessing: con `none` no hay preprocesador (el estimador recibe el panel crudo)",
+        _raises(lambda: run_cv(panel, splits, model_name="lgbm", preprocessing="none"), ValueError),
     )
 
 
@@ -806,6 +941,7 @@ def main() -> int:
     )
 
     landmark_panel_checks()
+    fleet_normalizer_checks()
 
     failed = [name for name, ok, _ in _checks if not ok]
     print()

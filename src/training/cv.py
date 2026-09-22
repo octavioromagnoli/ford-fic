@@ -46,6 +46,11 @@ TARGET_COLUMN = "label"
 # supervivencia no tengan que volver a abrir el panel. `aux_km_observed_after_cut`
 # completa la terna censurada (duración + evento) que necesita el C-index.
 CARRY_COLUMNS = ("event_observed", "time_to_event_km", "aux_km_observed_after_cut")
+# Qué preprocesamiento arma el loop antes del modelo. `standard` es el de siempre
+# (imputar + escalar + one-hot). `none` no arma ninguno: el estimador trae su propio
+# pipeline interno y lo fitea con el train del fold —es lo que necesita el cure model,
+# cuya normalización contra la flota depende de qué vehículos son sanos en ese train—.
+PREPROCESSING_MODES = ("standard", "none")
 
 
 def select_feature_columns(
@@ -101,6 +106,7 @@ def run_cv(
     feature_prefixes: tuple[str, ...] = FEATURE_PREFIXES,
     strict_splits: bool = True,
     min_valid_positives: int | None = None,
+    preprocessing: str = "standard",
 ) -> tuple[pd.DataFrame, list[dict[str, float]]]:
     """Corre la CV agrupada y devuelve `(predicciones out-of-fold, métricas por fold)`.
 
@@ -155,6 +161,11 @@ def run_cv(
             target_column,
         )
 
+    if preprocessing not in PREPROCESSING_MODES:
+        raise ValueError(f"`preprocessing` tiene que ser uno de {PREPROCESSING_MODES}, no `{preprocessing}`")
+    if preprocessing != "standard":
+        logger.info("Preprocesamiento `%s`: el pipeline es solo el modelo (trae el suyo adentro)", preprocessing)
+
     repeat_scores: list[np.ndarray] = []
     repeat_folds: list[np.ndarray] = []
     repeat_extras: list[dict[str, np.ndarray]] = []
@@ -171,7 +182,7 @@ def run_cv(
         for fold, train_mask, valid_mask in masks:
             pipeline = Pipeline(
                 [
-                    ("prep", build_preprocessor(X)),
+                    *([("prep", build_preprocessor(X))] if preprocessing == "standard" else []),
                     ("model", get_model(model_name, model_params)),
                 ]
             )

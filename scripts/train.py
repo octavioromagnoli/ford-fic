@@ -544,6 +544,9 @@ def main() -> None:
         target=target_cfg or None,
         strict_splits=bool(cfg.get("splits", {}).get("strict", True)),
         min_valid_positives=options["min_valid_positives"],
+        # `standard` (el default) es imputar + escalar + one-hot antes del modelo; con
+        # `none` el estimador trae su propio pipeline y lo ajusta con el train del fold.
+        preprocessing=str(cfg.get("preprocessing", "standard")),
     )
 
     n_repeats = int(splits.get("n_repeats", 1))
