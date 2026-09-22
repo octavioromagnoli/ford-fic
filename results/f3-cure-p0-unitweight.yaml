@@ -1,0 +1,166 @@
+run: f3-cure-p0-unitweight
+logged_on: '2026-09-22'
+note: 'Cure model P0 (pesos unitarios, preregistro f3-preregistro-cure.md): D1 0,599
+  ± 0,004 [0,520; 0,675], D2 4,2% (3 de 69 negativos). Le gana a C1 (p = 0,0045);
+  NO le gana al piso −ProductionDay (IC pareado [−0,005; 0,221]); empata con el piso
+  de uso −km/L (D1 0,581). No se adopta. El PR-AUC por fila no aplica en este panel.'
+source:
+  config_path: configs\exp_cure_p0_unitweight.yaml
+  config_versioned: true
+  branch: feat/landmark-post-venta
+  commit: '3165340'
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: cure_mixture
+  pr_auc: 0.22690361503876813
+  cohort_ceiling: null
+  cohort_lift: null
+  within_failed: null
+  within_failed_lift: null
+  when_delta: null
+  vehicle_agg: mean
+  vehicle_pr_auc: null
+  vehicle_lift: null
+  vehicle_base_rate: null
+  pr_auc_lo: 0.2304628471235457
+  pr_auc_hi: 0.2858759865079971
+  base_rate: 0.1746905089408528
+  lift: 1.2988891978990902
+  roc_auc: 0.5905686789151355
+  brier: 0.2625892592368176
+  detection_rate: null
+  median_lead_km: null
+  budget: null
+  panel: ${DATA_DIR}/processed/panel_landmark_ps.parquet
+  panel_generation: '2026-09-22'
+  splits: ${DATA_DIR}/processed/splits_landmark_ps_r3.json
+  n_positive: 127
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: unit_weight_score
+  d1: 0.5988339949882923
+  d1_std: 0.004425615370172397
+  d1_lo: 0.5201388742609628
+  d1_hi: 0.6744941456690599
+  d2: 0.04242424242424242
+  d2_std: 0.008570991287109666
+  d2_lo: 0.0
+  d2_hi: 0.2098765432098765
+  d2_lead_days: 115.33333333333333
+config:
+  name: f3-cure-p0-unitweight
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_landmark_ps.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_landmark_ps_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  preprocessing: none
+  target:
+    name: cure_window
+  model:
+    name: cure_mixture
+    params:
+      incidence: unit_weight
+      unit_weight_signs:
+        fleet_idle_per_1000km: 1
+        fleet_trips_below_regime_temp_frac: 1
+        fleet_speed_kmh_mean: -1
+        fleet_coolant_temp_end_mean: -1
+      latency: weibull
+      per_landmark: true
+      firth_flic: true
+      normalizer_params:
+        min_ref_vehicles: 10
+      max_iter: 1000
+      tol: 1.0e-07
+      random_state: 42
+  eval:
+    legacy_blocks: false
+    carry_columns:
+    - aux_landmark_day
+    - aux_dss_entry
+    - aux_dss_exit
+    - aux_event_in_window
+    - aux_gap_days
+    - aux_dss_window_end
+    - aux_days_to_event_after_cut
+    - aux_resolved_negative
+    - aux_resolved_negative_e60
+    - aux_resolved_negative_e120
+    - aux_production_tercile
+    - static_SalesCountry_cd
+    - aux_static_ProductionDay
+    - aux_sale_day
+    - window_km
+    - aux_landmark_month
+    - aux_air_temp_window_mean
+    landmark:
+      score_column: unit_weight_score
+      probability_column: score
+      max_false_alarms_per_1000: 50
+      extra_false_alarms_per_1000:
+      - 100
+      e_min_days_sensitivity:
+      - 60
+      - 120
+      n_boot: 2000
+  audit_cure:
+    event_clock: configs/data/event_clock.yaml
+    audits:
+    - A0
+    - C1
+    - C2
+    - C3
+    - C6
+    stop_if_c1_fails: true
+    n_boot: 2000
+    a0:
+      permutations: 5
+      d1_tolerance: 0.05
+      d2_tolerance: 0.05
+    c1:
+      permutations: 2000
+      strata:
+      - aux_landmark_day
+      - aux_production_tercile
+      - static_SalesCountry_cd
+      alpha: 0.05
+    c2:
+      floors:
+        production_day: aux_static_ProductionDay
+        sale_day: aux_sale_day
+      production_column: aux_static_ProductionDay
+      tercile_column: aux_production_tercile
+      max_abs_rho: 0.2
+    c3:
+      km_column: window_km
+    c6:
+      km_column: window_km
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-cure
+    job_type: train
+    tags:
+    - f3
+    - cure
+    - landmark
+    - p0
+    - r3
+    mode: online
+    log_artifacts: true
+  output_dir: experiments
+  _config_path: configs\exp_cure_p0_unitweight.yaml
