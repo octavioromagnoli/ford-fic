@@ -40,6 +40,10 @@ en el índice). **El ensamble de survival stacking con el CNN-LSTM tampoco** (E1
 - Con bagging por vehículo (E2) da lo mismo: 13,8% ± 5,0 y 1,48×.
 - Ficha: [f3-ensamble-e1-e2.md](f3-ensamble-e1-e2.md).
 
+**Aprender *qué auto* con los fallados sin fecha tampoco** (22-09): en los mercados sin fecha el
+rasgo temprano no separa fallados de sanos (AUC 0,513), así que la compuerta paró antes de
+tocar dev. Ficha: [f5-incidencia-externa.md](f5-incidencia-externa.md).
+
 ## Por qué survival stacking
 
 - Es el **único** cuyo aporte del "cuándo" (a′) da positivo en las tres repeticiones:

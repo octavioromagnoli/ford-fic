@@ -136,6 +136,15 @@ como dice el preregistro.
 
 ### 3.2 · Incidencia con 4–5× más eventos: los fallados sin fecha (la palanca más grande)
 
+> **Medido el 22-09: la compuerta G2 para.** Con la elegibilidad simétrica quedan 114 eventos
+> elegibles, no ~290, y Riley admite 2–3 parámetros, no una decena. En la fuente, el índice del
+> rasgo temprano da AUC 0,513 [0,445; 0,585]: idle y refrigerante van al revés que en dev, y solo
+> viajes bajo régimen y uso apuntan igual. Nada se aplicó a dev. En CNTRY_1 los fallados sin
+> fecha casi no tienen exceso de mensajes de filtro. Detalle en
+> [memoria/f5-incidencia-externa.md](memoria/f5-incidencia-externa.md); preregistro en
+> [memoria/f5-preregistro-incidencia-externa.md](memoria/f5-preregistro-incidencia-externa.md). Lo
+> que sigue quedó como estaba escrito antes de medirlo.
+
 **El hecho que la habilita:**
 - Fuera del universo quedaron **717 vehículos, 285 con evento**: 284 con la fecha por defecto
   (`IdentificationDate == daysUntilSale`) y 1 de un mercado excluido.
@@ -293,6 +302,9 @@ Falta la fecha en que cada corte llega a c + G. Sale de los viajes del vehículo
 
 ### 3.4 · 3.3 + 3.2: el reloj correcto con la incidencia externa
 
+> **Cerrado el 22-09:** dependía de que A-solo (§3.2) pasara, y la compuerta G2 paró antes de
+> aplicarlo a dev ([memoria/f5-incidencia-externa.md](memoria/f5-incidencia-externa.md)).
+
 La combinación que la teoría dice que debería ganar:
 - **qué auto**, aprendido con ~290 eventos (§3.2);
 - **cuándo**, con el reloj y el conjunto en riesgo correctos (§3.3).
@@ -374,9 +386,9 @@ Con las mismas reglas que [f3-preregistro-landmark-ensamble.md](memoria/f3-prere
 | lugar | corrida | consume presupuesto | condición |
 |---|---|---|---|
 | 0 | ~~**E1, E2**~~ **corridas el 22-09: pierden** ([f3-ensamble-e1-e2.md](memoria/f3-ensamble-e1-e2.md)) | no: ya preregistradas en 9b7bfb4 | ninguna |
-| 1 | **A-solo** (§3.2): incidencia externa, cero parámetros en dev, panel de hitos | sí | antes, un punto de control **solo con conteos**: excluidos del lado dev con `daysUntilSale`, ≥ 15 viajes en 30 d y exposición suficiente, por mercado |
+| 1 | ~~**A-solo** (§3.2)~~ **preregistrado y parado en la compuerta G2 el 22-09**: el rasgo temprano no se replica en la fuente ([f5-incidencia-externa.md](memoria/f5-incidencia-externa.md)) | sí | antes, un punto de control **solo con conteos**: excluidos del lado dev con `daysUntilSale`, ≥ 15 viajes en 30 d y exposición suficiente, por mercado |
 | 2 | **SS post-venta con ventana** (§3.3), reemplaza a L1 | no en el sentido de CLAUDE.md: hace comparable la fila del finalista | ninguna |
-| 3 | **2 + A** (§3.4) | sí | A-solo le gana a su piso |
+| 3 | ~~**2 + A** (§3.4)~~ cerrado: A-solo no llegó a dev | sí | A-solo le gana a su piso |
 | cond. | B-cal (§3.3) | sí | la (b) de la corrida 2 marca |
 | cond. | BART dentro de 2 (§3.5) | sí | la corrida 2 le gana a survival stacking |
 

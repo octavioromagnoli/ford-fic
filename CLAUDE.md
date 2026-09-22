@@ -24,7 +24,10 @@ post-venta**, con preregistro y lista cerrada. El rasgo temprano existe, pero no
 de producción y empata con un solo número de uso. No se adopta y **el finalista sigue siendo
 survival stacking** (`docs/memoria/f3-cure-model.md`). El mismo día corrió el ensamble
 preregistrado con el CNN-LSTM (E1/E2): pierde en lift por vehículo
-(`docs/memoria/f3-ensamble-e1-e2.md`). Lo que sí cambia todo panel es la ventana
+(`docs/memoria/f3-ensamble-e1-e2.md`). También el 22-09, la incidencia aprendida con los
+fallados sin fecha (F5 §3.2) paró en su compuerta preregistrada: en CNTRY_1/2/5 el rasgo temprano
+no separa fallados de sanos (AUC 0,513), así que nada se aplicó a dev
+(`docs/memoria/f5-incidencia-externa.md`). Lo que sí cambia todo panel es la ventana
 del registro de eventos (abajo). **Lo siguiente es F4 (dashboard contra el panel real)**; las
 ideas que quedaron sin probar siguen en `docs/f3-modelos-candidatos.md`.
 
@@ -199,7 +202,10 @@ src/data/subset.py       trips/signals para un conjunto de vehículos: canoniza 
 src/data/anchor.py       origen del calendario (estimado sobre dev, congelado en panel_meta.json) y odómetro del evento
 src/data/panel.py        cortes en grilla de Δ, etiqueta con gap y horizonte, censura, QC de ventana, emparejado de sanos
 src/data/landmark.py     panel de hitos post-venta (cure model): una fila por (vehículo, hito en días desde la venta),
-                         riesgo dentro de la ventana del registro, features por mes para la referencia de flota
+                         riesgo dentro de la ventana del registro, features por mes para la referencia de flota;
+                         opcional: ventana de features fija (`feature_window_days`) y km/día (`usage_feature`)
+src/data/external.py     conjunto externo de la incidencia (F5 §3.2): reproduce el sorteo padre contra su huella y
+                         toma los excluidos del lado dev, por mercado; nunca un vehículo de dev ni de test
 src/features/trips.py    derivadas a nivel viaje (idle/moving, velocidad recalculada, topes físicos, regen = caída de AirRegeneration)
 src/features/signals.py  una booleana por nivel de Message; regen_marker solo como aux
 src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agregadores (per_1000km, half_*, gap_*, km_since_last…)
@@ -212,8 +218,10 @@ src/models/survival_stacking.py  supervivencia en tiempo discreto: apila (fila �
                          score = 1 − S(H|x). Backend lightgbm o gpboost (efecto aleatorio por vehículo, opcional)
 src/models/bagging.py    bagging por vehículo (`vehicle_bagging`): N bootstraps de autos del train del fold, promedio;
                          el vehículo llega por el `y` (`discrete_survival` o `grouped_label`)
-src/models/cure.py       mixture cure model por hito (incidencia Firth + FLIC o pesos unitarios, latencia Weibull
-                         con entrada tardía, EM que falla si la verosimilitud baja); trae su propio pipeline
+src/models/cure.py       mixture cure model por hito (incidencia Firth + FLIC, pesos unitarios o pesos fijos de afuera,
+                         latencia Weibull con entrada tardía, EM que falla si la verosimilitud baja); trae su propio pipeline
+src/models/incidence.py  incidencia por vehículo aprendida con la fuente externa (Firth + estrato de mercado) y aplicada
+                         congelada: `external_incidence` no aprende nada en `fit`
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo; hooks `target:`,
                          `preprocessing: standard|none` y `carry_columns` (eval.carry_columns)
 src/training/transformers.py  FleetReferenceNormalizer: desvío contra la mediana de los sanos del train por
@@ -251,6 +259,9 @@ scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambia
 scripts/audit_event_clock.py  en qué reloj ocurre el evento y en qué ventana se registra (Fase 1 del cure model)
 scripts/build_landmark_panel.py  panel de hitos post-venta + _meta.json (universo de 364, conteos solo de dev)
 scripts/audit_cure.py    auditorías del cure model (A0, C1, C2, C3, C6, A3, A5, A6), veredicto y adopción
+scripts/build_external_panel.py  panel de la fuente de la incidencia externa (un hito, ventana de 30 d) + embudo
+                         por mercado (`--counts-only`)
+scripts/fit_external_incidence.py  compuertas G1/G2, ajuste congelado e I1 de la incidencia externa (solo la fuente)
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/build_history_panel.py  panel_history.parquet = panel_survival + feat_*_hist_delta (mismas filas; verifica
@@ -267,7 +278,7 @@ scripts/ensemble_rank.py ensamble por rango de corridas existentes (mismas filas
 scripts/rescore_run.py   re-mide una corrida vieja desde su predictions.parquet con la misma cuenta que train.py
                          (`evaluate_predictions`), sin reentrenar; falla si lo ya medido no se reproduce
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (139 chequeos)
+scripts/check_setup.py   smoke test del harness (148 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

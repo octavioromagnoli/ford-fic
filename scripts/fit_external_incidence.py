@@ -249,6 +249,68 @@ def informative_i1(model, panel: pd.DataFrame, fit_kwargs: dict[str, Any], spec:
     return out
 
 
+def post_stop_diagnostics(model, panel: pd.DataFrame, fit_kwargs: dict[str, Any], seed: int) -> dict[str, Any]:
+    """Por qué paró G2, solo con la fuente. **No estaba preregistrado, no decide nada y no toca dev.**
+
+    Se agregó después de que G2 parara (22-09), para descartar un error de cuenta antes de
+    escribir el negativo. Mira si el signo de cada feature depende de la normalización (cruda,
+    por mes, por mercado × mes), por mercado, si hay atajo de calendario en la fuente, qué pasa
+    con los autos quietos y con los positivos no elegibles, y cuánto pesan a y b ajustados.
+    """
+    elig = panel["aux_eligible"].eq(1).to_numpy()
+    y = panel["label"].to_numpy(dtype=int)
+    markets = panel["static_SalesCountry_cd"].astype(str).to_numpy()
+    signs = {c.removeprefix("fleet_"): s for c, s in model.signs.items()}
+    features = panel[[c for c in panel.columns if c.startswith(("feat_", "static_"))]]
+
+    def signed(rows: np.ndarray, frame: pd.DataFrame, prefix: str) -> dict[str, float]:
+        return {f: float(roc_auc(y[rows], s * frame[f"{prefix}{f}"].to_numpy(float)[rows]))
+                for f, s in signs.items() if np.isfinite(frame[f"{prefix}{f}"].to_numpy(float)[rows]).sum() > 20}
+
+    raw = panel.copy()
+    for f in signs:   # la cruda con NaN: la AUC se calcula sobre los que tienen dato
+        raw[f"aux_raw_{f}"] = raw[f"aux_raw_{f}"].fillna(raw.loc[elig, f"aux_raw_{f}"].median())
+    by_market_norm = fit_external_incidence(panel, **{**fit_kwargs, "normalizer_params": {"min_ref_vehicles": 10}})
+    z_month = model.standardized(features)
+    z_market = by_market_norm.standardized(features)
+    out: dict[str, Any] = {
+        "note": "Diagnóstico posterior a la parada de G2: no preregistrado, no decide, solo la fuente.",
+        "signed_auc_raw_aggregates": signed(elig, raw, "aux_raw_"),
+        "signed_auc_fleet_by_month": signed(elig, z_month.rename(columns=lambda c: c), "fleet_"),
+        "signed_auc_fleet_by_market_month": signed(elig, z_market, "fleet_"),
+        "signed_auc_by_market": {m: signed(elig & (markets == m), z_month, "fleet_") for m in sorted(set(markets))},
+        "minus_log_km_per_day_by_market": {m: float(roc_auc(y[elig & (markets == m)],
+                                                            -panel["feat_log1p_km_per_day"].to_numpy(float)[elig & (markets == m)]))
+                                           for m in sorted(set(markets))},
+    }
+    quiet = panel["window_km"].lt(100).to_numpy()
+    out["quiet_cars_eligible"] = {"failed": f"{int((quiet & elig & (y == 1)).sum())}/{int((elig & (y == 1)).sum())}",
+                                  "healthy": f"{int((quiet & elig & (y == 0)).sum())}/{int((elig & (y == 0)).sum())}"}
+    moving = elig & ~quiet
+    out["index_s_auc_without_quiet_cars"] = float(roc_auc(
+        y[moving], model.design_matrix(z_month)[moving, 0]))
+    all_pos = elig | (y == 1)
+    out["index_s_auc_all_positives"] = float(roc_auc(y[all_pos], model.design_matrix(z_month)[all_pos, 0]))
+    e = panel.loc[elig]
+    out["calendar_floor_auc_eligible"] = {
+        "minus_production_day": float(roc_auc(y[elig], -e["aux_static_ProductionDay"].to_numpy(float))),
+        "minus_sale_day": float(roc_auc(y[elig], -e["aux_sale_day"].to_numpy(float))),
+    }
+    out["fitted_slopes_not_frozen"] = dict(zip(model.slope_names, map(float, model.slopes)))
+    d = model.design_matrix(z_month)
+    strata = _strata(panel["static_SalesCountry_cd"], model.market_levels)
+    X = np.hstack([strata, d])[elig]
+    rng = np.random.default_rng(seed)
+    draws = []
+    for _ in range(1000):
+        idx = rng.integers(0, len(X), len(X))
+        draws.append(refit_slopes(X[idx], y[elig][idx], len(model.market_levels), fit_kwargs["firth"]))
+    draws = np.asarray(draws)
+    out["fitted_slopes_bootstrap_ci"] = {name: [float(np.quantile(draws[:, j], 0.025)), float(np.quantile(draws[:, j], 0.975))]
+                                         for j, name in enumerate(model.slope_names)}
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", required=True)
@@ -281,6 +343,7 @@ def main() -> int:
         if not report["G2"]["passed"]:
             report["stop"] = ("G2: el índice del rasgo temprano no separa fallados de sanos en la fuente "
                               "(IC95 de la AUC toca 0,5). Se para y no se congela nada (preregistro §4).")
+            report["post_stop_diagnostics"] = post_stop_diagnostics(model, panel, fit_kwargs, seed)
     if "stop" not in report:
         report["model"] = {"slope_names": model.slope_names, "slopes": model.slopes.tolist(),
                            "intercepts": model.intercepts, "weights": model.weights(), "info": model.info}
