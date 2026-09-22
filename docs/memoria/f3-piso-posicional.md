@@ -64,21 +64,65 @@ que no se puede esquivar: un score posicional también alerta los últimos corte
 atajo posicional no puede pagar, y por eso ahí la comparación significa algo.
 
 - **Punto de operación** (detección a presupuesto fijo de falsas alarmas): CNN-LSTM 17,0%
-  y survival stacking 15,1% contra 7,55% del piso. Le ganan 2:1.
+  y survival stacking 15,1% contra 7,55% del piso. Le ganan 2:1. *(Con R=1. Con R=3:
+  15,7% ± 0,9 y 11,9% ± 3,6; ver el punto 2 de abajo.)*
 - **Eje vehículo con `mean`**: 1,65× y 1,54× contra 1,018× del piso.
 
 ## Tres consecuencias que no son obvias
 
-**1. El control no le gana al piso.** `lgbm-panel-v1` empata exactamente en detección
-(7,55%, los mismos 4 vehículos de 53) y pierde en PR-AUC por fila. El modelo contra el que
-se midieron todas las ablaciones de familias de features no supera al odómetro. Cualquier
-diferencia de ±0,005 medida contra él hay que releerla.
+**1. El control no le gana al piso — con R=1.** `lgbm-panel-v1` empata exactamente en
+detección (7,55%, los mismos 4 vehículos de 53) y pierde en PR-AUC por fila. El modelo
+contra el que se midieron todas las ablaciones de familias de features no supera al
+odómetro. Cualquier diferencia de ±0,005 medida contra él hay que releerla.
+*Corrección del 21-09 (ver la sección R=3 de abajo):* esos 4/53 son la repetición 0; con
+R=3 el control detecta 4 / 8 / 7 vehículos, **11,9% ± 3,2**, y sí le gana al piso por el
+mismo criterio que el CNN-LSTM. El R=1 era el sorteo, igual que en el punto 2.
 
-**2. El CNN-LSTM estaba mal juzgado.** Se descartó por quedar 0,012 de PR-AUC por debajo
-del LightGBM — en la métrica degenerada. En la métrica honesta es **el mejor detector del
-proyecto**: 17,0% con 10.560 km de anticipación. Le falta R=3 para poder declararlo (17,0%
-son 9 vehículos de 53 y 15,1% son 8: la diferencia con survival stacking es un vehículo y
-no significa nada todavía). Lo que sí se puede declarar es que los dos le ganan al piso.
+**2. El CNN-LSTM estaba mal juzgado — pero no era el mejor detector.** Se descartó por
+quedar 0,012 de PR-AUC por debajo del LightGBM, en la métrica degenerada, y eso sigue
+siendo cierto. Lo que esta sección decía después no lo era: el 17,0% con R=1 **no
+sobrevive a R=3**. Con los tres juegos de folds de `splits_r3.json` detecta 9 / 5 / 5
+vehículos de 53, **11,9% ± 3,6**, con 10.366 ± 137 km de anticipación.
+
+El porqué es de construcción: la repetición 0 de `splits_r3.json` son exactamente los
+folds de `splits.json`, así que el 17,0% del R=1 era *una* de las tres repeticiones, la
+que mejor le salió. Con 53 vehículos un vehículo son 1,9 puntos, y la diferencia entre 9 y
+5 es de cuatro autos que cambian de fold. El 9,4% (5/53) que figura en
+`results/f3-cnn-lstm-r3-regen15.yaml` tampoco es el número R=3: sale del score promediado
+entre las tres repeticiones, que es un ensamble; el número R=3 es la media de las tres
+detecciones por separado (`scripts/train.py::detection_by_repeat`).
+
+Contra el piso, con el criterio preregistrado (le gana en detección por más de un desvío
+entre repeticiones **y** en lift por vehículo con `mean`): 11,9 − 7,55 = **4,4 puntos contra
+un desvío de 3,6** (1,2 desvíos) y **1,333× contra 1,018×**. Sigue siendo finalista, por
+poco: en dos de las tres repeticiones detecta 5/53 contra 4/53 del piso, un vehículo. Y no
+le gana a nadie más: empata con el control en detección (11,9% los dos) y pierde contra él
+en lift (1,333× contra 1,494×) y en Brier; survival stacking le gana en las dos honestas.
+
+### Las cuatro filas con R=3 (build `2026-09-20`, `splits_r3.json`, mismas 2.029 filas)
+
+Media ± desvío entre las 3 repeticiones (desvío poblacional, `metrics.py::dispersion`). El
+piso no tiene repeticiones: es el odómetro crudo, sin ajustar nada.
+
+| | detección @ ≤50 FA/1000 | vehículos por repetición | anticipación mediana | lift veh. (`mean`) | (a′) | Brier |
+|---|---|---|---|---|---|---|
+| **piso posicional** | 7,55% | 4 (fijo) | 7.385 km | 1,018× | +0,0872 | — |
+| **survival stacking** (referencia) | **15,7% ± 0,9** | 8 / 9 / 8 | 8.330 ± 22 km | **1,616× ± 0,061** | +0,0162 ± 0,0033 | **0,1123** |
+| CNN-LSTM | 11,9% ± 3,6 | 9 / 5 / 5 | 10.366 ± 137 km | 1,333× ± 0,054 | +0,0080 ± 0,0051 | 0,2276 |
+| control LGBM | 11,9% ± 3,2 | 4 / 8 / 7 | 9.370 ± 2.237 km | 1,494× ± 0,049 | −0,0055 ± 0,0040 | 0,1711 |
+
+Para completar: PR-AUC entre fallados 0,2896 / 0,2857 / 0,2871 contra 0,3301 del piso y
+C-index 0,582 / 0,531 / 0,559 (survival stacking / CNN-LSTM / control). Auditorías del
+CNN-LSTM con R=3 (`experiments/f3-cnn-lstm-r3-regen15/audit.json`): (a0) 0,1208 contra
+0,1252, PASS; (a′) +0,0114 sobre el score promediado, PASS; **(b) +0,0216 de ROC, marca**
+(ver [f3-cnn-lstm-tutora.md](f3-cnn-lstm-tutora.md): el +0,0101 que tenía registrado se
+midió con la secuencia corrida).
+
+Un dato que no es una comparación contra la etiqueta pero pesa para armar un ensamble: la
+correlación de rango entre los scores OOF de survival stacking y el CNN-LSTM es **0,24–0,36**
+por fila (0,32–0,45 por vehículo), y con el control **0,77** (0,85–0,87). El control y
+survival stacking leen los mismos 53 agregados y ordenan casi igual; el CNN-LSTM lee la
+secuencia y ordena distinto.
 
 **3. El piso re-confirma, por un camino independiente, que `mean` es la única agregación
 honesta.** Sobre el panel posicional las agregaciones dependientes del tamaño de bolsa se
@@ -107,12 +151,30 @@ FORD_DATA_DIR=data/v364 WANDB_MODE=disabled python scripts/train.py \
 
 # Y la comparación contra cualquier corrida ya entrenada:
 FORD_DATA_DIR=data/v364 python scripts/audit_positional_floor.py f3-survival-stacking
+
+# La tabla R=3 (21-09). El CNN-LSTM y el control se re-miden desde sus predicciones, sin
+# reentrenar: `rescore_run.py` usa la misma función que `train.py` y falla si lo que el
+# metrics.json ya traía no se reproduce. `--carry-from` trae `aux_km_observed_after_cut`
+# (C-index) del panel reconstruido, que es idéntico al que usaron en todas las demás columnas.
+python scripts/rescore_run.py f3-cnn-lstm-r3-regen15 \
+  --carry-from data/rebuild-0921/processed/panel_seq_v1.parquet
+python scripts/rescore_run.py f3-lgbm-panel-v1-r3-regen15 \
+  --carry-from data/rebuild-0921/processed/panel.parquet
+FORD_DATA_DIR=data/rebuild-0921 WANDB_MODE=disabled python scripts/audit_model.py \
+  --config configs/exp_cnn_lstm_r3.yaml --out experiments/f3-cnn-lstm-r3-regen15/audit.json
+python scripts/audit_positional_floor.py f3-cnn-lstm-r3-regen15
 ```
+
+`audit_positional_floor.py` mide sobre el score **promediado** entre repeticiones (lo que
+guarda `predictions.parquet` en `score`): para el CNN-LSTM da 9,4% de detección, que es
+el del ensamble de las tres pasadas. La tabla R=3 de arriba usa la media de las tres
+detecciones por separado, que es la regla de `train.py`.
 
 ## Qué queda abierto
 
-- **R=3 del CNN-LSTM**, que es lo único que falta para poder elegir finalista entre él y
-  survival stacking sobre la métrica honesta.
+- ~~**R=3 del CNN-LSTM**~~ — hecho el 21-09 (punto 2): 11,9% ± 3,6, sin re-entrenar,
+  desde sus predicciones (`scripts/rescore_run.py`). No le discute el lugar a survival
+  stacking; sigue como finalista del par para el ensamble.
 - **Re-leer la tabla de `results/`** completa contra los dos pisos: es probable que varias
   diferencias históricas no sobrevivan.
 - El atajo de calendario que survival stacking marca en la auditoría (b) (+0,0230 de ROC,

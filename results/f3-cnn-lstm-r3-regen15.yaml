@@ -1,18 +1,39 @@
 run: f3-cnn-lstm-r3-regen15
-logged_on: '2026-09-20'
-note: 'Control: la CNN-LSTM de la tutora re-medida sobre el panel RECONSTRUIDO (umbral
-  de regeneracion 15, commit 1eab4a1) y con R=3. 5 semillas: 0,1580 +- 0,0023 / ROC
-  0,5699. El numero viejo (0,153 / 0,574, results/f3-cnn-lstm-tutora.yaml) se midio
-  con el umbral de 5 y R=1: no es comparable con las corridas nuevas.'
+logged_on: '2026-09-21'
+note: 'CNN-LSTM de la tutora, panel secuencial RECONSTRUIDO (umbral 15, build 2026-09-20)
+  y R=3 con splits_r3.json. Completado el 21-09 SIN reentrenar: scripts/rescore_run.py
+  recalcula desde predictions.parquet con la misma funcion que train.py y reproduce
+  oof, oof_by_repeat y operating_point del registro anterior; el panel_seq_v1 reconstruido
+  con HEAD es identico en las 200 columnas. Metricas honestas R=3: deteccion 11,9%
+  +/- 3,6 (9/5/5 de 53: el 17,0% del R=1 era la repeticion 0; el 9,4% de la columna
+  Deteccion es el score promediado, un ensamble) y anticipacion 10.366 +/- 137 km;
+  lift por vehiculo (mean) 1,333x. Contra el piso posicional (7,55%, 1,018x) le gana
+  por 1,2 desvios y en lift: sigue finalista por el criterio preregistrado, por poco.
+  Empata con el control LGBM en deteccion (11,9% +/- 3,2) y pierde en lift (1,494x);
+  survival stacking le gana en las dos (15,7% +/- 0,9, 1,616x). (a'') +0,0080 +/-
+  0,0051; Brier 0,228 (class_weight balanced, no calibrado). Auditorias R=3: (a0)
+  PASS, (a'') PASS, (b) +0,0216 de ROC, MARCA. Detalle: docs/memoria/f3-piso-posicional.md.
+  Nota del registro anterior (20-09), que sigue valiendo: 5 semillas de red dan 0,1580
+  +/- 0,0023 / ROC 0,5699; el numero viejo (0,153 / 0,574, results/f3-cnn-lstm-tutora.yaml)
+  es del umbral de 5 y R=1 y no se compara.'
 source:
   config_path: configs\exp_cnn_lstm_r3.yaml
   config_versioned: true
-  branch: feat/model-gru-seq
-  commit: 08ba21f
+  branch: exp/cnn-lstm-r3-audit
+  commit: aa9cc64
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: cnn_lstm
   pr_auc: 0.1597689946943249
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.28745266727848007
+  within_failed_lift: 1.0943572018042922
+  when_delta: 0.01136831278952588
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.41304385142251787
+  vehicle_lift: 1.3326509168537841
+  vehicle_base_rate: 0.30994152046783624
   pr_auc_lo: 0.1705881330050818
   pr_auc_hi: 0.21782809650252383
   base_rate: 0.1251848201084278
@@ -23,8 +44,13 @@ summary:
   median_lead_km: 10269.0
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  panel_generation: '2026-09-20'
   splits: ${DATA_DIR}/processed/splits_r3.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f3-cnn-lstm-r3-regen15
   seed: 42

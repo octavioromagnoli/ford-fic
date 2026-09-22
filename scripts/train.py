@@ -357,6 +357,123 @@ def vehicle_block(
     return block
 
 
+def evaluate_predictions(
+    predictions: pd.DataFrame, cfg: dict, *, n_repeats: int, seed: int
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    """Todo lo que se mide sobre las predicciones out-of-fold, sin reentrenar nada.
+
+    Devuelve `(métricas, curva de anticipación)`. Es la parte de `metrics.json` que
+    sale solo de `predictions.parquet` y del bloque `eval:` del YAML; lo que describe el
+    entrenamiento (métricas por fold, panel, splits) lo agrega `main()`. Está separado
+    para que `scripts/rescore_run.py` complete una corrida vieja —o mida un ensamble de
+    predicciones que ya existen— con **exactamente** esta cuenta, en vez de con una
+    copia que se desincroniza la primera vez que alguien agregue una métrica acá.
+    """
+    eval_cfg = cfg.get("eval", {})
+    target_cfg = cfg.get("target") or {}
+    k_consecutive = int(eval_cfg.get("k_consecutive", 2))
+    target_metrics = build_target_report(
+        target_cfg.get("name"),
+        predictions,
+        cost_matrix=eval_cfg.get("cost_matrix"),
+        **dict(target_cfg.get("params") or {}),
+    )
+
+    by_repeat = repeat_metrics(predictions, n_repeats)
+    # `oof` es el promedio entre repeticiones. Con R=1 es exactamente la métrica de
+    # siempre (una sola repetición, promedio de un elemento).
+    # `n` y `n_positive` son los mismos en toda repetición (el conjunto out-of-fold es
+    # siempre el panel de dev entero): promediarlos los volvería float sin motivo.
+    oof = {
+        key: value if key in ("n", "n_positive")
+        else float(np.mean([m[key] for m in by_repeat]))
+        for key, value in by_repeat[0].items()
+    }
+    repeats_spread = {
+        key: dispersion([m[key] for m in by_repeat])
+        for key in ("pr_auc", "roc_auc", "brier", "pr_auc_lift")
+    }
+    curve = lead_time_curve(
+        predictions,
+        n_thresholds=int(eval_cfg.get("n_thresholds", 50)),
+        k_consecutive=k_consecutive,
+    )
+    budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
+    point = operating_point(curve, max_false_alarms_per_1000=budget)
+    vehicle = vehicle_block(predictions, eval_cfg, n_repeats)
+    cost = cost_block(predictions, eval_cfg)
+
+    # Descomposición cohorte / cuándo. Va en TODA corrida, no solo en `audit_model.py`:
+    # el PR-AUC por fila de este panel está dominado por *qué* vehículo falla (el techo
+    # de cohorte es 0,2627 sobre dev, contra una tasa base de 0,1252), así que un número
+    # suelto no dice si el modelo anticipa. Las tres piezas son baratas —salen de las
+    # predicciones que ya están en memoria, sin reentrenar nada— y se guardan con claves
+    # nuevas para no tocar lo que ya leen las corridas viejas ni wandb.
+    ceiling = cohort_ceiling(predictions["label"], predictions["vehicle_id"])
+    within_failed = pr_auc_within_failed(
+        predictions["label"], predictions["score"], predictions["vehicle_id"]
+    )
+    when = when_contribution(predictions)
+    # Con R > 1, la misma cuenta por repetición: sin la dispersión, declarar que un
+    # modelo aporta +0,015 del *cuándo* no dice si eso supera el ruido del sorteo.
+    when_repeats = when_by_repeat(predictions, n_repeats)
+    detect_repeats = detection_by_repeat(predictions, n_repeats, eval_cfg)
+    when_spread = {
+        "when_delta": dispersion([r["when"]["delta"] for r in when_repeats]),
+        "within_failed_pr_auc": dispersion(
+            [r["within_failed"]["pr_auc"] for r in when_repeats]
+        ),
+        "within_failed_lift": dispersion(
+            [r["within_failed"]["lift"] for r in when_repeats]
+        ),
+        "detection_rate": dispersion(
+            [p["detection_rate"] for p in detect_repeats if p is not None]
+        ),
+        "median_lead_km": dispersion(
+            [p["median_lead_km"] for p in detect_repeats if p is not None]
+        ),
+    }
+
+    # Secundarias. El C-index mide el orden usando a los sanos como censurados, no como
+    # ceros; el bootstrap por vehículo es el intervalo que corresponde a un panel con ~5
+    # filas correlacionadas por auto (el de folds mide otra cosa: el sorteo de folds).
+    concordance = concordance_index_oof(predictions) if "aux_km_observed_after_cut" in predictions else None
+    by_vehicle = (
+        bootstrap_by_vehicle(
+            predictions,
+            n_boot=int(eval_cfg.get("bootstrap_n_boot", 1000)),
+            seed=seed,
+        )
+        if eval_cfg.get("bootstrap_by_vehicle", False)
+        else None
+    )
+
+    metrics: dict[str, Any] = {
+        "oof": oof,
+        "n_repeats": n_repeats,
+        "oof_by_repeat": by_repeat,
+        "repeats_spread": repeats_spread,
+        "concordance": concordance,
+        "cohort_ceiling": ceiling,
+        "pr_auc_within_failed": within_failed,
+        "when_contribution": when,
+        "when_by_repeat": when_repeats,
+        "detection_by_repeat": detect_repeats,
+        "when_spread": when_spread,
+        "bootstrap_by_vehicle": by_vehicle,
+        "operating_point": point,
+        "operating_point_budget_per_1000": budget,
+        "k_consecutive": k_consecutive,
+        "target": target_cfg or None,
+        "target_report": target_metrics or None,
+    }
+    if vehicle is not None:
+        metrics["vehicle"] = vehicle
+    if cost is not None:
+        metrics["cost_ratio_sweep"] = cost
+    return metrics, curve
+
+
 def init_wandb(cfg: dict, run_name: str):
     """wandb opcional: `mode: disabled` para iterar rápido, `offline` sin red.
 
@@ -429,118 +546,32 @@ def main() -> None:
         min_valid_positives=options["min_valid_positives"],
     )
 
-    eval_cfg = cfg.get("eval", {})
-    k_consecutive = int(eval_cfg.get("k_consecutive", 2))
-    target_metrics = build_target_report(
-        target_cfg.get("name"),
-        predictions,
-        cost_matrix=eval_cfg.get("cost_matrix"),
-        **dict(target_cfg.get("params") or {}),
-    )
-
     n_repeats = int(splits.get("n_repeats", 1))
-    by_repeat = repeat_metrics(predictions, n_repeats)
-    # `oof` es el promedio entre repeticiones. Con R=1 es exactamente la métrica de
-    # siempre (una sola repetición, promedio de un elemento).
-    # `n` y `n_positive` son los mismos en toda repetición (el conjunto out-of-fold es
-    # siempre el panel de dev entero): promediarlos los volvería float sin motivo.
-    oof = {
-        key: value if key in ("n", "n_positive")
-        else float(np.mean([m[key] for m in by_repeat]))
-        for key, value in by_repeat[0].items()
-    }
-    repeats_spread = {
-        key: dispersion([m[key] for m in by_repeat])
-        for key in ("pr_auc", "roc_auc", "brier", "pr_auc_lift")
-    }
+    evaluated, curve = evaluate_predictions(predictions, cfg, n_repeats=n_repeats, seed=seed)
     summary = summarize_folds(
         [{k: v for k, v in m.items() if k not in ("fold", "repeat")} for m in fold_metrics],
         seed=seed,
     )
-    curve = lead_time_curve(
-        predictions,
-        n_thresholds=int(eval_cfg.get("n_thresholds", 50)),
-        k_consecutive=k_consecutive,
-    )
-    budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
-    point = operating_point(curve, max_false_alarms_per_1000=budget)
-    vehicle = vehicle_block(predictions, eval_cfg, n_repeats)
-    cost = cost_block(predictions, eval_cfg)
-
-    # Descomposición cohorte / cuándo. Va en TODA corrida, no solo en `audit_model.py`:
-    # el PR-AUC por fila de este panel está dominado por *qué* vehículo falla (el techo
-    # de cohorte es 0,2627 sobre dev, contra una tasa base de 0,1252), así que un número
-    # suelto no dice si el modelo anticipa. Las tres piezas son baratas —salen de las
-    # predicciones que ya están en memoria, sin reentrenar nada— y se guardan con claves
-    # nuevas para no tocar lo que ya leen las corridas viejas ni wandb.
-    ceiling = cohort_ceiling(predictions["label"], predictions["vehicle_id"])
-    within_failed = pr_auc_within_failed(
-        predictions["label"], predictions["score"], predictions["vehicle_id"]
-    )
-    when = when_contribution(predictions)
-    # Con R > 1, la misma cuenta por repetición: sin la dispersión, declarar que un
-    # modelo aporta +0,015 del *cuándo* no dice si eso supera el ruido del sorteo.
-    when_repeats = when_by_repeat(predictions, n_repeats)
-    detect_repeats = detection_by_repeat(predictions, n_repeats, eval_cfg)
-    when_spread = {
-        "when_delta": dispersion([r["when"]["delta"] for r in when_repeats]),
-        "within_failed_pr_auc": dispersion(
-            [r["within_failed"]["pr_auc"] for r in when_repeats]
-        ),
-        "within_failed_lift": dispersion(
-            [r["within_failed"]["lift"] for r in when_repeats]
-        ),
-        "detection_rate": dispersion(
-            [p["detection_rate"] for p in detect_repeats if p is not None]
-        ),
-        "median_lead_km": dispersion(
-            [p["median_lead_km"] for p in detect_repeats if p is not None]
-        ),
-    }
-
-    # Secundarias. El C-index mide el orden usando a los sanos como censurados, no como
-    # ceros; el bootstrap por vehículo es el intervalo que corresponde a un panel con ~5
-    # filas correlacionadas por auto (el de folds mide otra cosa: el sorteo de folds).
-    concordance = concordance_index_oof(predictions) if "aux_km_observed_after_cut" in predictions else None
-    by_vehicle = (
-        bootstrap_by_vehicle(
-            predictions,
-            n_boot=int(eval_cfg.get("bootstrap_n_boot", 1000)),
-            seed=seed,
-        )
-        if eval_cfg.get("bootstrap_by_vehicle", False)
-        else None
-    )
-
     metrics = {
-        "oof": oof,
-        "n_repeats": n_repeats,
-        "oof_by_repeat": by_repeat,
-        "repeats_spread": repeats_spread,
+        **evaluated,
+        # Lo que describe el entrenamiento y no sale de las predicciones.
         "folds": fold_metrics,
         "folds_summary": summary,
-        "concordance": concordance,
-        "cohort_ceiling": ceiling,
-        "pr_auc_within_failed": within_failed,
-        "when_contribution": when,
-        "when_by_repeat": when_repeats,
-        "detection_by_repeat": detect_repeats,
-        "when_spread": when_spread,
-        "bootstrap_by_vehicle": by_vehicle,
-        "operating_point": point,
-        "operating_point_budget_per_1000": budget,
-        "k_consecutive": k_consecutive,
         "panel": str(panel_path),
         "panel_build": panel_build(panel_path),
         "stratify": splits.get("stratify"),
         "min_valid_positives": splits.get("min_valid_positives"),
-        "target": target_cfg or None,
-        "target_report": target_metrics or None,
     }
-    if vehicle is not None:
-        metrics["vehicle"] = vehicle
-    if cost is not None:
-        metrics["cost_ratio_sweep"] = cost
+
+    # Los nombres que usan el log y wandb, leídos del mismo dict que se escribe.
+    eval_cfg = cfg.get("eval", {})
+    oof, repeats_spread = metrics["oof"], metrics["repeats_spread"]
+    ceiling, within_failed = metrics["cohort_ceiling"], metrics["pr_auc_within_failed"]
+    when, when_spread = metrics["when_contribution"], metrics["when_spread"]
+    concordance, by_vehicle = metrics["concordance"], metrics["bootstrap_by_vehicle"]
+    point, budget = metrics["operating_point"], metrics["operating_point_budget_per_1000"]
+    target_metrics = metrics["target_report"] or {}
+    vehicle, cost = metrics.get("vehicle"), metrics.get("cost_ratio_sweep")
 
     logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
                 oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
