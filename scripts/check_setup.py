@@ -20,6 +20,9 @@ fallan, invalidan todo lo que venga después:
    pesos por mes reproducen la ventana.
 8. La normalización contra la flota se ajusta solo con los sanos del train del fold,
    y el hook `preprocessing` deja el default intacto.
+9. El cure model: Firth contra referencias independientes, el EM sobre datos simulados
+   con ventana (monótono, en el máximo de la verosimilitud, recuperando la verdad) y el
+   par `cure_window` / `cure_mixture` por el loop de CV.
 """
 
 from __future__ import annotations
@@ -29,6 +32,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
+from scipy.special import expit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -65,6 +70,13 @@ from src.data.landmark import (  # noqa: E402
 )
 from src.eval.splits import iter_folds, iter_repeats, make_splits, test_split_masks  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
+from src.models.cure import (  # noqa: E402
+    UNIT_WEIGHT_SCORE,
+    CureMixtureModel,
+    fit_cure_em,
+    fit_logistic,
+    susceptible_weights,
+)
 from src.training.cv import build_preprocessor, run_cv, select_feature_columns  # noqa: E402
 from src.training.transformers import FleetReferenceNormalizer  # noqa: E402
 from src.training.targets import build_ordinal_target, build_target  # noqa: E402
@@ -401,6 +413,311 @@ def fleet_normalizer_checks() -> None:
     check(
         "preprocessing: con `none` no hay preprocesador (el estimador recibe el panel crudo)",
         _raises(lambda: run_cv(panel, splits, model_name="lgbm", preprocessing="none"), ValueError),
+    )
+
+
+# El test de correctitud del cure model (prompt §8.2): 300 vehículos, 70% curados, dos
+# covariables, latencia Weibull con k = 2 y λ = 200 d desde la venta, y una ventana de
+# calendario de 300 d que trunca la exposición: entrada tardía para los vendidos antes de
+# que abra y salida al cierre; a los vendidos muy tarde la ventana se les cierra antes de
+# L + G y quedan fuera de riesgo. Con una ventana de 190 d, como la real, la MV sin
+# penalizar degenera en 2 de 200 réplicas (π → 1 con una latencia larguísima: no hay
+# seguimiento suficiente) y Firth en ninguna. Con 300 d no degenera ninguna.
+CURE_SIM = {"beta": (-1.1, 0.8, -0.6), "shape": 2.0, "scale": 200.0, "landmark": 30.0,
+            "gap": 30.0, "window": 300.0, "n": 300, "seed": 11}
+# Tolerancia de la recuperación: 3 desvíos de cada estimador entre 200 réplicas del mismo
+# diseño (piloto del 22-09): 0,23 / 0,26 / 0,22 en β, 0,42 en k y 24 d en λ.
+CURE_SIM_TOLERANCE = (0.7, 0.8, 0.7, 1.3, 72.0)
+
+
+def _simulate_cure(*, beta, shape, scale, landmark, gap, window, n, seed):
+    """Datos del modelo del preregistro: Z ~ Bern(π(x)) y, si Z = 1, T | T > e ~ Weibull."""
+    rng = np.random.default_rng(seed)
+    design = np.column_stack([np.ones(n), rng.normal(size=(n, 2))])
+    susceptible = rng.random(n) < expit(design @ np.asarray(beta))
+    sale = rng.uniform(-200.0, 280.0, n)  # día de la venta respecto de la apertura de la ventana
+    entry = np.maximum(landmark + gap, -sale)
+    end = window - sale
+    # Inversa de la condicional: S(T)/S(e) = U.
+    t = scale * ((entry / scale) ** shape - np.log(rng.random(n))) ** (1.0 / shape)
+    event = susceptible & (t <= end) & (end > entry)
+    return design, entry, np.where(event, t, end), event.astype(int)
+
+
+def _cure_negloglik(theta, design, entry, exit_, event, firth=False):
+    """−ℓ del cure model escrita de nuevo, sin reusar nada de src/models/cure.py."""
+    beta, k, lam = theta[:-2], np.exp(theta[-2]), np.exp(theta[-1])
+    pi = expit(design @ beta)
+    log_ratio = (entry / lam) ** k - (exit_ / lam) ** k
+    log_h = np.log(k / lam) + (k - 1) * np.log(exit_ / lam)
+    loglik = np.where(event == 1, np.log(pi) + log_h + log_ratio,
+                      np.log(1 - pi + pi * np.exp(log_ratio))).sum()
+    if firth:
+        v = pi * (1 - pi)
+        loglik += 0.5 * np.linalg.slogdet((design * v[:, None]).T @ design)[1]
+    return -loglik
+
+
+def _direct_max(design, entry, exit_, event, *, firth, start):
+    """El máximo de la misma verosimilitud por BFGS, sin EM: `(β, k, λ)` y el objetivo."""
+    theta = np.r_[start[:-2], np.log(start[-2:])]
+    result = minimize(_cure_negloglik, theta, args=(design, entry, exit_, event, firth), method="BFGS",
+                      options={"gtol": 1e-9, "maxiter": 5000})
+    return np.r_[result.x[:-2], np.exp(result.x[-2:])], -result.fun
+
+
+def _firth_by_augmentation(X, y, *, n_iter=500):
+    """Firth por aumento de datos (Heinze & Schemper 2002), independiente del Newton del modelo.
+
+    Cada fila se parte en (y, peso 1 + h/2) y (1 − y, peso h/2), se ajusta la logística por
+    MV ponderada y se repite con el h nuevo hasta el punto fijo.
+    """
+    beta = np.zeros(X.shape[1])
+    Xa, ya = np.vstack([X, X]), np.r_[y, 1 - y]
+    for _ in range(n_iter):
+        p = expit(X @ beta)
+        v = p * (1 - p)
+        h = v * np.einsum("ij,jk,ik->i", X, np.linalg.inv((X * v[:, None]).T @ X), X)
+        wa = np.r_[1 + h / 2, h / 2]
+        result = minimize(lambda b: -(wa * (ya * (Xa @ b) - np.logaddexp(0, Xa @ b))).sum(), beta,
+                          jac=lambda b: -(Xa.T @ (wa * (ya - expit(Xa @ b)))), method="BFGS",
+                          options={"gtol": 1e-12})
+        if np.max(np.abs(result.x - beta)) < 1e-11:
+            return result.x
+        beta = result.x
+    return beta
+
+
+def _cure_panel(seed: int = 5, n: int = 160) -> pd.DataFrame:
+    """Panel de hitos sintético (30 y 60 d) con dos features de flota y el desenlace del cure.
+
+    Cada feature es un corrimiento por mercado × mes más el rasgo latente del vehículo: el
+    normalizador tiene que sacar el corrimiento y dejar el rasgo. El riesgo sube con `a` y
+    baja con `b`. Los eventos caen después de 90 d (ninguno dentro del gap) y solo se
+    registran dentro de una ventana de 300 d.
+    """
+    rng = np.random.default_rng(seed)
+    markets = np.where(np.arange(n) % 2 == 0, "X", "Y")
+    latent = rng.normal(size=(n, 2))
+    susceptible = rng.random(n) < expit(-0.9 + 1.0 * latent[:, 0] - 0.8 * latent[:, 1])
+    sale = rng.uniform(-150.0, 250.0, n)
+    window = 300.0
+    t = 200.0 * ((90.0 / 200.0) ** 2 - np.log(rng.random(n))) ** 0.5  # Weibull(2, 200) | T > 90
+    registered = susceptible & (t >= -sale) & (t <= window - sale)
+    shift = {("X", "2025-09"): 10.0, ("X", "2025-10"): 12.0, ("Y", "2025-09"): 30.0, ("Y", "2025-10"): 33.0}
+    rows = []
+    for landmark in (30.0, 60.0):
+        entry = np.maximum(landmark + 30.0, -sale)
+        end = window - sale
+        in_window = registered & (t > entry)
+        for i in range(n):
+            row = {
+                "vehicle_id": f"V{i:03d}", "cut_odo": landmark * 40.0, "cut_date": pd.NaT,
+                "horizon_km": np.nan, "gap_km": np.nan,
+                "label": int(registered[i] and t[i] <= landmark + 30.0 + 240.0),
+                "time_to_event_km": np.nan, "event_observed": int(registered[i]),
+                "feat_landmark_day": landmark, "static_SalesCountry_cd": markets[i],
+                "aux_landmark_day": landmark, "aux_gap_days": 30.0, "aux_horizon_days": 240.0,
+                "aux_dss_entry": entry[i], "aux_dss_exit": t[i] if in_window[i] else end[i],
+                "aux_event_in_window": int(in_window[i]),
+            }
+            for month in ("2025-09", "2025-10"):
+                base = shift[(markets[i], month)]
+                row[f"feat_fm__a__{month}"] = base + 2.0 * latent[i, 0] + rng.normal(scale=0.5)
+                row[f"feat_fm__w_a__{month}"] = 100.0
+                row[f"feat_fm__b__{month}"] = base + 1.5 * latent[i, 1] + rng.normal(scale=0.5)
+                row[f"feat_fm__w_b__{month}"] = 20.0
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def firth_checks() -> None:
+    """9a · Firth y FLIC contra referencias que no comparten código con el modelo."""
+    # Tabla 2×2 con una celda vacía: la MV diverge, y Firth en un modelo saturado es exactamente
+    # el log-odds con ½ sumado a cada celda (Firth 1993). Filas colapsadas, con la cuenta como peso.
+    X = np.array([[1, 0], [1, 0], [1, 1], [1, 1]], dtype=float)
+    y = np.array([0, 1, 0, 1], dtype=float)
+    fit = fit_logistic(X, y, weights=np.array([12, 3, 9, 0], dtype=float), firth=True)
+    p0, p1 = 3.5 / 16, 0.5 / 10
+    expected = np.array([np.log(p0 / (1 - p0)), np.log(p1 / (1 - p1)) - np.log(p0 / (1 - p0))])
+    check(
+        "firth: en una tabla 2×2 con una celda vacía es sumar ½ a cada celda (Firth 1993)",
+        fit.converged and np.allclose(fit.coef, expected, atol=1e-8),
+        f"{np.round(fit.coef, 5)} vs. {np.round(expected, 5)}",
+    )
+
+    rng = np.random.default_rng(3)
+    X = np.column_stack([np.ones(120), rng.normal(size=(120, 3))])
+    y = (rng.random(120) < expit(X @ np.array([-1.0, 1.5, -1.0, 0.5]))).astype(float)
+    ours = fit_logistic(X, y, firth=True).coef
+    reference = _firth_by_augmentation(X, y)
+    check(
+        "firth: el Newton coincide con Firth por aumento de datos (Heinze & Schemper 2002)",
+        np.allclose(ours, reference, atol=1e-6),
+        f"max |Δ| = {np.max(np.abs(ours - reference)):.1e}",
+    )
+    slopes = X[:, 1:] @ ours[1:]
+    intercept = fit_logistic(X[:, :1], y, offset=slopes).coef[0]
+    check(
+        "FLIC: con las pendientes de Firth fijas, el intercepto de MV iguala la tasa observada",
+        np.isclose(expit(intercept + slopes).mean(), y.mean(), atol=1e-9)
+        and not np.isclose(expit(X @ ours).mean(), y.mean(), atol=1e-4),
+        f"π̄ {expit(X @ ours).mean():.4f} → {expit(intercept + slopes).mean():.4f} (tasa {y.mean():.4f})",
+    )
+
+
+def cure_em_checks() -> None:
+    """9b · El EM sobre datos simulados con ventana: monótono, en el máximo y recuperando la verdad."""
+    design, entry, exit_, event = _simulate_cure(**CURE_SIM)
+    risk = exit_ > entry
+    d, e, x, ev = design[risk], entry[risk], exit_[risk], event[risk]
+    truth = np.r_[CURE_SIM["beta"], CURE_SIM["shape"], CURE_SIM["scale"]]
+
+    fit = fit_cure_em(d, e, x, ev)
+    estimate = np.r_[fit.coef, fit.latency.shape, fit.latency.scale]
+    check(
+        "cure EM: la verosimilitud no baja en ninguna iteración y converge",
+        fit.converged and np.diff(fit.history).min() >= 0,
+        f"{fit.n_iter} iteraciones, {int(risk.sum())} en riesgo, {int(ev.sum())} eventos",
+    )
+    direct, direct_value = _direct_max(d, e, x, ev, firth=False, start=truth)
+    check(
+        "cure EM: llega al máximo de la verosimilitud (BFGS sobre la misma ℓ, escrita aparte)",
+        np.allclose(estimate, direct, rtol=1e-3) and fit.loglik >= direct_value - 1e-5,
+        f"ℓ {fit.loglik:.6f} vs. {direct_value:.6f}",
+    )
+    check(
+        "cure EM: recupera β, k y λ de la simulación (3 desvíos del piloto)",
+        bool(np.all(np.abs(estimate - truth) <= np.asarray(CURE_SIM_TOLERANCE))),
+        f"{np.round(estimate, 2)} vs. {truth}",
+    )
+
+    penalized = fit_cure_em(d, e, x, ev, firth=True)
+    direct_firth, direct_firth_value = _direct_max(d, e, x, ev, firth=True, start=truth)
+    check(
+        "cure EM + Firth: el objetivo penalizado no baja y llega a su máximo",
+        penalized.converged and np.diff(penalized.history).min() >= 0
+        and np.allclose(np.r_[penalized.coef, penalized.latency.shape, penalized.latency.scale],
+                        direct_firth, rtol=1e-3)
+        and penalized.history[-1] >= direct_firth_value - 1e-5,
+        f"{penalized.history[-1]:.6f} vs. {direct_firth_value:.6f}",
+    )
+    flic = fit_cure_em(d, e, x, ev, firth=True, flic=True)
+    eta = d @ flic.coef
+    weights = susceptible_weights(eta, flic.latency, e, x, ev)
+    check(
+        "cure EM + FLIC: las pendientes son las de Firth y el intercepto iguala Σw con Σπ",
+        np.allclose(flic.coef[1:], penalized.coef[1:]) and not np.isclose(flic.coef[0], penalized.coef[0])
+        and np.isclose(weights.sum(), expit(eta).sum(), rtol=1e-4)
+        and np.diff(flic.flic_history).min() >= 0 and flic.loglik >= penalized.loglik,
+        f"intercepto {penalized.coef[0]:.4f} → {flic.coef[0]:.4f}",
+    )
+    check(
+        "cure EM: una fila sin exposición (salida ≤ entrada) no entra a la verosimilitud",
+        (~risk).any() and _raises(lambda: fit_cure_em(design, entry, exit_, event), ValueError),
+        f"{int((~risk).sum())} filas fuera de riesgo en la simulación",
+    )
+
+
+def cure_model_checks() -> None:
+    """9c · Target `cure_window`, modelo `cure_mixture` y su paso por el loop de CV."""
+    panel = _cure_panel()
+    spec = build_target("cure_window", panel, np.ones(len(panel), dtype=bool))
+    y = spec.y
+    check(
+        "cure_window: `y` sale del panel, en riesgo = salida > entrada, score en (L+G, L+G+H]",
+        np.array_equal(y["at_risk"], panel["aux_dss_exit"].to_numpy() > panel["aux_dss_entry"].to_numpy())
+        and np.array_equal(y["healthy"], panel["event_observed"].to_numpy() == 0)
+        and np.allclose(y["score_start"], panel["aux_landmark_day"] + 30.0)
+        and np.allclose(y["score_end"], panel["aux_landmark_day"] + 270.0)
+        and (~y["at_risk"]).any() and y["event"].sum() > 0,
+        f"{spec.info['n_at_risk']} de {spec.info['n_rows']} filas en riesgo, {spec.info['n_events']} eventos",
+    )
+    broken = panel.copy()
+    first_event = int(np.flatnonzero(panel["aux_event_in_window"].to_numpy() == 1)[0])
+    broken.loc[first_event, "aux_dss_exit"] = broken.loc[first_event, "aux_dss_entry"]
+    check(
+        "cure_window: un evento sin exposición en la ventana es un panel roto y falla",
+        _raises(lambda: build_target("cure_window", broken, np.ones(len(broken), dtype=bool)), ValueError),
+    )
+
+    X = panel[select_feature_columns(panel)]
+    firth = CureMixtureModel(incidence="firth").fit(X, y)
+    parts = firth.predict_components(X)
+    landmarks = X["feat_landmark_day"].to_numpy()
+    constant_horizon = all(np.unique(parts["p_horizon"][landmarks == value]).size == 1
+                           for value in np.unique(landmarks))
+    check(
+        "cure_mixture: score = π·(1 − S(L+G+H)/S(L+G)), con el segundo factor fijo en cada hito",
+        np.allclose(parts["score"], parts["pi_incidence"] * parts["p_horizon"]) and constant_horizon
+        and np.allclose(firth.predict_proba(X)[:, 1], parts["score"]),
+    )
+    coef = firth.summary_
+    check(
+        "cure_mixture: Firth recupera el signo de las dos covariables en los dos hitos",
+        all(c["coef"]["fleet_a"] > 0 and c["coef"]["fleet_b"] < 0 for c in coef.values()),
+        "; ".join(f"L={k}: a {c['coef']['fleet_a']:+.2f}, b {c['coef']['fleet_b']:+.2f}" for k, c in coef.items()),
+    )
+    unit = CureMixtureModel(incidence="unit_weight", unit_weight_signs={"fleet_a": 1, "fleet_b": -1}).fit(X, y)
+    unit_parts = unit.predict_components(X)
+    standardized = [unit._standardized(value, unit.normalizer_.transform(X).loc[landmarks == value, unit.covariates_])
+                    for value in np.unique(landmarks)]
+    by_hand = np.concatenate([z[:, 0] - z[:, 1] for z in standardized])
+    order = np.concatenate([np.flatnonzero(landmarks == value) for value in np.unique(landmarks)])
+    monotone = all(
+        np.array_equal(np.argsort(unit_parts[UNIT_WEIGHT_SCORE][landmarks == value], kind="stable"),
+                       np.argsort(unit_parts["score"][landmarks == value], kind="stable"))
+        for value in np.unique(landmarks))
+    check(
+        "cure_mixture P0: `unit_weight_score` = Σ signo·z por hito, y el cure es monótono en él",
+        np.allclose(unit_parts[UNIT_WEIGHT_SCORE][order], by_hand) and monotone
+        and all(c["coef"][UNIT_WEIGHT_SCORE] > 0 for c in unit.summary_.values()),
+    )
+    check(
+        "cure_mixture P0: un signo que falta o que no es ±1 falla",
+        _raises(lambda: CureMixtureModel(incidence="unit_weight", unit_weight_signs={"fleet_a": 1}).fit(X, y),
+                ValueError)
+        and _raises(lambda: CureMixtureModel(incidence="unit_weight",
+                                             unit_weight_signs={"fleet_a": 1, "fleet_b": -0.5}).fit(X, y),
+                    ValueError),
+    )
+
+    outside = ~y["at_risk"]
+    moved = y.copy()
+    moved["exit"][outside] = moved["entry"][outside] - 50.0
+    check(
+        "cure_mixture: el desenlace de una fila fuera de riesgo no mueve el ajuste",
+        outside.any() and np.array_equal(CureMixtureModel(incidence="firth").fit(X, moved).predict_proba(X),
+                                         firth.predict_proba(X)),
+    )
+    check(
+        "cure_mixture: con `label` como `y` falla (va de a pares con `target: cure_window`)",
+        _raises(lambda: CureMixtureModel().fit(X, panel["label"].to_numpy()), TypeError),
+    )
+    check(
+        "cure_mixture: `incidence: tabpfn` (P2) no corre hasta que P1 le gane a P0",
+        _raises(lambda: CureMixtureModel(incidence="tabpfn").fit(X, y), NotImplementedError),
+    )
+    first = landmarks == 30.0
+    pooled = CureMixtureModel(incidence="firth", per_landmark=False).fit(X.loc[first], y[first])
+    split = CureMixtureModel(incidence="firth").fit(X.loc[first], y[first])
+    check(
+        "cure_mixture: con un solo hito, `per_landmark: false` es el mismo ajuste",
+        np.allclose(pooled.predict_proba(X.loc[first]), split.predict_proba(X.loc[first])),
+    )
+
+    splits = make_splits(panel, n_splits=3, seed=5, min_valid_positives=1)
+    cv_args = dict(model_name="cure_mixture", model_params={"incidence": "firth"}, target={"name": "cure_window"})
+    predictions, _ = run_cv(panel, splits, preprocessing="none", **cv_args)
+    check(
+        "cure por run_cv: `preprocessing: none` + `target: cure_window` trae score, π y p_horizon",
+        {"pi_incidence", "p_horizon"} <= set(predictions.columns)
+        and np.allclose(predictions["score"], predictions["pi_incidence"] * predictions["p_horizon"])
+        and predictions["score"].between(0, 1).all(),
+    )
+    check(
+        "cure por run_cv: con `preprocessing: standard` falla (necesita el panel crudo)",
+        _raises(lambda: run_cv(panel, splits, preprocessing="standard", **cv_args), TypeError),
     )
 
 
@@ -942,6 +1259,9 @@ def main() -> int:
 
     landmark_panel_checks()
     fleet_normalizer_checks()
+    firth_checks()
+    cure_em_checks()
+    cure_model_checks()
 
     failed = [name for name, ok, _ in _checks if not ok]
     print()

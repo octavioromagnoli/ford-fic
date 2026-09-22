@@ -520,3 +520,134 @@ def report_ordinal_predictions(
         }
     )
     return report
+
+
+# --------------------------------------------------------------------------- #
+# Cure model por hito post-venta
+# --------------------------------------------------------------------------- #
+#: Campos del `y` estructurado que consume `src/models/cure.py` (y el normalizador de
+#: flota, que usa `healthy` y `group`).
+CURE_FIELDS = (
+    "entry", "exit", "event", "at_risk", "healthy", "landmark", "score_start", "score_end", "group",
+)
+
+
+@register_target("cure_window")
+def build_cure_window_target(
+    panel: pd.DataFrame,
+    train_mask: np.ndarray,
+    *,
+    entry_column: str = "aux_dss_entry",
+    exit_column: str = "aux_dss_exit",
+    event_column: str = "aux_event_in_window",
+    landmark_column: str = "aux_landmark_day",
+    gap_column: str = "aux_gap_days",
+    horizon_column: str = "aux_horizon_days",
+    group_column: str = GROUP_COLUMN,
+    **_: Any,
+) -> TargetSpec:
+    """La exposición en la ventana del registro, por fila de train del panel de hitos.
+
+    El reloj es días desde la venta. Para cada fila (vehículo, hito L):
+
+    * `entry` y `exit`: el tramo `(e, x]` en que el registro podía anotar el evento,
+      `e = max(L + G, inicio de la ventana)` y `x = min(evento, fin de la ventana)`. El
+      gap de blanking (regla 1) ya está en `e`: el riesgo arranca en L + G;
+    * `event`: δ, evento en `(e, x]`;
+    * `at_risk`: `x > e`. Una fila fuera de riesgo **no informa la verosimilitud**, pero
+      sigue en el `y` porque entra a la referencia de flota y se puntúa;
+    * `healthy`: `event_observed == 0`, lo que usa la referencia de flota;
+    * `landmark`, `score_start` = L + G y `score_end` = L + G + H: la ventana del score,
+      que es la del reloj post-venta **sin** la del registro (lo que valdría en
+      producción);
+    * `group`: el vehículo.
+
+    Todo sale de columnas que `scripts/build_landmark_panel.py` ya dejó en el panel: acá
+    no se recalcula nada, se valida que sea coherente.
+    """
+    mask = np.asarray(train_mask, dtype=bool)
+    train = panel.loc[mask]
+    columns = (entry_column, exit_column, event_column, landmark_column, gap_column, horizon_column,
+               group_column, "event_observed")
+    missing = [c for c in columns if c not in train]
+    if missing:
+        raise KeyError(
+            f"El panel no tiene {missing}: el target `cure_window` es del panel de hitos "
+            "(`python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps.yaml`)."
+        )
+    numeric = train[[entry_column, exit_column, landmark_column, gap_column, horizon_column]].astype(float)
+    if numeric.isna().any().any():
+        raise ValueError(f"Hay filas de train con NaN en {numeric.columns[numeric.isna().any()].tolist()}")
+
+    entry = numeric[entry_column].to_numpy()
+    exit_ = numeric[exit_column].to_numpy()
+    event = train[event_column].to_numpy(dtype=int)
+    healthy = train["event_observed"].to_numpy(dtype=int) == 0
+    at_risk = exit_ > entry
+    if (event.astype(bool) & ~at_risk).any():
+        raise ValueError("Hay filas con evento en la ventana y salida ≤ entrada: el panel está mal armado")
+    if (event.astype(bool) & healthy).any():
+        raise ValueError("Hay filas con evento en la ventana y `event_observed == 0`")
+    landmark = numeric[landmark_column].to_numpy()
+    score_start = landmark + numeric[gap_column].to_numpy()
+    score_end = score_start + numeric[horizon_column].to_numpy()
+
+    groups = train[group_column].astype(str).to_numpy()
+    width = max(1, max((len(g) for g in groups), default=1))
+    y = np.empty(len(train), dtype=[
+        ("entry", "f8"), ("exit", "f8"), ("event", "i1"), ("at_risk", "?"), ("healthy", "?"),
+        ("landmark", "f8"), ("score_start", "f8"), ("score_end", "f8"), ("group", f"U{width}"),
+    ])
+    y["entry"], y["exit"], y["event"], y["at_risk"], y["healthy"] = entry, exit_, event, at_risk, healthy
+    y["landmark"], y["score_start"], y["score_end"], y["group"] = landmark, score_start, score_end, groups
+
+    by_landmark = {
+        f"{value:g}": {
+            "n_rows": int((landmark == value).sum()),
+            "n_at_risk": int((at_risk & (landmark == value)).sum()),
+            "n_events": int(event[landmark == value].sum()),
+        }
+        for value in np.unique(landmark)
+    }
+    info = {
+        "n_rows": int(len(train)),
+        "n_at_risk": int(at_risk.sum()),
+        "n_events": int(event.sum()),
+        "n_healthy": int(healthy.sum()),
+        "by_landmark": by_landmark,
+    }
+    logger.debug("target cure_window | %s", info)
+    return TargetSpec(
+        y=y,
+        name="cure_window",
+        params={"entry_column": entry_column, "exit_column": exit_column, "event_column": event_column,
+                "landmark_column": landmark_column, "gap_column": gap_column,
+                "horizon_column": horizon_column, "group_column": group_column},
+        info=info,
+    )
+
+
+def _final_step(estimator: Any, features: pd.DataFrame) -> tuple[Any, Any]:
+    """El último paso de un `Pipeline` y las features ya pasadas por los anteriores."""
+    from sklearn.pipeline import Pipeline
+
+    if isinstance(estimator, Pipeline):
+        if len(estimator.steps) > 1:
+            features = estimator[:-1].transform(features)
+        return estimator[-1], features
+    return estimator, features
+
+
+@register_decoder("cure_window")
+def decode_cure_predictions(estimator: Any, features: pd.DataFrame, **_: Any) -> TargetPredictions:
+    """`score` = π_L(x)·[1 − S_u(L+G+H)/S_u(L+G)], más `pi_incidence` y `p_horizon`.
+
+    Con incidencia de pesos unitarios (P0) viaja además `unit_weight_score`, el puntaje
+    s con el que el preregistro mide D1 y D2 de P0.
+    """
+    model, transformed = _final_step(estimator, features)
+    if not hasattr(model, "predict_components"):
+        raise TypeError("El target `cure_window` va con `model: cure_mixture` (src/models/cure.py)")
+    parts = dict(model.predict_components(transformed))
+    score = parts.pop("score")
+    return TargetPredictions(score=score, extras=parts)

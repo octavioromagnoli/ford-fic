@@ -145,6 +145,21 @@ def _build_gpboost_survival(params: dict[str, Any]) -> BaseEstimator:
     return DiscreteSurvivalStacker(**params)
 
 
+@register("cure_mixture")
+def _build_cure_mixture(params: dict[str, Any]) -> BaseEstimator:
+    """Mixture cure model por hito post-venta: P0 (`incidence: unit_weight`) y P1 (`firth`).
+
+    Va de a pares con `target: {name: cure_window}` y `preprocessing: none`: trae adentro
+    la normalización contra la flota, la imputación y la escala por hito, y las ajusta
+    con el train del fold. Detalle y verosimilitud en `src/models/cure.py`; qué corre y
+    qué decide, en `docs/memoria/f3-preregistro-cure.md`.
+    """
+    from src.models.cure import CureMixtureModel
+
+    params.setdefault("random_state", 42)
+    return CureMixtureModel(**params)
+
+
 @register("lgbm_ordinal")
 def _build_lgbm_ordinal(params: dict[str, Any]) -> BaseEstimator:
     """LightGBM multiclase chico; `targets.py` acumula clases para recuperar P(evento en H)."""
