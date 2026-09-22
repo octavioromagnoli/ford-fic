@@ -131,6 +131,13 @@ python scripts/audit_cure.py --config configs/exp_cure_p1_firth.yaml            
 python scripts/check_setup.py                                                          # 129 chequeos
 ```
 
-El panel y los folds están en wandb como Artifact `panel-landmark-ps`. Las corridas están en el
-grupo `f3-cure`; las auditorías, en `audit_cure.json` y en las corridas `audit-*`. Sin red:
+En wandb (`oromagnoli-/ford-fic`, grupo `f3-cure`), de donde sale cada número de este archivo:
+- P0: [f3-cure-p0-unitweight](https://wandb.ai/oromagnoli-/ford-fic/runs/q5ah9y98) y
+  [su auditoría](https://wandb.ai/oromagnoli-/ford-fic/runs/0pcdkdqj);
+- P1: [f3-cure-p1-firth](https://wandb.ai/oromagnoli-/ford-fic/runs/176fj234) y
+  [su auditoría](https://wandb.ai/oromagnoli-/ford-fic/runs/s7nbmjoi), con el veredicto contra P0;
+- el panel y los folds: Artifact `panel-landmark-ps`, publicado desde
+  [log-panel-landmark-ps](https://wandb.ai/oromagnoli-/ford-fic/runs/rwveka4y).
+
+Las auditorías también quedan en `experiments/<corrida>/audit_cure.json`. Sin red:
 `WANDB_MODE=disabled`.
