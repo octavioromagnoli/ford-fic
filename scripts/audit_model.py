@@ -144,9 +144,19 @@ def permute_within_vehicle(panel: pd.DataFrame, *, seed: int = 0) -> pd.DataFram
 
 
 def promote_aux(panel: pd.DataFrame, columns: list[str]) -> tuple[pd.DataFrame, list[str]]:
-    """Renombra `aux_x` a `feat_aux_x` para que `cv.py` la seleccione por prefijo."""
+    """Renombra `aux_x` a `feat_aux_x` para que `cv.py` la seleccione por prefijo.
+
+    Las promovidas van **al final** del frame. En los paneles tabulares todas las
+    `feat_`/`static_` ya están antes de las `aux_`, así que el orden de columnas que ve
+    el modelo es el mismo que dejándolas en su lugar. En el panel secuencial no: ahí las
+    `aux_` están antes de las `feat_seq_*`, y los modelos secuenciales toman las primeras
+    `T × C` numéricas como la secuencia (`src/models/cnn_lstm.py::_split`). Dejarlas en
+    su lugar corría la secuencia en silencio; al final entran por la rama estática.
+    """
     present = [c for c in columns if c in panel.columns]
-    return panel.rename(columns={c: f"feat_{c}" for c in present}), present
+    promoted = panel.rename(columns={c: f"feat_{c}" for c in present})
+    moved = [f"feat_{c}" for c in panel.columns if c in present]
+    return promoted[[c for c in promoted.columns if c not in moved] + moved], present
 
 
 def evaluate(

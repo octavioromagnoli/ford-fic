@@ -33,6 +33,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from scripts.build_eda_cache import resolved_eda_config  # noqa: E402
+from scripts.audit_model import CALENDAR_AUX, promote_aux  # noqa: E402
 from scripts.train import vehicle_block  # noqa: E402
 from src.config import load_config, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
@@ -51,7 +52,7 @@ from src.eval.metrics import (  # noqa: E402
 )
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
-from src.training.cv import run_cv, select_feature_columns  # noqa: E402
+from src.training.cv import build_preprocessor, run_cv, select_feature_columns  # noqa: E402
 from src.training.targets import build_ordinal_target, build_target  # noqa: E402
 
 CONTRACT_COLUMNS = {
@@ -601,6 +602,35 @@ def main() -> int:
         "(a'): un score constante por vehículo no pierde nada (no sabía el cuándo)",
         abs(when_contribution(flat_when)["delta"]) < 1e-12,
         f"delta={when_contribution(flat_when)['delta']:+.2e}",
+    )
+
+    # Auditoría (b): promover las `aux_` de calendario no puede tocar el orden de lo que
+    # ya entraba al modelo. En el panel secuencial las `aux_` van antes de `feat_seq_*`, y
+    # los modelos secuenciales leen las primeras T × C numéricas como la secuencia: si las
+    # promovidas quedan en su lugar, la secuencia se corre sin que nada falle.
+    seq_layout = pd.DataFrame(
+        {
+            "vehicle_id": ["a", "b", "c", "d"],
+            "static_SalesCountry_cd": ["X", "Y", "X", "Y"],
+            **{c: [1.0, 2.0, 3.0, 4.0] for c in CALENDAR_AUX},
+            **{f"feat_seq_t{t:03d}_c00_x": [0.0, 1.0, 0.0, 1.0] for t in range(3)},
+        }
+    )
+    promoted_seq, _ = promote_aux(seq_layout, CALENDAR_AUX)
+    X_seq = promoted_seq[select_feature_columns(promoted_seq)]
+    seq_names = list(build_preprocessor(X_seq).fit(X_seq).get_feature_names_out())
+    check(
+        "audit (b): en el panel secuencial la secuencia sigue primero tras promover las aux_",
+        all(n.startswith("feat_seq_") for n in seq_names[:3]),
+        f"{seq_names}",
+    )
+    promoted_tab, _ = promote_aux(panel.assign(**{c: 0.0 for c in CALENDAR_AUX}), CALENDAR_AUX)
+    renamed_tab = panel.assign(**{c: 0.0 for c in CALENDAR_AUX}).rename(
+        columns={c: f"feat_{c}" for c in CALENDAR_AUX}
+    )
+    check(
+        "audit (b): en un panel tabular promover no cambia el orden de las columnas del modelo",
+        select_feature_columns(promoted_tab) == select_feature_columns(renamed_tab),
     )
 
     failed = [name for name, ok, _ in _checks if not ok]
