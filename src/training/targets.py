@@ -397,6 +397,88 @@ def build_window_survival_target(
 
 
 # --------------------------------------------------------------------------- #
+# Supervivencia en km desde c + G, con el conjunto en riesgo de la ventana (F6, K2)
+# --------------------------------------------------------------------------- #
+@register_target("window_km_survival")
+def build_window_km_survival_target(
+    panel: pd.DataFrame,
+    train_mask: np.ndarray,
+    *,
+    entry_column: str = "aux_risk_entry_km",
+    exit_column: str = "aux_risk_exit_km",
+    event_column: str = "aux_risk_event_km",
+    group_column: str = GROUP_COLUMN,
+    **_: Any,
+) -> TargetSpec:
+    """El `y` de `discrete_survival` con entrada tardía: el tramo en riesgo de la ventana, en km.
+
+    Es K2 de `docs/memoria/f6-preregistro-deteccion-vehiculo.md`. Las mismas filas y el mismo
+    eje que el finalista (km desde `c + G`, así que el gap sigue fuera de la vista); cambia
+    qué km cuentan como supervivencia verificada:
+
+    * `entry_km`: `max(0, odómetro al inicio de la ventana − (c + G))`. Antes del 01-09-2025
+      el registro no anotaba eventos.
+    * `duration_km`: la salida. Un fallado sale en su evento; un sano, en
+      `min(último odómetro, odómetro al fin de la ventana) − (c + G)`.
+    * `event`: el evento del vehículo cae dentro de la ventana y la fila está en riesgo.
+    * `at_risk`: salida ≥ 0 y salida > entrada (≥ si hay evento). Una fila fuera de riesgo
+      no informa el ajuste, pero sigue en el `y` para quedar alineada.
+
+    Las columnas las deja `scripts/build_km_window_panel.py`; acá se valida que sean
+    coherentes, no se recalculan. `DiscreteSurvivalStacker` apila solo los bins desde el que
+    contiene la entrada.
+    """
+    mask = np.asarray(train_mask, dtype=bool)
+    train = panel.loc[mask]
+    columns = (entry_column, exit_column, event_column, group_column, "event_observed")
+    missing = [c for c in columns if c not in train]
+    if missing:
+        raise KeyError(
+            f"El panel no tiene {missing}: el target `window_km_survival` es del panel con la ventana en km "
+            "(`python scripts/build_km_window_panel.py --config configs/data/panel_survival_kmw.yaml`)."
+        )
+    entry = train[entry_column].to_numpy(dtype=float)
+    exit_ = train[exit_column].to_numpy(dtype=float)
+    event = train[event_column].to_numpy(dtype=int).astype(bool)
+    if not np.isfinite(entry).all():
+        raise ValueError("Hay entradas sin valor: el panel tiene que dar una entrada (0 si arranca adentro) por fila")
+    if (entry < 0).any():
+        raise ValueError("Hay entradas negativas: el tramo en riesgo empieza en `c + G`, no antes")
+    known = np.isfinite(exit_)
+    at_risk = known & (exit_ >= 0) & ((exit_ > entry) | (event & (exit_ >= entry)))
+    if (event & ~at_risk).any():
+        raise ValueError("Hay filas con evento y sin tramo en riesgo: el panel está mal armado")
+    if (event & (train["event_observed"].to_numpy(dtype=int) == 0)).any():
+        raise ValueError("Hay filas con evento en la ventana y `event_observed == 0`")
+
+    groups = train[group_column].astype(str).to_numpy()
+    width = max(1, max((len(g) for g in groups), default=1))
+    y = np.empty(len(train), dtype=[
+        ("duration_km", "f8"), ("event", "i1"), ("at_risk", "?"), ("group", f"U{width}"), ("entry_km", "f8"),
+    ])
+    y["duration_km"] = np.where(at_risk, exit_, 0.0)
+    y["event"] = np.where(at_risk, event, 0)
+    y["at_risk"] = at_risk
+    y["group"] = groups
+    y["entry_km"] = np.where(at_risk, entry, 0.0)
+    info = {
+        "n_rows": int(len(train)),
+        "n_at_risk": int(at_risk.sum()),
+        "n_events": int(y["event"].sum()),
+        "n_late_entry": int((at_risk & (entry > 0)).sum()),
+        "exposure_km_total": float(np.clip(exit_ - entry, 0, None)[at_risk].sum()),
+    }
+    logger.debug("target window_km_survival | %s", info)
+    return TargetSpec(
+        y=y,
+        name="window_km_survival",
+        params={"entry_column": entry_column, "exit_column": exit_column,
+                "event_column": event_column, "group_column": group_column},
+        info=info,
+    )
+
+
+# --------------------------------------------------------------------------- #
 # La etiqueta de siempre, con el vehículo al lado
 # --------------------------------------------------------------------------- #
 @register_target("grouped_label")

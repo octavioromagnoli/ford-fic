@@ -1129,6 +1129,140 @@ def _window_trips() -> pd.DataFrame:
     ], ignore_index=True)
 
 
+def km_window_detection_checks() -> None:
+    """15 · F6: la ventana del registro en km (K2), la media acumulada causal (K1/K3) y el nulo de detección."""
+    from scripts.audit_detection_null import fast_detection
+    from scripts.build_km_window_panel import (ENTRY_KM, EVENT_KM, EXIT_KM, km_risk_columns,
+                                               window_odometers)
+    from scripts.smooth_scores import causal_cummean
+    from src.data.window_risk import RegistryWindow
+    from src.models.survival_stacking import DiscreteSurvivalStacker
+
+    trips = _window_trips()
+    window = RegistryWindow.from_config({"start": "2025-09-01", "end": "2026-03-11"})
+
+    # -- el tramo en riesgo en km ----------------------------------------------------------------
+    # F: 50 km/día desde julio (3.150 km al 01-09, evento el 10-12 en 8.150 km). S: deja de andar
+    # en 6.000 km. T: arranca en febrero de 2026 (1.950 km al fin de la ventana).
+    odometers = window_odometers(pd.Index(["F", "S", "T"]), trips, window)
+    panel = pd.DataFrame({
+        "vehicle_id": ["F", "F", "S", "T", "T"],
+        "cut_odo": [1000.0, 5000.0, 2000.0, 1000.0, 2500.0],
+        "gap_km": 500.0,
+        "event_observed": [1, 1, 0, 0, 0],
+        "time_to_event_km": [7150.0, 3150.0, np.nan, np.nan, np.nan],
+        "aux_km_observed_after_cut": [7150.0, 3150.0, 4000.0, 9000.0, 7500.0],
+    })
+    in_window = pd.Series({"F": True, "S": False, "T": False})
+    risk = km_risk_columns(panel, odometers, in_window)
+    check(
+        "ventana en km: entra en el odómetro del 01-09 (0 si arranca después); el fallado sale en su "
+        "evento y el sano en min(último odómetro, odómetro del 11-03)",
+        np.allclose(risk[ENTRY_KM], [1650.0, 0.0, 0.0, 0.0, 0.0])
+        and np.allclose(risk[EXIT_KM], [6650.0, 2650.0, 3500.0, 450.0, -1050.0])
+        and risk[EVENT_KM].tolist() == [1, 1, 0, 0, 0],
+        f"entrada {risk[ENTRY_KM].tolist()} · salida {risk[EXIT_KM].round(1).tolist()}",
+    )
+
+    # -- el target -----------------------------------------------------------------------------
+    full = pd.concat([panel, risk], axis=1)
+    spec = build_target("window_km_survival", full, np.ones(len(full), dtype=bool))
+    broken = full.assign(**{EXIT_KM: full[ENTRY_KM] - 1.0})
+    check(
+        "target: `window_km_survival` trae la entrada, deja fuera de riesgo el corte posterior a la "
+        "ventana, y un evento sin tramo falla",
+        spec.y["entry_km"].tolist() == [1650.0, 0.0, 0.0, 0.0, 0.0]
+        and spec.y["at_risk"].tolist() == [True, True, True, True, False]
+        and spec.y["event"].tolist() == [1, 1, 0, 0, 0]
+        and _raises(lambda: build_target("window_km_survival", broken, np.ones(len(full), dtype=bool)), ValueError),
+    )
+
+    # -- el apilado con entrada tardía ---------------------------------------------------------
+    model = DiscreteSurvivalStacker(horizon_km=1000, bin_km=500, max_horizon_km=3000)
+    model._train_edges_ = model._bin_edges(3000)
+    X = np.arange(5, dtype=float)[:, None]
+    duration = np.array([1200.0, 2600.0, 700.0, 4000.0, 5000.0])
+    event = np.array([1, 0, 1, 1, 1])
+    at_risk = np.ones(5, dtype=bool)
+    stacked, hazard, _, rows = model._stack(X, duration, event, at_risk, None,
+                                            np.array([0.0, 1100.0, 700.0, 3200.0, 0.0]))
+    per_row = pd.Series(rows).value_counts().sort_index().to_dict()
+    bins = stacked[:, -1] / 500.0
+    check(
+        "stacker: con entrada tardía apila desde el bin de la entrada; el evento cae en su bin, el que "
+        "entra después del final no genera filas y el que pasa el final se censura",
+        per_row == {0: 3, 1: 4, 2: 1, 4: 6} and bins[rows == 1].min() == 2
+        and sorted(zip(rows[hazard == 1].tolist(), bins[hazard == 1].tolist())) == [(0, 2.0), (2, 1.0)],
+        f"filas por corte {per_row}",
+    )
+    plain = model._stack(X, duration, event, at_risk, None)
+    zero = model._stack(X, duration, event, at_risk, None, np.zeros(5))
+    check(
+        "stacker: sin `entry_km` el apilado es el de siempre (entrada en 0)",
+        np.array_equal(plain[0], zero[0]) and np.array_equal(plain[1], zero[1]),
+    )
+
+    # -- por el loop de CV ----------------------------------------------------------------------
+    dummy = build_dummy_panel(SMALL_PANEL)
+    observed = dummy["event_observed"].to_numpy(int) == 1
+    tte = dummy["time_to_event_km"].to_numpy(float) - dummy["gap_km"].to_numpy(float)
+    dummy[ENTRY_KM] = np.where(np.arange(len(dummy)) % 4 == 0, 400.0, 0.0)
+    dummy[EXIT_KM] = np.where(observed, tte, 5000.0)
+    dummy[EVENT_KM] = (observed & (tte >= dummy[ENTRY_KM])).astype(int)
+    dummy[EXIT_KM] = np.where(observed & (tte < dummy[ENTRY_KM]), dummy[ENTRY_KM] - 1.0, dummy[EXIT_KM])
+    splits = make_splits(dummy, n_splits=3, seed=1)
+    predictions, _ = run_cv(dummy, splits, model_name="survival_stacking",
+                            model_params={"horizon_km": 3000, "bin_km": 500, "max_horizon_km": 6000},
+                            target={"name": "window_km_survival", "params": {}})
+    check(
+        "ventana en km: `window_km_survival` + `survival_stacking` pasan por el loop de CV con scores en [0, 1]",
+        bool(predictions["score"].between(0, 1).all()) and predictions["score"].nunique() > 10,
+    )
+
+    # -- la media acumulada causal ---------------------------------------------------------------
+    preds = pd.DataFrame({
+        "vehicle_id": ["A", "B", "A", "A", "B"], "cut_odo": [3.0, 1.0, 1.0, 2.0, 2.0],
+        "score_r0": [0.9, 0.2, 0.3, 0.6, 0.4], "fold_r0": [0, 1, 0, 0, 1],
+        "score_r1": [0.1, 0.5, 0.7, 0.4, 0.1], "fold_r1": [2, 0, 2, 2, 0],
+    })
+    smoothed = causal_cummean(preds).set_index(["vehicle_id", "cut_odo"])
+    later = causal_cummean(preds.assign(score_r0=np.where(preds["cut_odo"].eq(3.0), 0.0, preds["score_r0"])))
+    later = later.set_index(["vehicle_id", "cut_odo"])
+    check(
+        "media acumulada: promedio de las filas del vehículo hasta la propia, ordenadas por odómetro; "
+        "cambiar un corte posterior no toca los anteriores",
+        np.allclose(smoothed.loc["A", "score_r0"], [0.3, 0.45, 0.6])
+        and np.allclose(smoothed.loc["B", "score_r1"], [0.5, 0.3])
+        and np.allclose(smoothed["score"], (smoothed["score_r0"] + smoothed["score_r1"]) / 2)
+        and np.allclose(later.loc["A", "score_r0"].iloc[:2], smoothed.loc["A", "score_r0"].iloc[:2]),
+        f"A r0 {smoothed.loc['A', 'score_r0'].round(3).tolist()}",
+    )
+    check(
+        "media acumulada: un vehículo con filas en dos folds de la misma repetición falla",
+        _raises(lambda: causal_cummean(preds.assign(fold_r0=[0, 1, 1, 0, 1])), ValueError),
+    )
+
+    # -- la detección vectorizada del nulo --------------------------------------------------------
+    rng = np.random.default_rng(5)
+    sizes = rng.integers(1, 12, 80)
+    frame = pd.DataFrame({
+        "vehicle_id": np.repeat([f"V{i:02d}" for i in range(80)], sizes),
+        "cut_odo": np.concatenate([np.arange(s) * 500.0 for s in sizes]),
+        "event_observed": np.repeat((np.arange(80) % 3 == 0).astype(int), sizes),
+    })
+    frame["time_to_event_km"] = np.where(frame["event_observed"].eq(1), 10000.0 - frame["cut_odo"], np.nan)
+    frame["score"] = rng.random(len(frame)) + 0.3 * frame["event_observed"]
+    frame = frame.sort_values(["vehicle_id", "cut_odo"]).reset_index(drop=True)
+    eval_cfg = {"k_consecutive": 2, "n_thresholds": 50, "max_false_alarms_per_1000": 100}
+    fast, _ = fast_detection(frame, frame["score"].to_numpy(), eval_cfg)
+    point = operating_point(lead_time_curve(frame, n_thresholds=50, k_consecutive=2), max_false_alarms_per_1000=100)
+    check(
+        "nulo de detección: la versión vectorizada reproduce `operating_point` de la curva de anticipación",
+        point is not None and abs(fast - float(point["detection_rate"])) < 1e-12,
+        f"{fast:.4f} vs {float(point['detection_rate']) if point else float('nan'):.4f}",
+    )
+
+
 def window_survival_checks() -> None:
     """14 · El reloj en días con la ventana del registro (F5 §3.3): panel, target, PEM y evaluación."""
     import json
@@ -2046,6 +2180,7 @@ def main() -> int:
     bagging_ensemble_checks()
     external_incidence_checks()
     window_survival_checks()
+    km_window_detection_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()

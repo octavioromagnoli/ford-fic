@@ -1,0 +1,66 @@
+# F6 · K1: media acumulada causal del score del finalista
+#
+# Preregistro: docs/memoria/f6-preregistro-deteccion-vehiculo.md. Sin reentrenar: toma las
+# predicciones out-of-fold de `f3-survival-stacking-r3-rebuild` y reemplaza el score de cada fila por el promedio de
+# los scores del mismo vehículo hasta ese corte (`scripts/smooth_scores.py`).
+#
+#   python scripts/smooth_scores.py --config configs/exp_ss_cummean_r3.yaml --audit
+name: f6-ss-cummean-r3
+seed: 42
+
+smoothing:
+  method: causal_cummean
+  member:
+    run: f3-survival-stacking-r3-rebuild
+    config: configs/exp_survival_stacking_r3.yaml     # para reentrenarlo en (a0) y (b)
+
+compare:
+  reference: f3-survival-stacking-r3-rebuild
+
+# eval_window_label.py lee de acá la etiqueta corregida y los pisos (mismas filas que la referencia).
+data:
+  panel: ${DATA_DIR}/processed/panel_survival_kmw.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+
+window_eval:
+  reference: f3-survival-stacking-r3-rebuild
+  evaluable_column: aux_eval_in_window
+  decides: corrected
+  floors: [cut_odo, aux_cut_dss]
+  a0_tolerance: 0.02
+
+detection_null:
+  n_permutations: 200
+  seed: 0
+  n_boot: 1000
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f6-deteccion
+  job_type: smoothing
+  tags: [f6, survival, stacking, media-acumulada, r3]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments
