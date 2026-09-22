@@ -726,6 +726,14 @@ def cure_model_checks() -> None:
         "cure_mixture: `incidence: tabpfn` (P2) no corre hasta que P1 le gane a P0",
         _raises(lambda: CureMixtureModel(incidence="tabpfn").fit(X, y), NotImplementedError),
     )
+    raw = X.drop(columns=[c for c in X.columns if c.startswith("feat_fm__")]).assign(
+        feat_raw_a=panel["feat_fm__a__2025-09"], feat_raw_b=panel["feat_fm__b__2025-09"])
+    ablation = CureMixtureModel(incidence="firth", fleet_normalization=False).fit(raw, y)
+    check(
+        "cure_mixture A5: sin normalizador las covariables son las crudas (ni el mercado ni el hito)",
+        ablation.normalizer_ is None and ablation.covariates_ == ["feat_raw_a", "feat_raw_b"]
+        and ablation.predict_components(raw)["score"].shape == (len(raw),),
+    )
     first = landmarks == 30.0
     pooled = CureMixtureModel(incidence="firth", per_landmark=False).fit(X.loc[first], y[first])
     split = CureMixtureModel(incidence="firth").fit(X.loc[first], y[first])

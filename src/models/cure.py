@@ -121,8 +121,9 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
+from src.data.landmark import FM_PREFIX
 from src.training.targets import CURE_FIELDS
-from src.training.transformers import FleetReferenceNormalizer
+from src.training.transformers import MARKET_COLUMN, FleetReferenceNormalizer
 
 logger = logging.getLogger(__name__)
 
@@ -520,6 +521,9 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
       todas las filas.
     - `landmark_column`: la variable de diseño que separa los hitos. No es covariable.
     - `normalizer_params`: se pasan a `FleetReferenceNormalizer`.
+    - `fleet_normalization`: con `False` no hay normalizador. Las covariables son las
+      columnas numéricas que no son `feat_fm__*` ni el mercado ni el hito. Existe para
+      la ablación A5, que entrena con los agregados crudos de la ventana (preregistro §7).
     - `firth_flic`: reestimar el intercepto al final. Vale para `firth` y para la
       calibración de `unit_weight`, que también se penaliza (ver arriba).
     - `max_iter`, `tol`: del EM (sobre el objetivo). `inner_max_iter`, `inner_tol`: del
@@ -536,6 +540,7 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         per_landmark: bool = True,
         landmark_column: str = LANDMARK_COLUMN,
         normalizer_params: Mapping[str, Any] | None = None,
+        fleet_normalization: bool = True,
         firth_flic: bool = True,
         max_iter: int = 1000,
         tol: float = 1e-7,
@@ -549,6 +554,7 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         self.per_landmark = per_landmark
         self.landmark_column = landmark_column
         self.normalizer_params = normalizer_params
+        self.fleet_normalization = fleet_normalization
         self.firth_flic = firth_flic
         self.max_iter = max_iter
         self.tol = tol
@@ -572,6 +578,13 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         if not np.isin(values, (-1.0, 1.0)).all():
             raise ValueError("Los pesos unitarios son +1 o −1 (Dawes 1979): nada se ajusta")
         return values
+
+    def _normalized(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Las covariables antes de imputar: desvío contra la flota, o crudas sin normalizador."""
+        if self.normalizer_ is not None:
+            return self.normalizer_.transform(X)
+        market = dict(self.normalizer_params or {}).get("market_column", MARKET_COLUMN)
+        return X[[c for c in X.columns if not c.startswith(FM_PREFIX) and c != market]]
 
     def _standardized(self, key: float | None, features: pd.DataFrame) -> np.ndarray:
         model = self.landmarks_[key]
@@ -609,9 +622,11 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         if not np.allclose(landmarks, target["landmark"].astype(float)):
             raise ValueError(f"`{self.landmark_column}` no coincide con el hito del target: X e y no están alineados")
 
-        self.normalizer_ = FleetReferenceNormalizer(**dict(self.normalizer_params or {})).fit(
-            X, (target["healthy"], target["group"]))
-        normalized = self.normalizer_.transform(X)
+        self.normalizer_ = (
+            FleetReferenceNormalizer(**dict(self.normalizer_params or {})).fit(X, (target["healthy"], target["group"]))
+            if self.fleet_normalization else None
+        )
+        normalized = self._normalized(X)
         self.covariates_ = [c for c in normalized.columns if c != self.landmark_column]
         if not self.covariates_:
             raise ValueError("No quedó ninguna covariable de incidencia después del normalizador")
@@ -686,7 +701,7 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         unknown = sorted(set(landmarks) - set(self.score_windows_))
         if unknown:
             raise ValueError(f"Hitos que no estaban en train: {unknown}")
-        normalized = self.normalizer_.transform(X)
+        normalized = self._normalized(X)
         out = {name: np.full(len(X), np.nan)
                for name in ("score", "pi_incidence", "p_horizon", "latency_shape", "latency_scale")}
         if self.incidence == "unit_weight":

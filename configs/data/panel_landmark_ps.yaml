@@ -76,6 +76,15 @@ splits:
   extend_from: ${DATA_DIR}/processed/splits_r3.json
   guard_by: aux_landmark_day      # ≥ 5 vehículos positivos en validación en cada hito
 
+# Artifacts: `python scripts/log_panel_artifact.py --config configs/data/panel_landmark_ps.yaml`
+wandb:
+  project: ford-fic
+  entity: oromagnoli-
+  artifact: panel-landmark-ps   # panel + folds congelados + meta + YAMLs (panel, features, reloj)
+  holdout_artifact: test-split  # el mismo test_split.json que ya está publicado
+  group: f3-cure
+  tags: [f3, cure, panel-landmark-ps]
+
 output:
   panel: ${DATA_DIR}/processed/panel_landmark_ps.parquet
   meta: ${DATA_DIR}/processed/panel_landmark_ps_meta.json
