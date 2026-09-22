@@ -131,6 +131,42 @@ def rank_correlation(a: pd.DataFrame, b: pd.DataFrame, n_repeats: int) -> dict[s
     return {"by_row": by_row, "by_vehicle": by_vehicle}
 
 
+def diagnostics(candidate: pd.DataFrame, reference: pd.DataFrame, n_repeats: int, *,
+                position: str, usage: str, early_days: float) -> dict[str, Any]:
+    """Por qué ordena autos como ordena. **No preregistrado:** se agregó después del veredicto.
+
+    - ρ de Spearman del score con la posición en días (`position`), por fila y por vehículo;
+    - AUC por vehículo (`mean`) con todas las filas y solo con las de `position ≤ early_days`,
+      para comparar autos en posiciones parecidas;
+    - el lift por vehículo de `−usage` solo (el uso como score, sin ajustar nada).
+    """
+    from sklearn.metrics import roc_auc_score
+
+    out: dict[str, Any] = {"note": "diagnóstico posterior al veredicto, no preregistrado; no decide nada",
+                           "early_days": early_days}
+    for name, frame in (("candidate", candidate), ("reference", reference)):
+        y = frame.groupby("vehicle_id", observed=True)["event_observed"].max()
+        pos = frame.groupby("vehicle_id", observed=True)[position].mean()
+        early = frame.loc[frame[position].le(early_days)]
+        y_early = early.groupby("vehicle_id", observed=True)["event_observed"].max()
+        block: dict[str, list[float]] = {"rho_row": [], "rho_vehicle": [], "auc_vehicle": [], "auc_vehicle_early": []}
+        for r in range(n_repeats):
+            column = f"score_r{r}"
+            means = frame.groupby("vehicle_id", observed=True)[column].mean()
+            block["rho_row"].append(float(spearmanr(frame[column], frame[position], nan_policy="omit").statistic))
+            block["rho_vehicle"].append(float(spearmanr(means.reindex(pos.index), pos, nan_policy="omit").statistic))
+            block["auc_vehicle"].append(float(roc_auc_score(y, means.reindex(y.index))))
+            early_means = early.groupby("vehicle_id", observed=True)[column].mean()
+            block["auc_vehicle_early"].append(float(roc_auc_score(y_early, early_means.reindex(y_early.index))))
+        out[name] = {k: float(np.mean(v)) for k, v in block.items()}
+        out[name]["early_vehicles"] = {"event": int(y_early.sum()), "healthy": int((y_early == 0).sum())}
+    values = candidate[usage].astype(float)
+    score = -values.fillna(values.median())
+    frame = candidate.assign(score=(score - score.min()) / (float(score.max() - score.min()) or 1.0))
+    out["usage_floor_vehicle_lift"] = float(vehicle_metrics(frame, how="mean", fold_column=None)["pr_auc_lift"])
+    return out
+
+
 def beats_in_both(result: dict[str, Any]) -> bool:
     return bool(result["detection"]["wins"] and result["vehicle_lift_mean"]["wins"])
 
@@ -172,6 +208,8 @@ def num(values: list[float], fmt: str = "{:.3f}") -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", required=True)
+    parser.add_argument("--diagnose", action="store_true",
+                        help="agrega el diagnóstico posterior al veredicto (no preregistrado)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s | %(message)s")
 
@@ -190,7 +228,10 @@ def main() -> int:
     candidate, ref = align_members(frames, [name, reference])
     n_repeats = n_repeats_of(candidate)
     panel = select_dev(pd.read_parquet(resolve_path(cfg["data"]["panel"])), cfg)
+    diagnose_cfg = wcfg.get("diagnose") or {}
     extra = [evaluable, *[f for f in floors if f not in candidate]]
+    if args.diagnose:
+        extra += [c for c in (diagnose_cfg["position"], diagnose_cfg["usage"]) if c not in extra and c not in candidate]
     candidate = attach_panel_columns(candidate, panel, extra)
     ref = attach_panel_columns(ref, panel, extra)
     masks = label_masks(candidate, evaluable)
@@ -211,6 +252,10 @@ def main() -> int:
             "reference_vs_floors": {f: compare(mr, m) for f, m in mf.items()},
             "rank_correlation": rank_correlation(cand_rows, ref_rows, n_repeats),
         }
+        if args.diagnose:
+            results[label]["diagnostics"] = diagnostics(
+                cand_rows, ref_rows, n_repeats, position=diagnose_cfg["position"],
+                usage=diagnose_cfg["usage"], early_days=float(diagnose_cfg["early_days"]))
 
     a0 = read_a0(experiments / name, float(wcfg.get("a0_tolerance", 0.02)))
     decision = verdict(results, decides, floors, a0)
@@ -248,6 +293,14 @@ def main() -> int:
         rc = block["rank_correlation"]
         print(f"  ρ con la referencia: por fila {[round(x, 2) for x in rc['by_row']]} · "
               f"por vehículo {[round(x, 2) for x in rc['by_vehicle']]}")
+        if "diagnostics" in block:
+            d = block["diagnostics"]
+            print(f"  diagnóstico (no preregistrado): lift de −uso solo {d['usage_floor_vehicle_lift']:.3f}")
+            for who in ("candidate", "reference"):
+                x = d[who]
+                print(f"    {who}: ρ(score, posición) fila {x['rho_row']:+.2f} · vehículo {x['rho_vehicle']:+.2f} | "
+                      f"AUC veh. {x['auc_vehicle']:.3f} · con posición ≤ {d['early_days']:g} d "
+                      f"{x['auc_vehicle_early']:.3f} ({x['early_vehicles']})")
 
     print(f"\n(a0): {a0}")
     print(f"\n== Veredicto (etiqueta {decides}) == {decision}")

@@ -61,6 +61,12 @@ window_eval:
   decides: corrected                  # corrected (V) | hard (D)
   floors: [cut_odo, feat_cut_dss]     # a los dos hay que ganarles, con la etiqueta que decide
   a0_tolerance: 0.02
+  # `--diagnose`: agregado DESPUÉS del veredicto, no preregistrado, no decide nada. Cuánto del
+  # score es la posición en días, el orden de autos en posiciones parecidas y el uso solo.
+  diagnose:
+    position: feat_cut_dss
+    usage: feat_km_per_day
+    early_days: 120
 
 wandb:
   enabled: true
