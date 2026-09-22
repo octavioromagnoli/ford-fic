@@ -234,6 +234,16 @@ dos formas:
 
 ### 3.3 · Survival stacking en el reloj del evento, con el conjunto en riesgo de la ventana
 
+> **Medido el 22-09: no se adopta.** Con la etiqueta corregida (decide) empata en detección
+> (9,6% ± 2,8 contra 11,9% ± 2,8) y pierde en lift por vehículo (1,38× contra 1,66×). Aprende el
+> *cuándo* ((a′) +0,067 contra +0,016), pero el score queda dominado por los días desde la venta y
+> eso le resta al *qué auto*. Deja dos cosas: la (b) baja de +0,049 a +0,016, así que el atajo de
+> calendario del finalista era exposición al registro; y con la etiqueta corregida el finalista
+> detecta 11,9%, no 15,7%. El horizonte quedó en 30 d, no traducido por vehículo. Detalle en
+> [memoria/f5-ss-post-venta.md](memoria/f5-ss-post-venta.md); preregistro en
+> [memoria/f5-preregistro-ss-post-venta.md](memoria/f5-preregistro-ss-post-venta.md). Lo que sigue
+> quedó como estaba escrito antes de medirlo.
+
 **Qué es.** El mismo survival stacking, las **mismas filas y las mismas 53 features del panel v1**
 y los mismos folds. Cambia solo cómo se arma el objetivo:
 - **Reloj:** días desde la venta. `feat_cut_dss` reemplaza a `feat_cut_odo` como covariable del
@@ -314,6 +324,9 @@ externa no tiene nada que aportar.
 
 ### 3.5 · Otro learner dentro de 3.3 (condicional, un solo lugar)
 
+> **Cerrado el 22-09:** 3.3 no le ganó a survival stacking
+> ([memoria/f5-ss-post-venta.md](memoria/f5-ss-post-venta.md)).
+
 Solo si 3.3 le gana a survival stacking, igual que la regla que dejaba correr P2 en el cure
 solo si P1 ganaba. En orden:
 
@@ -345,6 +358,8 @@ LibAUC) sí cambia el orden y consume un lugar. Además está pensada para redes
 no se recomienda.
 
 ### 3.7 · Exposición acumulada con rezagos (tercera línea)
+
+> **Cerrado el 22-09:** era "solo si 3.3 abre el camino", y 3.3 no ganó.
 
 **Qué es.** En vez de la ventana de W = 1.000 km, el riesgo depende de toda la historia de uso
 desde la venta, con pesos por rezago que se estiman suavizados (exposición-rezago-respuesta,
@@ -387,10 +402,10 @@ Con las mismas reglas que [f3-preregistro-landmark-ensamble.md](memoria/f3-prere
 |---|---|---|---|
 | 0 | ~~**E1, E2**~~ **corridas el 22-09: pierden** ([f3-ensamble-e1-e2.md](memoria/f3-ensamble-e1-e2.md)) | no: ya preregistradas en 9b7bfb4 | ninguna |
 | 1 | ~~**A-solo** (§3.2)~~ **preregistrado y parado en la compuerta G2 el 22-09**: el rasgo temprano no se replica en la fuente ([f5-incidencia-externa.md](memoria/f5-incidencia-externa.md)) | sí | antes, un punto de control **solo con conteos**: excluidos del lado dev con `daysUntilSale`, ≥ 15 viajes en 30 d y exposición suficiente, por mercado |
-| 2 | **SS post-venta con ventana** (§3.3), reemplaza a L1 | no en el sentido de CLAUDE.md: hace comparable la fila del finalista | ninguna |
+| 2 | ~~**SS post-venta con ventana** (§3.3), reemplaza a L1~~ **corrido el 22-09: no se adopta** (empata en detección y pierde en lift con la etiqueta corregida; [f5-ss-post-venta.md](memoria/f5-ss-post-venta.md)) | no en el sentido de CLAUDE.md: hace comparable la fila del finalista | ninguna |
 | 3 | ~~**2 + A** (§3.4)~~ cerrado: A-solo no llegó a dev | sí | A-solo le gana a su piso |
-| cond. | B-cal (§3.3) | sí | la (b) de la corrida 2 marca |
-| cond. | BART dentro de 2 (§3.5) | sí | la corrida 2 le gana a survival stacking |
+| cond. | ~~B-cal (§3.3)~~ no elegible: la (b) de la corrida 2 dio +0,016 | sí | la (b) de la corrida 2 marca |
+| cond. | ~~BART dentro de 2 (§3.5)~~ no elegible: la corrida 2 no ganó | sí | la corrida 2 le gana a survival stacking |
 
 **Cuánto hay que ganar para que se vea.** Con 53 fallados, un vehículo son 1,9 puntos de
 detección. El desvío de la referencia es 0,9 y el de un candidato nuevo suele ser 2–4 (CNN-LSTM

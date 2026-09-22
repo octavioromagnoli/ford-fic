@@ -52,6 +52,8 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-ensamble-e1-e2.md](f3-ensamble-e1-e2.md) | **E1 y E2 del preregistro (22-09):** el ensamble por rango de survival stacking y CNN-LSTM, con y sin bagging por vehículo, pierde contra survival stacking en lift por vehículo y no le gana en detección. El finalista no cambia |
 | [f5-preregistro-incidencia-externa.md](f5-preregistro-incidencia-externa.md) | Lista cerrada de la incidencia aprendida con los fallados sin fecha (F5 §3.2), escrita después de los conteos y antes de mirar una feature contra la etiqueta: quién entra a la fuente, elegibilidad simétrica, el modelo de dos pendientes (Riley), las compuertas y qué decide sobre dev |
 | [f5-incidencia-externa.md](f5-incidencia-externa.md) | **Resultado de la incidencia externa (22-09):** el índice del rasgo temprano no separa a los fallados sin fecha de sus sanos en CNTRY_1/2/5 (AUC 0,513 [0,445; 0,585]); la compuerta G2 para y nada se aplica a dev. Solo viajes bajo régimen y uso apuntan como en dev; en CNTRY_1 los fallados no tienen la firma del filtro |
+| [f5-preregistro-ss-post-venta.md](f5-preregistro-ss-post-venta.md) | Lista cerrada de survival stacking en días post-venta con la ventana del registro (F5 §3.3), escrita después de los conteos y antes de implementar: las mismas filas con el tramo en riesgo por fila, el PEM con offset de exposición, la etiqueta corregida que decide y los dos pisos |
+| [f5-ss-post-venta.md](f5-ss-post-venta.md) | **Resultado de survival stacking post-venta (22-09):** con la etiqueta corregida empata en detección y pierde en lift por vehículo (1,38× contra 1,66×); no se adopta. Pero la (b) de calendario baja de +0,049 a +0,016 (el atajo del finalista era exposición al registro), y con la etiqueta corregida el finalista detecta 11,9%, no 15,7% |
 | [f3-gru-secuencial.md](f3-gru-secuencial.md) | GRU sobre la ventana en bins de km: `last` le gana por poco al LightGBM (p = 0,05), la atención pierde y la ventana larga no ayuda |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué. **Su primera entrada cierra F3**: el techo de cohorte, el piso posicional, por qué el PR-AUC por fila mide *qué auto* y no *cuándo*, y por qué el finalista se elige por el punto de operación |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
@@ -82,6 +84,8 @@ python scripts/audit_cure.py --config configs/exp_cure_p0_unitweight.yaml       
 python scripts/ensemble_rank.py --config configs/exp_ens_e1.yaml --audit       # ensamble E1 (y exp_ens_e2.yaml), f3-ensamble-e1-e2.md
 python scripts/build_external_panel.py --config configs/data/panel_external_incidence.yaml  # fuente de la incidencia externa (--counts-only: Fase 1)
 python scripts/fit_external_incidence.py --config configs/exp_ext_incidence_a30.yaml       # G1, G2 (paró) y diagnóstico, f5-incidencia-externa.md
+python scripts/build_window_survival_panel.py --config configs/data/panel_survival_ps.yaml  # panel v1 en días con la ventana (--counts-only: Fase 1)
+python scripts/eval_window_label.py --config configs/exp_ss_post_venta_r3.yaml --diagnose   # etiqueta dura y corregida, veredicto, f5-ss-post-venta.md
 python scripts/check_setup.py      # chequeos del harness
 ```
 

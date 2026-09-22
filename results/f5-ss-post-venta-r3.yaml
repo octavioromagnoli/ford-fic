@@ -1,0 +1,116 @@
+run: f5-ss-post-venta-r3
+logged_on: '2026-09-22'
+note: 'F5 §3.3 (preregistro docs/memoria/f5-preregistro-ss-post-venta.md): survival
+  stacking en dias desde c + G, con el conjunto en riesgo de la ventana del registro
+  y PEM (Poisson con offset de exposicion). Mismas filas, features (feat_cut_dss en
+  vez de feat_cut_odo) y folds que f3-survival-stacking-r3-rebuild. PIERDE: con la
+  etiqueta corregida (decide, 1.435 filas con el horizonte dentro de la ventana) detecta
+  9,6% +- 2,8 contra 11,9% +- 2,8 (empata) y lift por vehiculo 1,376 contra 1,655
+  (pierde por 0,28 contra 0,15 de desvio combinado). Con la etiqueta dura: 9,4% +-
+  1,5 y 1,33x contra 15,7% +- 0,9 y 1,62x. (a0) PASS (-0,004). (b) +0,016 de ROC contra
+  +0,049 de la referencia: el atajo de calendario desaparece. (a'') +0,067: aprende
+  el cuando, y el score queda dominado por los dias desde la venta (rho 0,51). Evaluacion
+  D/V: scripts/eval_window_label.py. Build data/rebuild-0921.'
+source:
+  config_path: configs\exp_ss_post_venta_r3.yaml
+  config_versioned: true
+  branch: exp/ss-post-venta
+  commit: d4938c6
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: window_survival_stacking
+  pr_auc: 0.17940923232537553
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.3122764990644148
+  within_failed_lift: 1.1888636795090122
+  when_delta: 0.0654923531237786
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.41163927792910715
+  vehicle_lift: 1.3281191797335345
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.18072062915303008
+  pr_auc_hi: 0.22376284499065863
+  base_rate: 0.1251848201084278
+  lift: 1.433154851921996
+  roc_auc: 0.5992118590809953
+  brier: 0.1158154212391157
+  detection_rate: 0.11320754716981132
+  median_lead_km: 9287.490266210645
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_survival_ps.parquet
+  panel_generation: '2026-09-22'
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: f5-ss-post-venta-r3
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_survival_ps.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  target:
+    name: window_survival
+    params: {}
+  model:
+    name: window_survival_stacking
+    params:
+      bin_days: 5
+      horizon_days: 30
+      max_horizon_days: 60
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  window_eval:
+    reference: f3-survival-stacking-r3-rebuild
+    evaluable_column: aux_eval_in_window
+    decides: corrected
+    floors:
+    - cut_odo
+    - feat_cut_dss
+    a0_tolerance: 0.02
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f5-ss-post-venta
+    job_type: train
+    tags:
+    - f5
+    - survival
+    - stacking
+    - post-venta
+    - ventana
+    - r3
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_ss_post_venta_r3.yaml

@@ -27,7 +27,10 @@ preregistrado con el CNN-LSTM (E1/E2): pierde en lift por vehículo
 (`docs/memoria/f3-ensamble-e1-e2.md`). También el 22-09, la incidencia aprendida con los
 fallados sin fecha (F5 §3.2) paró en su compuerta preregistrada: en CNTRY_1/2/5 el rasgo temprano
 no separa fallados de sanos (AUC 0,513), así que nada se aplicó a dev
-(`docs/memoria/f5-incidencia-externa.md`). Lo que sí cambia todo panel es la ventana
+(`docs/memoria/f5-incidencia-externa.md`). Y survival stacking en días post-venta con la ventana
+del registro (F5 §3.3) aprende el *cuándo* pero pierde en lift por vehículo, así que no se adopta
+(`docs/memoria/f5-ss-post-venta.md`). Deja dos cosas: la (b) del finalista es exposición al
+registro, y con la etiqueta corregida el finalista detecta 11,9%, no 15,7%. Lo que sí cambia todo panel es la ventana
 del registro de eventos (abajo). **Lo siguiente es F4 (dashboard contra el panel real)**; las
 ideas que quedaron sin probar siguen en `docs/f3-modelos-candidatos.md`.
 
@@ -199,11 +202,14 @@ src/data/usable.py       universo del estudio: qué vehículo entra y por qué l
 src/data/join.py         unión a nivel vehículo + enriquecimiento de trips/signals con las estáticas
                          (trips y signals NO se mergean entre sí: no hay clave fila a fila)
 src/data/subset.py       trips/signals para un conjunto de vehículos: canoniza → filtra → deduplica la fila completa
-src/data/anchor.py       origen del calendario (estimado sobre dev, congelado en panel_meta.json) y odómetro del evento
+src/data/anchor.py       origen del calendario (estimado sobre dev, congelado en panel_meta.json) y odómetro del evento;
+                         `project_odometer_to_dates`, la inversa exacta (fecha en que el odómetro llega a un valor)
 src/data/panel.py        cortes en grilla de Δ, etiqueta con gap y horizonte, censura, QC de ventana, emparejado de sanos
 src/data/landmark.py     panel de hitos post-venta (cure model): una fila por (vehículo, hito en días desde la venta),
                          riesgo dentro de la ventana del registro, features por mes para la referencia de flota;
                          opcional: ventana de features fija (`feature_window_days`) y km/día (`usage_feature`)
+src/data/window_risk.py  el panel v1 en días (F5 §3.3): tramo en riesgo por fila desde que el odómetro llega a c + G,
+                         dentro de la ventana del registro; `feat_cut_dss`; filas evaluables con la etiqueta corregida
 src/data/external.py     conjunto externo de la incidencia (F5 §3.2): reproduce el sorteo padre contra su huella y
                          toma los excluidos del lado dev, por mercado; nunca un vehículo de dev ni de test
 src/features/trips.py    derivadas a nivel viaje (idle/moving, velocidad recalculada, topes físicos, regen = caída de AirRegeneration)
@@ -220,6 +226,8 @@ src/models/bagging.py    bagging por vehículo (`vehicle_bagging`): N bootstraps
                          el vehículo llega por el `y` (`discrete_survival` o `grouped_label`)
 src/models/cure.py       mixture cure model por hito (incidencia Firth + FLIC, pesos unitarios o pesos fijos de afuera,
                          latencia Weibull con entrada tardía, EM que falla si la verosimilitud baja); trae su propio pipeline
+src/models/window_stacking.py  survival stacking en días con exposición exacta (PEM: LightGBM Poisson con offset);
+                         `window_survival_stacking`, va con el target `window_survival`
 src/models/incidence.py  incidencia por vehículo aprendida con la fuente externa (Firth + estrato de mercado) y aplicada
                          congelada: `external_incidence` no aprende nada en `fit`
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo; hooks `target:`,
@@ -228,7 +236,8 @@ src/training/transformers.py  FleetReferenceNormalizer: desvío contra la median
                          mercado × mes (se ajusta por fold, nunca con validación)
 src/training/targets.py  con qué se entrena (no con qué se mide) y cómo la salida del modelo vuelve a un
                          score comparable: registro por nombre, `discrete_survival`, `ordinal_horizon` y
-                         `cure_window` (exposición en la ventana del registro, para el cure model).
+                         `cure_window` (exposición en la ventana del registro, para el cure model) y
+                         `window_survival` (el tramo en riesgo del panel v1 en días, F5 §3.3).
                          Lo que se evalúa sigue siendo `label`; cv.py no sabe qué modos hay
 src/eval/splits.py       splits antileakage + serialización a splits.json
                          estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML;
@@ -262,6 +271,9 @@ scripts/audit_cure.py    auditorías del cure model (A0, C1, C2, C3, C6, A3, A5,
 scripts/build_external_panel.py  panel de la fuente de la incidencia externa (un hito, ventana de 30 d) + embudo
                          por mercado (`--counts-only`)
 scripts/fit_external_incidence.py  compuertas G1/G2, ajuste congelado e I1 de la incidencia externa (solo la fuente)
+scripts/build_window_survival_panel.py  panel v1 + reloj en días y ventana (`panel_survival_ps.parquet`) + embudo (`--counts-only`)
+scripts/eval_window_label.py  una corrida contra la referencia con la etiqueta dura y la corregida por ventana, pisos y
+                         veredicto del preregistro (`--diagnose`: diagnóstico posterior, no preregistrado)
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/build_history_panel.py  panel_history.parquet = panel_survival + feat_*_hist_delta (mismas filas; verifica
@@ -278,7 +290,7 @@ scripts/ensemble_rank.py ensamble por rango de corridas existentes (mismas filas
 scripts/rescore_run.py   re-mide una corrida vieja desde su predictions.parquet con la misma cuenta que train.py
                          (`evaluate_predictions`), sin reentrenar; falla si lo ya medido no se reproduce
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (148 chequeos)
+scripts/check_setup.py   smoke test del harness (158 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

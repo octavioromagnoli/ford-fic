@@ -5,6 +5,47 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-22 · Survival stacking en días post-venta con la ventana no se adopta: aprende el *cuándo* y pierde el *qué auto*
+
+**Alcance:** cierra el preregistro de F5 §3.3
+([f5-preregistro-ss-post-venta.md](f5-preregistro-ss-post-venta.md)). **No cambia el finalista.**
+Evidencia, auditorías, diagnóstico y comandos: [f5-ss-post-venta.md](f5-ss-post-venta.md). Solo
+dev, R = 3, con las mismas filas, features y folds que el finalista; test sin tocar.
+
+**Qué se decidió, con la regla del preregistro** (decide la etiqueta corregida: solo las filas
+con el horizonte entero dentro de la ventana del registro):
+1. **Pierde contra el finalista.**
+   - En lift por vehículo pierde: 1,376 contra 1,655, una diferencia de −0,28 contra 0,15 de
+     desvío combinado.
+   - En detección empata: 9,6% ± 2,8 contra 11,9% ± 2,8.
+2. Les gana a los dos pisos (`cut_odo` y `feat_cut_dss`) y pasa (a0). No alcanza.
+3. Con la etiqueta dura también pierde: 9,4% ± 1,5 y 1,33× contra 15,7% ± 0,9 y 1,62×.
+4. **Se cierran** §3.5 (otro learner dentro de 3.3), B-cal (la (b) no marca) y §3.7 del doc F5.
+
+**Lo que esta corrida deja aunque no se adopte:**
+- **El atajo de calendario del finalista es exposición al registro.** Con el conjunto en riesgo
+  de la ventana, la (b) baja a +0,016, contra +0,049 del finalista. Es un límite del finalista con
+  nombre: su (b) no es física.
+- **Con la etiqueta corregida, el finalista detecta 11,9% ± 2,8** (4 / 7 / 5 de 45), no 15,7%.
+  - Su lift se mantiene (1,66×): la corrección no le saca el orden de autos.
+  - Parte de sus aciertos caían en filas que el registro no cubría. **El número honesto para el
+    pitch es el corregido**, con su desvío.
+- **El reloj en días aprende el *cuándo***: (a′) +0,067, contra +0,016. Pero el score queda
+  dominado por los días desde la venta (ρ 0,51 por fila), y al promediar por vehículo eso le resta
+  al *qué auto*. Es un diagnóstico posterior al veredicto, no preregistrado.
+- **La infraestructura:**
+  - el panel v1 en días con el tramo en riesgo por fila (`src/data/window_risk.py`);
+  - la inversa de la proyección del evento;
+  - el PEM con offset de exposición (`window_survival_stacking`);
+  - la evaluación con las dos etiquetas (`scripts/eval_window_label.py`);
+  - 10 chequeos (158 en verde).
+
+**Qué no se puede separar con esta corrida:** cambió a la vez el reloj y el conjunto en riesgo.
+El diagnóstico apunta al reloj, pero la ablación (km con la ventana) sería un candidato nuevo, y el
+presupuesto está agotado.
+
+---
+
 ## 2026-09-22 · La incidencia aprendida con los fallados sin fecha no corre: el rasgo temprano no se replica en la fuente
 
 **Alcance:** cierra el preregistro de la incidencia externa
