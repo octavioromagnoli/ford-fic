@@ -194,6 +194,19 @@ Son las reglas del preregistro del 21-09, aplicadas con la etiqueta V
   panel de hitos, y se mantiene.
 - **El test:** no se toca hasta que haya un modelo elegido.
 
+## Enmienda antes de entrenar (commit de la implementación)
+
+**El offset lleva también la tasa global del train:** `init_score = log(exposición) + log(Σ
+eventos / Σ exposición)`, y la tasa predicha es esa constante por `exp(salida del booster)`.
+- **Por qué:** con `init_score`, LightGBM no arranca desde el promedio. Con la tasa de
+  aprendizaje del finalista (0,03 × 300 árboles), no alcanza a bajar el intercepto hasta
+  log(0,01).
+  - En datos simulados, con tasas verdaderas de 0,005 y 0,02 por día, estimaba 0,27 y 0,28.
+  - Con la constante estima 0,007 y 0,019.
+- La constante es el MLE del modelo sin covariables, ajustado con el train del fold. Es lo que
+  haría `boost_from_average` sin offset, así que no cambia el modelo.
+- Se encontró con los datos simulados de `check_setup.py`, antes de entrenar nada sobre dev.
+
 ## Preguntas para Ford que pueden invalidar esto
 
 - **¿Cuál es la ventana real de extracción del registro?** Si es más ancha que la de dev, los

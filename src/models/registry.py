@@ -129,6 +129,20 @@ def _build_survival_stacking(params: dict[str, Any]) -> BaseEstimator:
     return DiscreteSurvivalStacker(**params)
 
 
+@register("window_survival_stacking")
+def _build_window_survival_stacking(params: dict[str, Any]) -> BaseEstimator:
+    """El mismo apilado en días desde `c + G`, con el conjunto en riesgo de la ventana (F5 §3.3).
+
+    Necesita `target: {name: window_survival}`. Hazard por tramos con exposición exacta
+    (Poisson con offset) y score `1 − S(horizon_days | x)`. Detalle en
+    `src/models/window_stacking.py`.
+    """
+    from src.models.window_stacking import WindowPEMStacker
+
+    params.setdefault("random_state", 42)
+    return WindowPEMStacker(**params)
+
+
 @register("gpboost_survival")
 def _build_gpboost_survival(params: dict[str, Any]) -> BaseEstimator:
     """Lo mismo con un intercept aleatorio por `vehicle_id` (GPBoost, Sigrist).

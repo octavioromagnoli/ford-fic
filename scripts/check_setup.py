@@ -35,6 +35,10 @@ fallan, invalidan todo lo que venga después:
     huella, el conjunto externo no toca dev ni test, la ventana de features fija no mueve
     las filas ni mira después de venta + 30, el ajuste de la fuente recupera la señal y el
     scorer congelado no aprende nada en `fit`.
+14. El reloj en días con la ventana del registro (F5 §3.3): la fecha de un odómetro es la
+    inversa exacta de la del evento, el tramo en riesgo entra tarde y sale en el fin de la
+    ventana, el PEM apila la exposición exacta y recupera la tasa, y la etiqueta corregida
+    evalúa solo las filas con el horizonte adentro.
 """
 
 from __future__ import annotations
@@ -1112,6 +1116,215 @@ def external_incidence_checks() -> None:
         )
 
 
+def _window_trips() -> pd.DataFrame:
+    """Viajes de tres autos: uno que falla en la ventana, uno sano que deja de andar y uno tardío."""
+    def trips(vid: str, start: str, n: int, step_days: float, km: float) -> pd.DataFrame:
+        dates = pd.Timestamp(start, tz="UTC") + pd.to_timedelta(np.arange(n) * step_days, unit="D")
+        return pd.DataFrame({"vehicle_id": vid, "TripDatetimeStart": dates,
+                             "OdometerTripEnd": np.arange(1, n + 1) * km})
+    return pd.concat([
+        trips("F", "2025-07-01", 400, 1.0, 50.0),     # 50 km/día desde julio de 2025
+        trips("S", "2025-08-01", 120, 1.0, 50.0),     # deja de andar a fines de noviembre
+        trips("T", "2026-02-01", 200, 1.0, 50.0),     # arranca un mes antes del fin de la ventana
+    ], ignore_index=True)
+
+
+def window_survival_checks() -> None:
+    """14 · El reloj en días con la ventana del registro (F5 §3.3): panel, target, PEM y evaluación."""
+    import json
+    import tempfile
+
+    from scripts.eval_window_label import attach_panel_columns, floor_metrics_for, label_masks, read_a0, verdict
+    from src.data.anchor import EPOCH, project_dates_to_odometer, project_odometer_to_dates
+    from src.data.window_risk import (CUT_DSS, ENTRY, EVALUABLE, EVENT, EXIT, HORIZON, RegistryWindow,
+                                      window_risk_columns)
+    from src.models.window_stacking import WindowPEMStacker
+
+    trips = _window_trips()
+    window = RegistryWindow.from_config({"start": "2025-09-01", "end": "2026-03-11"})
+
+    # -- la inversa de la proyección del evento ----------------------------------------------
+    event = pd.Series([pd.Timestamp("2025-12-10 00:00", tz="UTC")], index=["F"])
+    event_odo = project_dates_to_odometer(event, trips)["event_odo_km"]
+    plateau = pd.concat([trips.loc[trips["vehicle_id"].eq("S")].iloc[:3],
+                         pd.DataFrame({"vehicle_id": ["S"], "TripDatetimeStart": [pd.Timestamp("2025-08-10", tz="UTC")],
+                                       "OdometerTripEnd": [150.0]})], ignore_index=True)
+    back = project_odometer_to_dates(pd.DataFrame({"vehicle_id": ["F", "S", "S", "S"],
+                                                   "odo": [event_odo["F"], 150.0, 1e6, 10.0]}), trips)
+    first_of_plateau = project_odometer_to_dates(pd.DataFrame({"vehicle_id": ["S"], "odo": [150.0]}), plateau)
+    check(
+        "reloj: la fecha de un odómetro es la inversa exacta de la proyección del evento; nunca llegar da NaT",
+        abs((back.iloc[0] - event["F"]) / pd.Timedelta(hours=1)) < 1e-3
+        and back.iloc[2] is pd.NaT and back.iloc[3] is pd.NaT
+        and first_of_plateau.iloc[0] == pd.Timestamp("2025-08-03", tz="UTC"),
+        f"{back.tolist()} · meseta {first_of_plateau.iloc[0]}",
+    )
+
+    # -- las columnas del tramo en riesgo ----------------------------------------------------
+    sale = {"F": "2025-07-01", "S": "2025-08-01", "T": "2026-02-01"}
+    vehicles = pd.DataFrame({
+        "event_observed": [1, 0, 0],
+        "sale_date": [pd.Timestamp(sale[v], tz="UTC") for v in ("F", "S", "T")],
+        "event_date": [event["F"], pd.NaT, pd.NaT],
+    }, index=["F", "S", "T"])
+    # F: un corte antes de la ventana y otro adentro; S: adentro, con horizonte que pasa su último
+    # viaje; T: después de la ventana.
+    panel = pd.DataFrame({
+        "vehicle_id": ["F", "F", "S", "S", "T"],
+        "cut_odo": [1000.0, 5000.0, 2000.0, 5000.0, 2500.0],
+        "gap_km": 500.0, "horizon_km": 1000.0,
+        "event_observed": [1, 1, 0, 0, 0],
+    })
+    panel["cut_date"] = project_odometer_to_dates(panel[["vehicle_id"]].assign(odo=panel["cut_odo"]),
+                                                  trips).dt.tz_convert(None)
+    risk = window_risk_columns(panel, trips, vehicles, window)
+    t0 = project_odometer_to_dates(panel[["vehicle_id"]].assign(odo=panel["cut_odo"] + 500.0), trips)
+    day = pd.Timedelta(days=1)
+    expected_entry = ((window.start - t0) / day).clip(lower=0)
+    expected_exit = pd.Series([(event["F"] - t0[0]) / day, (event["F"] - t0[1]) / day,
+                               (window.end - t0[2]) / day, (window.end - t0[3]) / day,
+                               (window.end - t0[4]) / day])
+    check(
+        "reloj: entrada tardía antes de la ventana; el sano sale en el fin de la ventana, no en su último viaje",
+        np.allclose(risk[ENTRY], expected_entry) and np.allclose(risk[EXIT], expected_exit)
+        and risk.loc[0, ENTRY] > 0 and risk.loc[1, ENTRY] == 0
+        and risk.loc[3, EXIT] > (pd.Timestamp("2025-11-28", tz="UTC") - t0[3]) / day,
+        f"entrada {risk[ENTRY].round(1).tolist()} · salida {risk[EXIT].round(1).tolist()}",
+    )
+    check(
+        "reloj: evento solo en el fallado, y el corte posterior a la ventana queda fuera de riesgo",
+        risk[EVENT].tolist() == [1, 1, 0, 0, 0] and risk.loc[4, EXIT] < risk.loc[4, ENTRY],
+    )
+    t_h = project_odometer_to_dates(panel[["vehicle_id"]].assign(odo=panel["cut_odo"] + 1500.0), trips)
+    expected_eval = (t0.notna() & t_h.notna() & (t0 >= window.start) & (t_h <= window.end)).astype(int)
+    check(
+        "reloj: evaluable = horizonte entero en la ventana (igual para positivas y negativas); "
+        "feat_cut_dss = días desde la venta en el corte",
+        risk[EVALUABLE].tolist() == expected_eval.tolist() == [0, 1, 1, 0, 0]
+        and np.isnan(risk.loc[3, HORIZON])
+        and np.allclose(risk[CUT_DSS], (pd.to_datetime(panel["cut_date"]).dt.tz_localize("UTC")
+                                         - panel["vehicle_id"].map(vehicles["sale_date"])) / day),
+        f"evaluables {risk[EVALUABLE].tolist()}",
+    )
+
+    # -- el target ---------------------------------------------------------------------------
+    full = pd.concat([panel, risk], axis=1)
+    train = np.array([True, True, True, False, True])
+    spec = build_target("window_survival", full, train)
+    broken = full.assign(**{EXIT: full[ENTRY] - 1.0})
+    check(
+        "target: `window_survival` alineado con el train, fuera de riesgo el corte tardío, y un evento "
+        "sin tramo falla",
+        len(spec.y) == 4 and spec.y["at_risk"].tolist() == [True, True, True, False]
+        and spec.y["event"].tolist() == [1, 1, 0, 0]
+        and _raises(lambda: build_target("window_survival", broken, train), ValueError),
+    )
+
+    # -- el apilado con exposición exacta --------------------------------------------------------
+    model = WindowPEMStacker(horizon_days=30, bin_days=5, max_horizon_days=60)
+    model.n_bins_train_ = 12
+    entry = np.array([0.0, 7.5, 3.0, 0.0, 10.0])
+    exit_ = np.array([12.0, 22.0, 3.0, 80.0, 40.0])
+    event = np.array([1, 1, 0, 1, 0])
+    at_risk = exit_ > entry
+    st = model.stack(np.arange(5, dtype=float)[:, None], entry, exit_, event, at_risk)
+    per_row = pd.Series(st["exposure"]).groupby(st["row"]).sum()
+    events_at = st["bin"][st["event"] == 1].tolist()
+    check(
+        "PEM: la exposición apilada suma el tramo en riesgo (cortado en 60 d), sin bins antes de la "
+        "entrada; el evento cae en su bin y el que pasa 60 d se censura",
+        np.allclose(per_row.reindex([0, 1, 3, 4]).to_numpy(), [12.0, 14.5, 60.0, 30.0])
+        and 2 not in per_row.index
+        and st["bin"][st["row"] == 1].min() == 1 and events_at == [2, 4]
+        and st["X"][:, -1].tolist() == (st["bin"] * 5.0).tolist(),
+        f"exposición {per_row.round(2).to_dict()} · eventos en bins {events_at}",
+    )
+
+    # -- el PEM recupera tasas y el score es 1 − S(H) ------------------------------------------
+    rng = np.random.default_rng(3)
+    n = 2500
+    x = rng.integers(0, 2, n).astype(float)
+    rate = np.where(x == 1, 0.02, 0.005)
+    life = rng.exponential(1 / rate)
+    enter = rng.uniform(0, 20, n)
+    kept = life > enter
+    x, life, enter = x[kept], life[kept], enter[kept]
+    cens = rng.uniform(30, 90, len(life))
+    y = np.empty(len(life), dtype=[("entry", "f8"), ("exit", "f8"), ("event", "i1"), ("at_risk", "?"), ("group", "U2")])
+    y["entry"], y["exit"], y["event"] = enter, np.minimum(life, cens), (life <= cens).astype(int)
+    y["at_risk"], y["group"] = y["exit"] > y["entry"], "g"
+    X = np.column_stack([x, rng.normal(size=len(x))])
+    fitted = WindowPEMStacker(horizon_days=30, bin_days=5, max_horizon_days=60).fit(X, y)
+    query = np.array([[0.0, 0.0], [1.0, 0.0]])
+    rates = np.exp(fitted.log_rate(query, np.array([10.0, 10.0])))
+    by_hand = 1 - np.exp(-sum(np.exp(fitted.log_rate(query, np.full(2, 5.0 * k))) * 5.0 for k in range(6)))
+    check(
+        "PEM: recupera la tasa por día con el offset de exposición (0,005 y 0,02) y el score es "
+        "1 − exp(−Σ λ·5) sobre los 6 bins de 30 d",
+        0.003 < rates[0] < 0.009 and 0.014 < rates[1] < 0.026
+        and np.allclose(fitted.predict_proba(query)[:, 1], by_hand),
+        f"tasas {rates.round(4).tolist()}",
+    )
+
+    # -- por el loop de CV ----------------------------------------------------------------------
+    dummy = build_dummy_panel(SMALL_PANEL)
+    tte = dummy["time_to_event_km"].to_numpy(float)
+    observed = dummy["event_observed"].to_numpy(int) == 1
+    duration = (tte - dummy["gap_km"].to_numpy(float)) / 60.0
+    dummy[ENTRY] = 0.0
+    dummy[EXIT] = np.where(observed, duration, 90.0)
+    dummy[EVENT] = (observed & (duration > 0)).astype(int)
+    dummy[CUT_DSS] = dummy["cut_odo"] / 60.0
+    splits = make_splits(dummy, n_splits=3, seed=1)
+    predictions, _ = run_cv(dummy, splits, model_name="window_survival_stacking",
+                            model_params={"horizon_days": 30, "bin_days": 5, "max_horizon_days": 60},
+                            target={"name": "window_survival", "params": {}})
+    check(
+        "PEM: `window_survival` + `window_survival_stacking` pasan por el loop de CV con scores en [0, 1]",
+        bool(predictions["score"].between(0, 1).all()) and predictions["score"].nunique() > 10,
+    )
+
+    # -- la evaluación con las dos etiquetas ---------------------------------------------------
+    preds = pd.DataFrame({"vehicle_id": ["A", "A", "B", "B"], "cut_odo": [1.0, 2.0, 1.0, 2.0],
+                          "score": 0.5, "label": [0, 1, 0, 0], "event_observed": [1, 1, 0, 0]})
+    marks = pd.DataFrame({"vehicle_id": ["A", "A", "B", "B"], "cut_odo": [1.0, 2.0, 1.0, 2.0],
+                          EVALUABLE: [0, 1, 1, 0], CUT_DSS: [5.0, np.nan, 3.0, 9.0]})
+    joined = attach_panel_columns(preds, marks, [EVALUABLE, CUT_DSS])
+    masks = label_masks(joined, EVALUABLE)
+    check(
+        "evaluación: V se queda solo con las filas evaluables, D con todas, y una fila sin par en el panel falla",
+        masks["hard"].all() and masks["corrected"].tolist() == [False, True, True, False]
+        and _raises(lambda: attach_panel_columns(preds, marks.iloc[:3], [EVALUABLE]), ValueError),
+    )
+    floor = pd.DataFrame({"vehicle_id": ["A", "A", "B", "B", "C", "C"], "cut_odo": [1.0, 2.0] * 3,
+                          "label": [0, 1, 0, 0, 0, 0], "event_observed": [1, 1, 0, 0, 0, 0],
+                          "time_to_event_km": [2000.0, 1000.0, np.nan, np.nan, np.nan, np.nan],
+                          CUT_DSS: [np.nan, np.nan, 50.0, 60.0, 10.0, 20.0]})
+    floored = floor_metrics_for(floor, CUT_DSS, {"n_thresholds": 20, "k_consecutive": 1,
+                                                  "max_false_alarms_per_1000": 1000})
+    lifted = floor_metrics_for(floor.assign(**{CUT_DSS: floor[CUT_DSS].fillna(100.0)}), CUT_DSS,
+                               {"n_thresholds": 20, "k_consecutive": 1, "max_false_alarms_per_1000": 1000})
+    win = {"verdict": "gana"}
+    both = {"detection": {"wins": True}, "vehicle_lift_mean": {"wins": True}}
+    half = {"detection": {"wins": True}, "vehicle_lift_mean": {"wins": False}}
+    results = {"corrected": {"vs_reference": win, "vs_floors": {"a": both, "b": half}}}
+    with tempfile.TemporaryDirectory() as tmp:
+        run_dir = Path(tmp)
+        missing_a0 = read_a0(run_dir, 0.02)
+        (run_dir / "audit.json").write_text(json.dumps({"audits": [
+            {"audit": "(a0) features permutadas", "pr_auc": 0.13, "base_rate": 0.125}]}), encoding="utf-8")
+        passed_a0 = read_a0(run_dir, 0.02)
+    check(
+        "evaluación: el piso manda los NaN abajo; se adopta solo si gana, les gana a todos los pisos "
+        "en las dos métricas y pasa (a0)",
+        np.isclose(floored["vehicle_lift_mean"][0], 1.0) and np.isclose(lifted["vehicle_lift_mean"][0], 3.0)
+        and not verdict(results, "corrected", ["a", "b"], passed_a0)["adopted"]
+        and verdict(results, "corrected", ["a"], passed_a0)["adopted"]
+        and not verdict(results, "corrected", ["a"], missing_a0)["adopted"],
+        f"lift del piso {floored['vehicle_lift_mean'][0]:.3f}",
+    )
+
+
 def _fold_of(splits: dict, repeat: int) -> dict[str, int]:
     return {str(v): int(f["fold"]) for f in splits["repeats"][repeat]["folds"] for v in f["valid_vehicles"]}
 
@@ -1832,6 +2045,7 @@ def main() -> int:
     extend_splits_checks()
     bagging_ensemble_checks()
     external_incidence_checks()
+    window_survival_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()
