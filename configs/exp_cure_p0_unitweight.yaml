@@ -1,0 +1,121 @@
+# F3 · cure model, P0: pesos unitarios (piso y respaldo). Preregistro:
+# docs/memoria/f3-preregistro-cure.md §4. Nada de acá se elige mirando D1/D2.
+#
+#   python scripts/train.py --config configs/exp_cure_p0_unitweight.yaml
+#   python scripts/audit_cure.py --config configs/exp_cure_p0_unitweight.yaml
+#
+# Score que decide: s = z(idle) + z(bajo régimen) − z(velocidad) − z(refrigerante), sobre
+# las cuatro features desviadas contra la flota e imputadas/estandarizadas por hito. Cero
+# coeficientes ajustados: el cure (a, b) solo calibra, y D1/D2 se miden con s.
+name: f3-cure-p0-unitweight
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel_landmark_ps.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_landmark_ps_r3.json   # extienden splits_r3.json (Fase 7)
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+# El modelo trae su pipeline (normalizador de flota → imputación y escala por hito → EM).
+preprocessing: none
+
+target:
+  name: cure_window
+
+model:
+  name: cure_mixture
+  params:
+    incidence: unit_weight
+    # Signo físico del índice (docs/f3-modelos-candidatos.md §1.1): más idle y más viajes
+    # bajo régimen, más riesgo; más velocidad y más refrigerante al final, menos.
+    unit_weight_signs:
+      fleet_idle_per_1000km: 1
+      fleet_trips_below_regime_temp_frac: 1
+      fleet_speed_kmh_mean: -1
+      fleet_coolant_temp_end_mean: -1
+    latency: weibull
+    per_landmark: true
+    firth_flic: true            # la calibración (a, b) va por Firth + FLIC (enmienda 563e8d4)
+    normalizer_params:
+      min_ref_vehicles: 10
+    max_iter: 1000
+    tol: 1.0e-7
+    random_state: 42
+
+eval:
+  legacy_blocks: false          # techo de cohorte, (a'), eje de vehículo y costo no aplican (§5)
+  carry_columns:
+    - aux_landmark_day
+    - aux_dss_entry
+    - aux_dss_exit
+    - aux_event_in_window
+    - aux_gap_days
+    - aux_dss_window_end
+    - aux_days_to_event_after_cut
+    - aux_resolved_negative
+    - aux_resolved_negative_e60
+    - aux_resolved_negative_e120
+    # Para las auditorías (estratos de C1, pisos de C2/C3, quietos de C6, A3).
+    - aux_production_tercile
+    - static_SalesCountry_cd
+    - aux_static_ProductionDay
+    - aux_sale_day
+    - window_km
+    - aux_landmark_month
+    - aux_air_temp_window_mean
+  landmark:
+    score_column: unit_weight_score   # P0 se mide con s (preregistro §4)
+    probability_column: score         # lo que se calibra es la probabilidad del cure
+    max_false_alarms_per_1000: 50     # D2: a lo sumo el 5% de los negativos resueltos alerta
+    extra_false_alarms_per_1000: [100]
+    e_min_days_sensitivity: [60, 120]
+    n_boot: 2000
+
+audit_cure:
+  event_clock: configs/data/event_clock.yaml   # `early_trait.immobile_km` para C6
+  audits: [A0, C1, C2, C3, C6]                 # preregistro §8, paso 3
+  stop_if_c1_fails: true                       # si P0 no le gana a C1 en D1, se para (§8)
+  n_boot: 2000
+  a0:
+    permutations: 5
+    # "D1 cae a ~0,5 y D2 al presupuesto": tolerancias declaradas antes de correr (~2 errores
+    # estándar de un C con ~40 eventos promediado sobre 5 permutaciones × 3 repeticiones).
+    d1_tolerance: 0.05
+    d2_tolerance: 0.05
+  c1:
+    permutations: 2000
+    strata: [aux_landmark_day, aux_production_tercile, static_SalesCountry_cd]
+    alpha: 0.05
+  c2:
+    floors:
+      production_day: aux_static_ProductionDay   # score = −ProductionDay
+      sale_day: aux_sale_day                     # score = −fecha de venta
+    production_column: aux_static_ProductionDay
+    tercile_column: aux_production_tercile
+    max_abs_rho: 0.2
+  c3:
+    km_column: window_km                          # score = −km/L en (venta, venta + L]
+  c6:
+    km_column: window_km
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-cure
+  job_type: train
+  tags: [f3, cure, landmark, p0, r3]
+  mode: online
+  log_artifacts: true
+
+output_dir: experiments

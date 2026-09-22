@@ -47,6 +47,7 @@ from src.eval.metrics import (  # noqa: E402
     cost_ratio_breakeven,
     cost_ratio_sweep,
     dispersion,
+    landmark_metrics,
     lead_time_curve,
     operating_point,
     pr_auc_within_failed,
@@ -130,6 +131,17 @@ def panel_build(panel_path: Path) -> dict | None:
             "features_spec": meta.get("features_spec"),
         }
     return None
+
+
+def panel_meta(panel_path: Path) -> dict | None:
+    """El `*_meta.json` del panel, si existe (el de hitos trae los fallados de dev sin fila)."""
+    meta_path = panel_path.with_name(f"{panel_path.stem}_meta.json")
+    if not meta_path.exists():
+        return None
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def select_dev(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
@@ -358,7 +370,7 @@ def vehicle_block(
 
 
 def evaluate_predictions(
-    predictions: pd.DataFrame, cfg: dict, *, n_repeats: int, seed: int
+    predictions: pd.DataFrame, cfg: dict, *, n_repeats: int, seed: int, meta: dict | None = None
 ) -> tuple[dict[str, Any], pd.DataFrame]:
     """Todo lo que se mide sobre las predicciones out-of-fold, sin reentrenar nada.
 
@@ -368,6 +380,18 @@ def evaluate_predictions(
     para que `scripts/rescore_run.py` complete una corrida vieja —o mida un ensamble de
     predicciones que ya existen— con **exactamente** esta cuenta, en vez de con una
     copia que se desincroniza la primera vez que alguien agregue una métrica acá.
+
+    **Dos claves del bloque `eval:` cambian qué se mide** (sin ellas, lo de siempre):
+
+    * `legacy_blocks: false` apaga lo que no aplica en el panel de hitos: la curva de
+      anticipación con alerta sostenida, el techo de cohorte, el PR-AUC entre fallados,
+      (a'), el eje de vehículo, el costo y el C-index sobre km. Ahí `label` ≈ "falla
+      alguna vez", un vehículo aparece en hasta tres hitos y dos hitos seguidos no son
+      "alerta sostenida" (preregistro del cure model §5). El PR-AUC por fila (`oof`) se
+      sigue calculando porque lo leen el log y la tabla, pero **no decide**.
+    * `landmark:` agrega D1 y D2 del preregistro (`src/eval/metrics.py::landmark_metrics`)
+      y sus informativas. `meta` es el `*_meta.json` del panel: de ahí sale cuántos
+      fallados de dev hay en total, con fila o sin ella.
     """
     eval_cfg = cfg.get("eval", {})
     target_cfg = cfg.get("target") or {}
@@ -393,12 +417,45 @@ def evaluate_predictions(
         key: dispersion([m[key] for m in by_repeat])
         for key in ("pr_auc", "roc_auc", "brier", "pr_auc_lift")
     }
+    budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
+    landmark = None
+    if eval_cfg.get("landmark") is not None:
+        total_events = ((meta or {}).get("dev") or {}).get("event_vehicles")
+        landmark, landmark_curve = landmark_metrics(
+            predictions, eval_cfg["landmark"], n_repeats=n_repeats, seed=seed,
+            n_event_vehicles_total=total_events,
+        )
+        landmark["curve"] = landmark_curve.to_dict(orient="records")
+    if not bool(eval_cfg.get("legacy_blocks", True)):
+        metrics: dict[str, Any] = {
+            "oof": oof,
+            "n_repeats": n_repeats,
+            "oof_by_repeat": by_repeat,
+            "repeats_spread": repeats_spread,
+            "legacy_blocks": False,
+            "concordance": None,
+            "cohort_ceiling": None,
+            "pr_auc_within_failed": None,
+            "when_contribution": None,
+            "when_by_repeat": None,
+            "detection_by_repeat": None,
+            "when_spread": None,
+            "bootstrap_by_vehicle": None,
+            "operating_point": None,
+            "operating_point_budget_per_1000": None,
+            "k_consecutive": None,
+            "target": target_cfg or None,
+            "target_report": target_metrics or None,
+        }
+        if landmark is not None:
+            metrics["landmark"] = landmark
+        return metrics, pd.DataFrame()
+
     curve = lead_time_curve(
         predictions,
         n_thresholds=int(eval_cfg.get("n_thresholds", 50)),
         k_consecutive=k_consecutive,
     )
-    budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
     point = operating_point(curve, max_false_alarms_per_1000=budget)
     vehicle = vehicle_block(predictions, eval_cfg, n_repeats)
     cost = cost_block(predictions, eval_cfg)
@@ -471,6 +528,8 @@ def evaluate_predictions(
         metrics["vehicle"] = vehicle
     if cost is not None:
         metrics["cost_ratio_sweep"] = cost
+    if landmark is not None:
+        metrics["landmark"] = landmark
     return metrics, curve
 
 
@@ -544,10 +603,18 @@ def main() -> None:
         target=target_cfg or None,
         strict_splits=bool(cfg.get("splits", {}).get("strict", True)),
         min_valid_positives=options["min_valid_positives"],
+        # `standard` (el default) es imputar + escalar + one-hot antes del modelo; con
+        # `none` el estimador trae su propio pipeline y lo ajusta con el train del fold.
+        preprocessing=str(cfg.get("preprocessing", "standard")),
+        # Columnas del panel que viajan a las predicciones además de las de siempre (las
+        # `aux_` de exposición del panel de hitos, que necesita `eval.landmark`).
+        carry_columns=(cfg.get("eval") or {}).get("carry_columns"),
     )
 
     n_repeats = int(splits.get("n_repeats", 1))
-    evaluated, curve = evaluate_predictions(predictions, cfg, n_repeats=n_repeats, seed=seed)
+    evaluated, curve = evaluate_predictions(
+        predictions, cfg, n_repeats=n_repeats, seed=seed, meta=panel_meta(panel_path)
+    )
     summary = summarize_folds(
         [{k: v for k, v in m.items() if k not in ("fold", "repeat")} for m in fold_metrics],
         seed=seed,
@@ -573,21 +640,39 @@ def main() -> None:
     target_metrics = metrics["target_report"] or {}
     vehicle, cost = metrics.get("vehicle"), metrics.get("cost_ratio_sweep")
 
-    logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
-                oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
-    logger.info(
-        "Cohorte | techo %.4f (lift %.2fx) con %d/%d filas de vehículos fallados — "
-        "el PR-AUC de arriba %s",
-        ceiling["pr_auc"], ceiling["lift"], ceiling["n_positive"], ceiling["n_failed_rows"],
-        "lo supera" if oof["pr_auc"] > ceiling["pr_auc"] else
-        "NO lo supera: identificar la cohorte ya daría más, esto no demuestra anticipación",
-    )
-    logger.info(
-        "Cuándo | PR-AUC entre fallados=%.4f (lift %.2fx sobre %.4f, %d filas) | "
-        "(a') aporte del cuándo=%+.4f (%.4f → %.4f al promediar por vehículo)",
-        within_failed["pr_auc"], within_failed["lift"], within_failed["base_rate"],
-        within_failed["n"], when["delta"], when["pr_auc"], when["pr_auc_vehicle_mean"],
-    )
+    logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f%s",
+                oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"],
+                "" if ceiling is not None else " | por fila: no decide en este panel")
+    if ceiling is not None:
+        logger.info(
+            "Cohorte | techo %.4f (lift %.2fx) con %d/%d filas de vehículos fallados — "
+            "el PR-AUC de arriba %s",
+            ceiling["pr_auc"], ceiling["lift"], ceiling["n_positive"], ceiling["n_failed_rows"],
+            "lo supera" if oof["pr_auc"] > ceiling["pr_auc"] else
+            "NO lo supera: identificar la cohorte ya daría más, esto no demuestra anticipación",
+        )
+        logger.info(
+            "Cuándo | PR-AUC entre fallados=%.4f (lift %.2fx sobre %.4f, %d filas) | "
+            "(a') aporte del cuándo=%+.4f (%.4f → %.4f al promediar por vehículo)",
+            within_failed["pr_auc"], within_failed["lift"], within_failed["base_rate"],
+            within_failed["n"], when["delta"], when["pr_auc"], when["pr_auc_vehicle_mean"],
+        )
+    landmark = metrics.get("landmark")
+    if landmark is not None:
+        d1, d2 = landmark["d1"], landmark["d2"]
+        logger.info(
+            "D1 (C con entrada tardía, promedio de hitos) = %.4f ± %.4f | IC95 por vehículo [%.4f, %.4f] | %s",
+            d1["mean"]["mean"], d1["mean"]["std"], d1["bootstrap_by_vehicle"]["lo"],
+            d1["bootstrap_by_vehicle"]["hi"],
+            " · ".join(f"L{k}: {v['c_index']['mean']:.3f} ({v['n_events']} ev.)" for k, v in d1["by_landmark"].items()),
+        )
+        logger.info(
+            "D2 (≤ %d de %d negativos resueltos alertan) | detección %.1f%% ± %.1f de %d | IC95 [%.1f%%, %.1f%%] | "
+            "anticipación mediana %.0f d / %.0f km",
+            d2["alerts_allowed"], d2["n_negative"], 100 * d2["detection_rate"]["mean"],
+            100 * d2["detection_rate"]["std"], d2["n_positive"], 100 * d2["bootstrap_by_vehicle"]["lo"],
+            100 * d2["bootstrap_by_vehicle"]["hi"], d2["median_lead_days"]["mean"], d2["median_lead_km"]["mean"],
+        )
     if concordance and np.isfinite(concordance["c_index"]):
         logger.info("OOF | C-index=%.4f sobre %d filas (%d con evento)",
                     concordance["c_index"], concordance["n"], concordance["n_events"])
@@ -595,7 +680,7 @@ def main() -> None:
         for name, ci in by_vehicle.items():
             logger.info("Bootstrap por vehículo (%d vehículos) | %s=%.4f [%.4f, %.4f]",
                         ci["n_vehicles"], name, ci["point"], ci["lo"], ci["hi"])
-    if n_repeats > 1:
+    if n_repeats > 1 and when_spread is not None:
         spread = repeats_spread["pr_auc"]
         logger.info(
             "CV repetida (%d pasadas) | PR-AUC por repetición: %.4f ± %.4f (min %.4f, max %.4f)",
@@ -619,7 +704,7 @@ def main() -> None:
             "anticipación mediana %.0f km | umbral %.4f",
             budget, 100 * point["detection_rate"], point["median_lead_km"], point["threshold"],
         )
-    else:
+    elif budget is not None:
         logger.info("Ningún umbral respeta el presupuesto de %.0f falsas alarmas/1000", budget)
     if target_metrics and "cost_total" in target_metrics:
         logger.info(
@@ -686,7 +771,10 @@ def main() -> None:
 
     out_dir = ensure_dir(Path(resolve_path(cfg.get("output_dir", "experiments"))) / run_name)
     predictions.to_parquet(out_dir / "predictions.parquet", index=False)
-    curve.to_csv(out_dir / "lead_time_curve.csv", index=False)
+    if not curve.empty:
+        curve.to_csv(out_dir / "lead_time_curve.csv", index=False)
+    if landmark is not None:
+        pd.DataFrame(landmark["curve"]).to_csv(out_dir / "landmark_detection_curve.csv", index=False)
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2, default=float), encoding="utf-8")
     (out_dir / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
     logger.info("Outputs: %s", out_dir.relative_to(repo_root()))
@@ -702,12 +790,19 @@ def main() -> None:
                      for stat, v in stats.items()})
         if concordance:
             flat["oof/c_index"] = concordance["c_index"]
-        flat.update({f"cohort/{k}": v for k, v in ceiling.items()})
-        flat.update({f"within_failed/{k}": v for k, v in within_failed.items()})
-        flat.update({f"when/{k}": v for k, v in when.items()})
+        flat.update({f"cohort/{k}": v for k, v in (ceiling or {}).items()})
+        flat.update({f"within_failed/{k}": v for k, v in (within_failed or {}).items()})
+        flat.update({f"when/{k}": v for k, v in (when or {}).items()})
         flat.update({f"when_repeats/{k}_{stat}": v
-                     for k, stats in when_spread.items()
+                     for k, stats in (when_spread or {}).items()
                      for stat, v in stats.items()})
+        if landmark is not None:
+            flat.update({f"landmark/d1_{stat}": v for stat, v in landmark["d1"]["mean"].items()})
+            flat.update({f"landmark/d1_L{k}": v["c_index"]["mean"] for k, v in landmark["d1"]["by_landmark"].items()})
+            flat.update({f"landmark/d2_{stat}": v for stat, v in landmark["d2"]["detection_rate"].items()})
+            flat["landmark/d2_median_lead_days"] = landmark["d2"]["median_lead_days"]["mean"]
+            flat.update({f"landmark/{name}_boot_{side}": landmark[name]["bootstrap_by_vehicle"][side]
+                         for name in ("d1", "d2") for side in ("lo", "hi")})
         if by_vehicle:
             flat.update({f"vehicle_boot/{k}_{stat}": v
                          for k, ci in by_vehicle.items()
@@ -756,12 +851,17 @@ def main() -> None:
                 }
             )
         run.log(flat)
-        run.log({"lead_time_curve": wandb.Table(dataframe=curve)})
+        if not curve.empty:
+            run.log({"lead_time_curve": wandb.Table(dataframe=curve)})
+        if landmark is not None and landmark["curve"]:
+            run.log({"landmark_detection_curve": wandb.Table(dataframe=pd.DataFrame(landmark["curve"]))})
         run.log({"fold_metrics": wandb.Table(dataframe=pd.DataFrame(fold_metrics))})
         if cfg.get("wandb", {}).get("log_artifacts", False):
             artifact = wandb.Artifact(f"{run_name}-predictions", type="predictions")
             artifact.add_file(str(out_dir / "predictions.parquet"))
-            artifact.add_file(str(out_dir / "lead_time_curve.csv"))
+            for name in ("lead_time_curve.csv", "landmark_detection_curve.csv"):
+                if (out_dir / name).exists():
+                    artifact.add_file(str(out_dir / name))
             run.log_artifact(artifact)
         run.finish()
 

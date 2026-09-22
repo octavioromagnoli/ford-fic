@@ -155,38 +155,51 @@ def _build_folds(
     folds = []
     for fold, (_, valid_idx) in enumerate(splitter.split(np.zeros(len(panel)), y, groups)):
         valid_vehicles = sorted(pd.unique(groups[valid_idx]).tolist())
-        valid_mask = np.isin(groups, valid_vehicles)
-        n_positives = int(labels[valid_mask].sum())
-        if n_positives < min_valid_positives:
-            raise ValueError(
-                _thin_fold_message(
-                    repeat=repeat,
-                    fold=fold,
-                    n_positives=n_positives,
-                    minimum=min_valid_positives,
-                    n_valid_rows=int(valid_mask.sum()),
-                    where="al armar los folds",
-                )
-            )
-        folds.append(
-            {
-                "fold": fold,
-                "valid_vehicles": valid_vehicles,
-                "n_valid_rows": int(valid_mask.sum()),
-                "n_train_rows": int((~valid_mask).sum()),
-                "n_valid_event_vehicles": (
-                    _group_max(events[valid_mask], groups[valid_mask])
-                    if events is not None
-                    else None
-                ),
-                "valid_positive_rate": float(labels[valid_mask].mean()),
-                # Lo que mira la guarda, escrito en el JSON para que la tabla de folds
-                # salga del archivo y no haya que recalcularla contra el panel.
-                "n_valid_positives": n_positives,
-                "n_valid_positive_vehicles": _group_max(labels[valid_mask], groups[valid_mask]),
-            }
-        )
+        folds.append(_fold_record(groups, labels, events, fold=fold, valid_vehicles=valid_vehicles,
+                                  repeat=repeat, min_valid_positives=min_valid_positives,
+                                  where="al armar los folds"))
     return folds
+
+
+def _fold_record(
+    groups: np.ndarray,
+    labels: np.ndarray,
+    events: np.ndarray | None,
+    *,
+    fold: int,
+    valid_vehicles: list[str],
+    repeat: int,
+    min_valid_positives: int,
+    where: str,
+) -> dict[str, Any]:
+    """El registro de un fold en el JSON, después de pasar la guarda de positivos."""
+    valid_mask = np.isin(groups, valid_vehicles)
+    n_positives = int(labels[valid_mask].sum())
+    if n_positives < min_valid_positives:
+        raise ValueError(
+            _thin_fold_message(
+                repeat=repeat,
+                fold=fold,
+                n_positives=n_positives,
+                minimum=min_valid_positives,
+                n_valid_rows=int(valid_mask.sum()),
+                where=where,
+            )
+        )
+    return {
+        "fold": fold,
+        "valid_vehicles": valid_vehicles,
+        "n_valid_rows": int(valid_mask.sum()),
+        "n_train_rows": int((~valid_mask).sum()),
+        "n_valid_event_vehicles": (
+            _group_max(events[valid_mask], groups[valid_mask]) if events is not None else None
+        ),
+        "valid_positive_rate": float(labels[valid_mask].mean()),
+        # Lo que mira la guarda, escrito en el JSON para que la tabla de folds
+        # salga del archivo y no haya que recalcularla contra el panel.
+        "n_valid_positives": n_positives,
+        "n_valid_positive_vehicles": _group_max(labels[valid_mask], groups[valid_mask]),
+    }
 
 
 def make_splits(
@@ -300,6 +313,149 @@ def make_splits(
         "n_event_vehicles": n_event_vehicles,
         "repeats": repeats,
         # Espejo de la repetición 0: compatibilidad con todo lo que lee `splits["folds"]`.
+        "folds": repeats[0]["folds"],
+    }
+
+
+def _file_digest(path: str | Path) -> str:
+    return hashlib.sha256(resolve_path(path).read_bytes()).hexdigest()[:16]
+
+
+def extend_splits(
+    base_splits: dict[str, Any],
+    panel: pd.DataFrame,
+    *,
+    seed: int,
+    n_splits: int | None = None,
+    n_repeats: int | None = None,
+    group_column: str = GROUP_COLUMN,
+    stratify_column: str = STRATIFY_COLUMN,
+    stratify_level: str = STRATIFY_LEVEL,
+    label_column: str = LABEL_COLUMN,
+    min_valid_positives: int = MIN_VALID_POSITIVES,
+    guard_by: str | None = None,
+    base_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Folds para un panel nuevo que **conservan** los de un `splits.json` existente.
+
+    Para que la comparación con el finalista quede pareada (cure model, preregistro §6):
+    en cada repetición, un vehículo que ya tenía fold en `base_splits` lo conserva. Solo
+    se sortean los vehículos que el panel base no tenía:
+
+    * se estratifican por `stratify_column` a nivel vehículo (como `make_splits`) y, dentro
+      de cada estrato, cada uno va al fold con menos vehículos de ese estrato, desempatando
+      por menos vehículos en total y después al azar. El azar sale de
+      `seed + r · REPEAT_SEED_STEP`, la misma receta de semillas que `make_splits`;
+    * los vehículos del panel base que no están en este panel se descartan y se cuentan.
+
+    **Guarda.** La de siempre (filas `label = 1` por fold) y, con `guard_by`, una más
+    estricta: al menos `min_valid_positives` **vehículos** positivos en validación por
+    cada valor de esa columna (en el panel de hitos, por hito). Si no se cumple, falla: la
+    salida del preregistro es `make_splits` normal, con la comparación declarada no pareada.
+
+    El resultado tiene el mismo formato que `make_splits` más `extended_from` (path, huella
+    del archivo y del panel base, cuántos vehículos se conservaron, sortearon y descartaron)
+    y, por fold, `n_valid_new_vehicles` y `n_valid_positive_vehicles_by`.
+    """
+    _validate_panel(panel, group_column, stratify_column, label_column, *([guard_by] if guard_by else []))
+    base_repeats = _repeats_of(base_splits)
+    declared = splits_declared(base_splits)
+    n_splits = int(n_splits or declared["n_splits"])
+    n_repeats = int(n_repeats or len(base_repeats))
+    if n_splits != declared["n_splits"] or n_repeats != len(base_repeats):
+        raise ValueError(
+            f"El split base tiene {declared['n_splits']} folds × {len(base_repeats)} repeticiones y se "
+            f"pidieron {n_splits} × {n_repeats}: extender solo conserva folds que existen."
+        )
+    if min_valid_positives < 1:
+        raise ValueError(f"min_valid_positives={min_valid_positives}: con 0 la guarda no guarda nada")
+
+    groups = panel[group_column].astype(str).to_numpy()
+    labels = panel[label_column].astype(int).to_numpy()
+    events = panel[EVENT_COLUMN].astype(int).to_numpy() if EVENT_COLUMN in panel.columns else None
+    strata = pd.Series(stratify_labels(panel, group_column=group_column, column=stratify_column,
+                                       level=stratify_level)).groupby(groups).max()
+    vehicles = sorted(strata.index)
+    base_vehicles = {str(v) for fold in base_repeats[0]["folds"] for v in fold["valid_vehicles"]}
+    kept = [v for v in vehicles if v in base_vehicles]
+    new = [v for v in vehicles if v not in base_vehicles]
+    dropped = sorted(base_vehicles - set(vehicles))
+
+    repeats = []
+    for repeat, entry in enumerate(base_repeats):
+        base_fold = {str(v): int(fold["fold"]) for fold in entry["folds"] for v in fold["valid_vehicles"]}
+        if set(base_fold) != base_vehicles:
+            raise ValueError(f"La repetición {repeat} del split base no reparte los mismos vehículos que la 0")
+        assignment = {v: base_fold[v] for v in kept}
+        rng = np.random.default_rng(int(seed) + repeat * REPEAT_SEED_STEP)
+        for stratum in sorted(strata.unique(), reverse=True):
+            in_stratum = np.zeros(n_splits, dtype=int)
+            totals = np.zeros(n_splits, dtype=int)
+            for vehicle, fold in assignment.items():
+                totals[fold] += 1
+                in_stratum[fold] += int(strata[vehicle] == stratum)
+            candidates = [v for v in new if strata[v] == stratum]
+            for vehicle in rng.permutation(np.asarray(candidates, dtype=object)):
+                fold = int(np.lexsort((rng.random(n_splits), totals, in_stratum))[0])
+                assignment[str(vehicle)] = fold
+                in_stratum[fold] += 1
+                totals[fold] += 1
+
+        folds = []
+        for fold in range(n_splits):
+            valid_vehicles = sorted(v for v, f in assignment.items() if f == fold)
+            record = _fold_record(groups, labels, events, fold=fold, valid_vehicles=valid_vehicles,
+                                  repeat=repeat, min_valid_positives=min_valid_positives,
+                                  where="al extender los folds")
+            record["n_valid_new_vehicles"] = int(sum(v not in base_vehicles for v in valid_vehicles))
+            if guard_by:
+                valid_mask = np.isin(groups, valid_vehicles)
+                by_group = (pd.DataFrame({"g": panel[guard_by].to_numpy()[valid_mask], "v": groups[valid_mask],
+                                          "y": labels[valid_mask]})
+                            .loc[lambda d: d["y"] == 1].groupby("g")["v"].nunique())
+                values = sorted(pd.unique(panel[guard_by]))
+                counts = {f"{value:g}" if isinstance(value, float) else str(value): int(by_group.get(value, 0))
+                          for value in values}
+                thin = {k: n for k, n in counts.items() if n < min_valid_positives}
+                if thin:
+                    raise ValueError(
+                        f"Repetición {repeat}, fold {fold}: {thin} vehículo(s) positivos en validación por "
+                        f"`{guard_by}` (mínimo {min_valid_positives}). Extender no es viable: la salida del "
+                        "preregistro es `make_splits` normal, con la comparación declarada no pareada."
+                    )
+                record["n_valid_positive_vehicles_by"] = counts
+            folds.append(record)
+        covered = [v for fold in folds for v in fold["valid_vehicles"]]
+        if sorted(covered) != vehicles:
+            raise AssertionError(f"Repetición {repeat}: los folds no reparten cada vehículo del panel exactamente una vez")
+        repeats.append({"repeat": repeat, "seed": int(seed) + repeat * REPEAT_SEED_STEP,
+                        "base_seed": entry.get("seed"), "folds": folds})
+
+    return {
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "n_splits": n_splits,
+        "seed": int(seed),
+        "group_column": group_column,
+        "stratify": {"column": stratify_column, "level": stratify_level,
+                     "n_positive_vehicles": int(strata.sum())},
+        "label_column": label_column,
+        "min_valid_positives": int(min_valid_positives),
+        "guard_by": guard_by,
+        "n_repeats": n_repeats,
+        "panel": panel_fingerprint(panel),
+        "n_event_vehicles": _group_max(events, groups) if events is not None else None,
+        "extended_from": {
+            "path": None if base_path is None else str(base_path),
+            "file_sha256_16": None if base_path is None else _file_digest(base_path),
+            "panel": base_splits.get("panel"),
+            "declared": declared,
+            "n_kept": len(kept),
+            "n_new": len(new),
+            "n_new_positive": int(strata[new].sum()) if new else 0,
+            "n_dropped": len(dropped),
+            "dropped_vehicles": dropped,
+        },
+        "repeats": repeats,
         "folds": repeats[0]["folds"],
     }
 

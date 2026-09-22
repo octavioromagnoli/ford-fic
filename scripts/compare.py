@@ -104,6 +104,9 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
     aggregation = (config.get("eval") or {}).get("vehicle_read_aggregation", "mean")
     vehicle_agg = (vehicle.get("aggregations") or {}).get(aggregation) or {}
     panel = (config.get("data") or {}).get("panel")
+    # Panel de hitos (cure model): D1 y D2 son los que deciden (preregistro §5).
+    landmark = metrics.get("landmark") or {}
+    d1, d2 = landmark.get("d1") or {}, landmark.get("d2") or {}
     return {
         "run": run_dir.name,
         "model": (config.get("model") or {}).get("name", "?"),
@@ -142,6 +145,16 @@ def load_run(run_dir: Path) -> dict[str, Any] | None:
             if "cost_matrix" in (config.get("eval") or {})
             else None
         ),
+        "landmark_score_column": (landmark.get("config") or {}).get("score_column"),
+        "d1": (d1.get("mean") or {}).get("mean"),
+        "d1_std": (d1.get("mean") or {}).get("std"),
+        "d1_lo": (d1.get("bootstrap_by_vehicle") or {}).get("lo"),
+        "d1_hi": (d1.get("bootstrap_by_vehicle") or {}).get("hi"),
+        "d2": (d2.get("detection_rate") or {}).get("mean"),
+        "d2_std": (d2.get("detection_rate") or {}).get("std"),
+        "d2_lo": (d2.get("bootstrap_by_vehicle") or {}).get("lo"),
+        "d2_hi": (d2.get("bootstrap_by_vehicle") or {}).get("hi"),
+        "d2_lead_days": (d2.get("median_lead_days") or {}).get("mean"),
     }
 
 

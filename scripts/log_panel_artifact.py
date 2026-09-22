@@ -14,6 +14,11 @@ los pisan, igual que en `scripts/train.py`):
 - `test-split` (tipo `holdout`): `test_split.json`, para que `select_dev()` recorte
   igual en todas las máquinas.
 
+El mismo script publica el panel de hitos del cure model (`panel-landmark-ps`, con sus
+folds congelados y el YAML del reloj del evento):
+
+    python scripts/log_panel_artifact.py --config configs/data/panel_landmark_ps.yaml
+
 Para consumirlos desde otro lado:
 
     import wandb
@@ -40,6 +45,36 @@ from src.config import load_config, resolve_path  # noqa: E402
 logger = logging.getLogger("log_panel_artifact")
 
 
+def describe(meta: dict) -> tuple[str, dict]:
+    """`(descripción, metadata)` del Artifact: panel v1 (tiene `label`) o panel de hitos."""
+    if "label" in meta:
+        description = (
+            f"Panel real F2 · W={meta['label']['window_km']:.0f} G={meta['label']['gap_km']:.0f} "
+            f"H={meta['label']['horizon_km']:.0f} Δ={meta['label']['cut_step_km']:.0f} km · "
+            f"{meta['panel']['rows']} filas antes del emparejado · dev {meta['dev']['rows']} filas / "
+            f"{meta['dev']['vehicles']} vehículos · test {meta['test']['rows']} / {meta['test']['vehicles']}"
+        )
+        metadata = {
+            "label": meta["label"], "anchor": meta["anchor"], "events": meta["events"],
+            "dev": meta["dev"], "test": meta["test"], "sampling": meta["sampling"],
+            "n_feat": len(meta["columns"]["feat"]), "n_static": len(meta["columns"]["static"]),
+            "n_aux": len(meta["columns"]["aux"]), "splits": meta["splits"], "created_at": meta["created_at"],
+        }
+        return description, metadata
+    landmark = meta["landmark"]
+    description = (
+        f"Panel de hitos post-venta (cure model) · hitos {landmark['landmarks_days']} d · "
+        f"G={landmark['gap_days']} d · H={landmark['horizon_days']} d · dev {meta['dev']['rows']} filas / "
+        f"{meta['dev']['vehicles']} vehículos · test {meta['test']['rows']} / {meta['test']['vehicles']}"
+    )
+    metadata = {
+        "landmark": landmark, "anchor": meta["anchor"], "dev": meta["dev"], "test": meta["test"],
+        "fleet_features": meta["fleet_features"], "n_feat_fm": meta["columns"]["feat_fm"],
+        "n_aux": len(meta["columns"]["aux"]), "created_at": meta["created_at"],
+    }
+    return description, metadata
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -54,7 +89,7 @@ def main() -> int:
     splits_path = resolve_path(cfg["output"]["splits"])
     meta_path = resolve_path(cfg["output"]["meta"])
     holdout_path = resolve_path(cfg["test_split"])
-    features_path = resolve_path(cfg["features"]["spec"])
+    features_path = resolve_path((cfg.get("features") or {}).get("spec") or cfg["features_spec"])
     for path in (panel_path, splits_path, meta_path, holdout_path):
         if not path.exists():
             raise FileNotFoundError(f"Falta {path}. Construí el panel primero: "
@@ -73,31 +108,21 @@ def main() -> int:
         job_type="dataset",
         tags=list(wandb_cfg.get("tags", ["f2", "panel"])),
         mode=mode,
-        config={"panel_config": cfg.get("_config_path"), "label": meta["label"], "splits": meta["splits"]},
+        config={"panel_config": cfg.get("_config_path"), "label": meta.get("label") or meta.get("landmark"),
+                "splits": meta.get("splits") or cfg.get("splits")},
     )
     logger.info("wandb: %s/%s | mode=%s", entity or "<default>", wandb_cfg.get("project", "ford-fic"), mode)
 
-    panel_artifact = wandb.Artifact(
-        wandb_cfg["artifact"],
-        type="dataset",
-        description=(
-            f"Panel real F2 · W={meta['label']['window_km']:.0f} G={meta['label']['gap_km']:.0f} "
-            f"H={meta['label']['horizon_km']:.0f} Δ={meta['label']['cut_step_km']:.0f} km · "
-            f"{meta['panel']['rows']} filas antes del emparejado · dev {meta['dev']['rows']} filas / "
-            f"{meta['dev']['vehicles']} vehículos · test {meta['test']['rows']} / {meta['test']['vehicles']}"
-        ),
-        metadata={
-            "label": meta["label"], "anchor": meta["anchor"], "events": meta["events"],
-            "dev": meta["dev"], "test": meta["test"], "sampling": meta["sampling"],
-            "n_feat": len(meta["columns"]["feat"]), "n_static": len(meta["columns"]["static"]),
-            "n_aux": len(meta["columns"]["aux"]), "splits": meta["splits"], "created_at": meta["created_at"],
-        },
-    )
+    description, metadata = describe(meta)
+    panel_artifact = wandb.Artifact(wandb_cfg["artifact"], type="dataset", description=description,
+                                    metadata=metadata)
     panel_artifact.add_file(str(panel_path), name="panel.parquet")
     panel_artifact.add_file(str(splits_path), name="splits.json")
     panel_artifact.add_file(str(meta_path), name="panel_meta.json")
     panel_artifact.add_file(str(resolve_path(args.config)), name="configs/panel.yaml")
     panel_artifact.add_file(str(features_path), name="configs/features.yaml")
+    if cfg.get("event_clock"):
+        panel_artifact.add_file(str(resolve_path(cfg["event_clock"])), name="configs/event_clock.yaml")
     run.log_artifact(panel_artifact)
 
     holdout = json.loads(holdout_path.read_text(encoding="utf-8"))

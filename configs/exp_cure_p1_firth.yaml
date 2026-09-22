@@ -1,0 +1,116 @@
+# F3 · cure model, P1: incidencia por Firth + FLIC sobre las cuatro features, latencia
+# Weibull. Preregistro: docs/memoria/f3-preregistro-cure.md §4. Corre solo si P0 le ganó
+# a su nulo estratificado (C1) en D1 (§8, paso 3).
+#
+#   python scripts/train.py --config configs/exp_cure_p1_firth.yaml
+#   python scripts/audit_cure.py --config configs/exp_cure_p1_firth.yaml
+#
+# Idéntico a configs/exp_cure_p0_unitweight.yaml salvo la incidencia y el score que se mide.
+name: f3-cure-p1-firth
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel_landmark_ps.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_landmark_ps_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+preprocessing: none
+
+target:
+  name: cure_window
+
+model:
+  name: cure_mixture
+  params:
+    incidence: firth
+    latency: weibull
+    per_landmark: true
+    firth_flic: true
+    normalizer_params:
+      min_ref_vehicles: 10
+    max_iter: 1000
+    tol: 1.0e-7
+    random_state: 42
+
+eval:
+  legacy_blocks: false
+  carry_columns:
+    - aux_landmark_day
+    - aux_dss_entry
+    - aux_dss_exit
+    - aux_event_in_window
+    - aux_gap_days
+    - aux_dss_window_end
+    - aux_days_to_event_after_cut
+    - aux_resolved_negative
+    - aux_resolved_negative_e60
+    - aux_resolved_negative_e120
+    - aux_production_tercile
+    - static_SalesCountry_cd
+    - aux_static_ProductionDay
+    - aux_sale_day
+    - window_km
+    - aux_landmark_month
+    - aux_air_temp_window_mean
+  landmark:
+    score_column: score               # P1 se mide con su probabilidad π·(1 − S(L+G+H)/S(L+G))
+    probability_column: score
+    max_false_alarms_per_1000: 50
+    extra_false_alarms_per_1000: [100]
+    e_min_days_sensitivity: [60, 120]
+    n_boot: 2000
+
+audit_cure:
+  event_clock: configs/data/event_clock.yaml
+  # Preregistro §8, paso 4, más C1 y C2 que pide la adopción (§5).
+  audits: [A0, C1, C2, A3, A5, C6, A6]
+  compare_to: f3-cure-p0-unitweight            # veredicto P1 contra P0 (§5)
+  n_boot: 2000
+  a0:
+    permutations: 5
+    d1_tolerance: 0.05
+    d2_tolerance: 0.05
+  c1:
+    permutations: 2000
+    strata: [aux_landmark_day, aux_production_tercile, static_SalesCountry_cd]
+    alpha: 0.05
+  c2:
+    floors:
+      production_day: aux_static_ProductionDay
+      sale_day: aux_sale_day
+    production_column: aux_static_ProductionDay
+    tercile_column: aux_production_tercile
+    max_abs_rho: 0.2
+  a3:
+    covariates: [aux_landmark_month, aux_air_temp_window_mean, aux_static_ProductionDay]
+    threshold: 0.02                             # ΔD1 o ΔAUC entre resueltos > 0,02 marca
+  a5:
+    raw_prefix: aux_raw_
+  c6:
+    km_column: window_km
+  a6:
+    reference_run: f3-survival-stacking-r3-rebuild
+    first_cut_auc: 0.681                        # AUC por vehículo con su primer corte (Fase 1, H7)
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-cure
+  job_type: train
+  tags: [f3, cure, landmark, p1, r3]
+  mode: online
+  log_artifacts: true
+
+output_dir: experiments

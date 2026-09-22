@@ -45,6 +45,10 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-piso-posicional.md](f3-piso-posicional.md) | El odómetro solo le gana a los cuatro finalistas en PR-AUC por fila y en las tres métricas del eje "cuándo": qué métricas quedan descalificadas y cuáles dos sobreviven. Con R=3 (21-09): el 17,0% del CNN-LSTM era la repetición 0 — da 11,9% ± 3,6, igual que el control |
 | [f3-preregistro-landmark-ensamble.md](f3-preregistro-landmark-ensamble.md) | Lista cerrada de las corridas de landmarking y del ensamble de finalistas (máximo 4), con qué métrica decide cada una y qué resultado la descarta, escrita antes de correrlas |
 | [f3-desvio-historia.md](f3-desvio-historia.md) | El desvío respecto de la historia previa del vehículo (la pista de TimesFM, sin TimesFM) sobre survival stacking: ROC univariado 0,598, pero (a′) mejora 0,98× el desvío combinado y la anticipación pierde su estabilidad. No entra |
+| [f3-reloj-y-ventana-del-evento.md](f3-reloj-y-ventana-del-evento.md) | **En qué reloj ocurre el evento y en qué ventana se registra** (22-09, Fase 1 del cure model): días y no km; los eventos solo existen entre el 03-09-2025 y el 11-03-2026, así que la censura de un sano es su exposición dentro de esa ventana; el riesgo arranca en la venta; sin trayectoria previa, con un rasgo temprano débil en la cola |
+| [f3-preregistro-cure.md](f3-preregistro-cure.md) | Lista cerrada del cure model sobre hitos post-venta, escrita antes de construir el panel y de medir D1/D2: reloj, ventana y censura; las cuatro features fijas; P0 (pesos unitarios), P1 (Firth + FLIC), P2 (TabPFN v2, condicional); qué decide, los nulos y las paradas |
+| [f3-mejor-modelo-a-la-fecha.md](f3-mejor-modelo-a-la-fecha.md) | **Cuál es el mejor modelo hoy y por qué** (22-09): survival stacking, con la tabla de las dos métricas que valen, el cure model explicado en criollo y los límites para el pitch |
+| [f3-cure-model.md](f3-cure-model.md) | **Resultado del cure model (22-09):** P0 le gana a su nulo (p = 0,0045) pero no al piso de producción, y empata con un solo número de uso (−km/L); P1 empata con P0. No se adopta nada y el finalista no cambia |
 | [f3-gru-secuencial.md](f3-gru-secuencial.md) | GRU sobre la ventana en bins de km: `last` le gana por poco al LightGBM (p = 0,05), la atención pierde y la ventana larga no ayuda |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué. **Su primera entrada cierra F3**: el techo de cohorte, el piso posicional, por qué el PR-AUC por fila mide *qué auto* y no *cuándo*, y por qué el finalista se elige por el punto de operación |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
@@ -67,6 +71,11 @@ python scripts/audit_gamma_monotonia.py --config configs/data/gamma_monotonia.ya
 python scripts/build_positional_panel.py --config configs/data/panel_positional.yaml  # panel de una sola feature: el odómetro
 python scripts/audit_positional_floor.py f3-survival-stacking         # ¿le gana al odómetro pelado? (piso del eje "cuándo")
 python scripts/rescore_run.py f3-cnn-lstm-r3-regen15                # completa una corrida vieja desde sus predicciones, sin reentrenar
+python scripts/audit_event_clock.py --config configs/data/event_clock.yaml  # reloj y ventana del evento (Fase 1 del cure model)
+python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps.yaml  # panel de hitos post-venta (Fase 3 del cure model)
+python scripts/make_splits.py --config configs/data/panel_landmark_ps.yaml          # folds del cure model: extienden splits_r3.json (Fase 7)
+python scripts/train.py --config configs/exp_cure_p0_unitweight.yaml               # cure model P0 (y exp_cure_p1_firth.yaml)
+python scripts/audit_cure.py --config configs/exp_cure_p0_unitweight.yaml          # sus auditorías y el veredicto (f3-cure-model.md)
 python scripts/check_setup.py      # chequeos del harness
 ```
 

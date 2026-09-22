@@ -19,9 +19,12 @@ panel real. **F3 cerrada el 20-09**: los candidatos medidos están en `results/`
 lectura conjunta —qué mide en realidad el PR-AUC por fila de este panel, y por qué el
 finalista es survival stacking— es la primera entrada de
 [`docs/memoria/decisiones.md`](docs/memoria/decisiones.md). Hay que leerla antes de
-volver a comparar modelos: cambia el criterio. **Lo siguiente es F4 (dashboard contra el
-panel real)**; las ideas que quedaron sin probar siguen en
-`docs/f3-modelos-candidatos.md`.
+volver a comparar modelos: cambia el criterio. **El 22-09 se midió el cure model por hito
+post-venta**, con preregistro y lista cerrada. El rasgo temprano existe, pero no le gana al piso
+de producción y empata con un solo número de uso. No se adopta y **el finalista sigue siendo
+survival stacking** (`docs/memoria/f3-cure-model.md`). Lo que sí cambia todo panel es la ventana
+del registro de eventos (abajo). **Lo siguiente es F4 (dashboard contra el panel real)**; las
+ideas que quedaron sin probar siguen en `docs/f3-modelos-candidatos.md`.
 
 **El presupuesto de comparaciones está agotado** (§0, punto 2 de ese doc): con ~12
 eventos por fold, agregar candidatos sobre la marcha garantiza que "el mejor" sea ruido.
@@ -30,7 +33,7 @@ un modelo.
 
 **Antes de tocar los datos, leer [`docs/memoria/`](docs/memoria/README.md).** Ahí
 están los hallazgos de F1/F2 y las decisiones tomadas, con la evidencia y el comando
-que las reproduce. Ocho que cambian cómo se escribe el código:
+que las reproduce. Nueve que cambian cómo se escribe el código:
 
 - Los datos vienen en **dos cohortes de muestreo** (failed / not_failed) y la
   cohorte *es* la etiqueta: `IdentificationDate` nula ⇔ sin evento. Nunca entra
@@ -61,6 +64,13 @@ que las reproduce. Ocho que cambian cómo se escribe el código:
 - **El 35% de las filas de `trips` son idle de 0 km** (motor encendido sin moverse) y
   son la señal que más anticipa. Toda fracción "de viaje" se calcula entre los que se
   mueven; `KilometerPerHour` es nulo exactamente ahí y se recalcula como km/duración.
+- **El registro de eventos tiene ventana de calendario:** 01-09-2025 → 11-03-2026,
+  `configs/data/event_clock.yaml`.
+  - **La censura de un sano es el fin de su exposición dentro de esa ventana, no su último
+    viaje**, y un sano sin exposición en la ventana no es un negativo.
+  - El riesgo se mide en días desde la venta: el evento se ordena por días, no por km.
+  - El panel v1 no se corrigió: el 28% de sus horizontes sanos cae en parte fuera de la ventana
+    (`docs/memoria/decisiones.md`, 22-09).
 
 ## Contrato de datos
 
@@ -82,6 +92,10 @@ Artefacto: `data/processed/panel.parquet` (dummy: `panel_dummy.parquet`).
 | `static_*` | mixto | solo `SalesCountry_cd` en el set base v1 |
 | `aux_km_observed_after_cut` | float | km observados **después** del corte (`last_odo − c`). En los censurados es la única forma de saber hasta dónde estuvieron en riesgo: un sano no es un cero, es "llegó hasta acá sin fallar" |
 | `aux_*` | mixto | **en el panel, fuera del modelo**: `aux_static_{Engine, ModelSeries, ProductionDay, daysUntilSale}`, `aux_air_temp_*`, `aux_regen_marker_per_1000km`, controles de ventana. Para ablaciones y auditorías sin reconstruir |
+
+**El panel de hitos del cure model** (`panel_landmark_ps.parquet`) usa los mismos nombres, pero
+tiene una fila por (vehículo, hito post-venta). `horizon_km`/`gap_km` van en NaN, y el riesgo
+vive en `aux_dss_entry`, `aux_dss_exit` y `aux_event_in_window` (`docs/memoria/f3-cure-model.md`).
 
 **Regla de prefijos:** toda columna que entra a un modelo se llama `feat_` o
 `static_`, y `src/training/cv.py` la selecciona por prefijo. Agregar una feature
@@ -182,6 +196,8 @@ src/data/join.py         unión a nivel vehículo + enriquecimiento de trips/sig
 src/data/subset.py       trips/signals para un conjunto de vehículos: canoniza → filtra → deduplica la fila completa
 src/data/anchor.py       origen del calendario (estimado sobre dev, congelado en panel_meta.json) y odómetro del evento
 src/data/panel.py        cortes en grilla de Δ, etiqueta con gap y horizonte, censura, QC de ventana, emparejado de sanos
+src/data/landmark.py     panel de hitos post-venta (cure model): una fila por (vehículo, hito en días desde la venta),
+                         riesgo dentro de la ventana del registro, features por mes para la referencia de flota
 src/features/trips.py    derivadas a nivel viaje (idle/moving, velocidad recalculada, topes físicos, regen = caída de AirRegeneration)
 src/features/signals.py  una booleana por nivel de Message; regen_marker solo como aux
 src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agregadores (per_1000km, half_*, gap_*, km_since_last…)
@@ -192,17 +208,26 @@ src/models/timesfm_zeroshot.py  series por km + TimesFM 3.0 zero-shot sobre los 
 src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia + rama estática (torch, opcional)
 src/models/survival_stacking.py  supervivencia en tiempo discreto: apila (fila × bin de km), hazard por bin,
                          score = 1 − S(H|x). Backend lightgbm o gpboost (efecto aleatorio por vehículo, opcional)
-src/training/cv.py       loop de CV agrupada; selección de features por prefijo; hook `target:`
+src/models/cure.py       mixture cure model por hito (incidencia Firth + FLIC o pesos unitarios, latencia Weibull
+                         con entrada tardía, EM que falla si la verosimilitud baja); trae su propio pipeline
+src/training/cv.py       loop de CV agrupada; selección de features por prefijo; hooks `target:`,
+                         `preprocessing: standard|none` y `carry_columns` (eval.carry_columns)
+src/training/transformers.py  FleetReferenceNormalizer: desvío contra la mediana de los sanos del train por
+                         mercado × mes (se ajusta por fold, nunca con validación)
 src/training/targets.py  con qué se entrena (no con qué se mide) y cómo la salida del modelo vuelve a un
-                         score comparable: registro por nombre, `discrete_survival` y `ordinal_horizon`.
+                         score comparable: registro por nombre, `discrete_survival`, `ordinal_horizon` y
+                         `cure_window` (exposición en la ventana del registro, para el cure model).
                          Lo que se evalúa sigue siendo `label`; cv.py no sabe qué modos hay
 src/eval/splits.py       splits antileakage + serialización a splits.json
-                         estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML
+                         estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML;
+                         extend_splits() conserva los folds de un split existente y reparte solo los vehículos nuevos
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
                          (por folds y por vehículo) + C-index out-of-fold +
                          cohort_ceiling()/pr_auc_within_failed()/when_contribution() (el piso real y la
                          descomposición cohorte/cuándo), vehicle_scores()/vehicle_metrics() (la decisión
-                         por vehículo, MIL) y cost_ratio_sweep() (C_FN/C_FP: reporte, nunca selección)
+                         por vehículo, MIL) y cost_ratio_sweep() (C_FN/C_FP: reporte, nunca selección);
+                         landmark_metrics(): D1 (C con entrada tardía) y D2 (primera alerta sobre los hitos) del
+                         panel de hitos, con bootstrap pareado por vehículo
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
@@ -217,7 +242,11 @@ scripts/audit_model.py   las auditorías obligatorias de F3 §0.4 sobre cualquie
                          null global, permutación intra-vehículo, aporte del `cuándo`, aux_ de calendario, importancias
 scripts/build_seq_panel.py  panel secuencial: mismas filas que el panel v1, feat_seq_* en vez de agregados
                          (+ _meta.json con T y C); mismo splits.json
-scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambiar folds no es reconstruir el panel)
+scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambiar folds no es reconstruir el panel);
+                         con `splits.extend_from` extiende uno congelado, y no pisa un reparto distinto sin --force
+scripts/audit_event_clock.py  en qué reloj ocurre el evento y en qué ventana se registra (Fase 1 del cure model)
+scripts/build_landmark_panel.py  panel de hitos post-venta + _meta.json (universo de 364, conteos solo de dev)
+scripts/audit_cure.py    auditorías del cure model (A0, C1, C2, C3, C6, A3, A5, A6), veredicto y adopción
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/build_history_panel.py  panel_history.parquet = panel_survival + feat_*_hist_delta (mismas filas; verifica
@@ -232,7 +261,7 @@ scripts/results.py       registro versionado en results/: métricas + config com
 scripts/rescore_run.py   re-mide una corrida vieja desde su predictions.parquet con la misma cuenta que train.py
                          (`evaluate_predictions`), sin reentrenar; falla si lo ya medido no se reproduce
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (64 chequeos)
+scripts/check_setup.py   smoke test del harness (129 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4
