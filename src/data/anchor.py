@@ -108,3 +108,51 @@ def project_dates_to_odometer(
     )
     out["event_odo_uncertainty_km"] = (merged["odo_after"] - merged["odo_before"]).abs().astype(float)
     return out.set_index(ID_COL)
+
+
+def project_odometer_to_dates(
+    queries: pd.DataFrame,
+    trips: pd.DataFrame,
+    *,
+    odo_query_col: str = "odo",
+    date_col: str = "TripDatetimeStart",
+    odo_col: str = "OdometerTripEnd",
+) -> pd.Series:
+    """Fecha en que el odómetro de cada vehículo llega a un valor: la inversa de la anterior.
+
+    `queries` trae `vehicle_id` y `odo_query_col`. Devuelve las fechas (UTC) alineadas con
+    su índice: NaT si el vehículo no tiene viajes o si su odómetro nunca llega a ese valor
+    (antes del primer viaje o después del último).
+
+    Usa la misma curva (fecha de inicio del viaje, odómetro al final) y la misma
+    interpolación lineal que `project_dates_to_odometer`, sobre el odómetro acumulado para
+    que sea monótona. Con una meseta (viajes de 0 km) devuelve la primera fecha en que el
+    odómetro alcanza el valor. Por eso, si `x ≤ odómetro del evento`, la fecha de `x` nunca
+    pasa la del evento: el origen del riesgo de una fila con evento no cae después de él.
+    """
+    anchors = trips[[ID_COL, date_col, odo_col]].dropna().sort_values([ID_COL, date_col], kind="stable")
+    anchor_rows = anchors.groupby(ID_COL, observed=True, sort=False).indices
+    days = ((anchors[date_col] - EPOCH) / pd.Timedelta(days=1)).to_numpy(dtype=float)
+    odometer = anchors[odo_col].to_numpy(dtype=float)
+
+    out = np.full(len(queries), np.nan)
+    positions = queries.groupby(ID_COL, observed=True, sort=False).indices
+    targets = queries[odo_query_col].to_numpy(dtype=float)
+    for vehicle, rows in positions.items():
+        idx = anchor_rows.get(vehicle)
+        if idx is None:
+            continue
+        odo = np.maximum.accumulate(odometer[idx])
+        t = days[idx]
+        x = targets[rows]
+        j = np.searchsorted(odo, x, side="left")
+        # j = 0: solo vale si x es exactamente el primer odómetro. j = len: nunca llega.
+        found = np.isfinite(x) & (j < len(odo)) & ((j > 0) | (x == odo[0]))
+        jj = np.clip(j, 1, max(len(odo) - 1, 1))
+        lo_o, hi_o = odo[jj - 1], odo[np.minimum(jj, len(odo) - 1)]
+        lo_t, hi_t = t[jj - 1], t[np.minimum(jj, len(odo) - 1)]
+        # Con j ≥ 1, odo[j−1] < x ≤ odo[j]: el cociente está en (0, 1] y nunca divide por 0.
+        weight = np.where(hi_o > lo_o, (x - lo_o) / np.where(hi_o > lo_o, hi_o - lo_o, 1.0), 1.0)
+        value = np.where(j == 0, t[0], lo_t + weight * (hi_t - lo_t))
+        out[rows] = np.where(found, value, np.nan)
+    return pd.Series(EPOCH + pd.to_timedelta(out, unit="D"), index=queries.index)

@@ -1,0 +1,103 @@
+# Panel de hitos post-venta con la ventana de features FIJA en 30 días (F5 §3.2).
+#
+#   python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps_w30.yaml
+#
+# Mismas filas, mismas `aux_` y mismos folds que panel_landmark_ps.yaml (el del cure model): cambia
+# solo de dónde salen las features. En todos los hitos son las de (venta, venta + 30], la
+# ventana con la que se entrena la incidencia externa, más `feat_log1p_km_per_day`.
+# Preregistro: docs/memoria/f5-preregistro-incidencia-externa.md §3 y §5.
+#
+# ---- lo que sigue es panel_landmark_ps.yaml, con tres cambios marcados (F5) ----
+# Panel de hitos post-venta (Fase 3 del cure model). Una fila por (vehículo, hito L días
+# después de la venta).
+#
+#   python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps.yaml
+#
+# Cada valor de acá está preregistrado en docs/memoria/f3-preregistro-cure.md §1–§3. Para
+# cambiar uno, primero se commitea el cambio en el preregistro (y por qué), después acá.
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml
+# Estáticas (`load_vehicle_static` las renombra a `static_*` según este YAML).
+panel_config: configs/data/panel_v1.yaml
+# Definiciones de las features (columna + agregador) y umbrales/topes de `derive_trip_columns`.
+features_spec: configs/data/features_v1.yaml
+
+# Universo + holdout congelado: el panel se construye con los 364 (dev + test); los terciles
+# de producción y el origen del calendario se estiman solo con dev.
+test_split: ${DATA_DIR}/processed/test_split.json
+# Origen del calendario congelado en F2. Se re-estima sobre dev y falla si no coincide.
+anchor_meta: ${DATA_DIR}/processed/panel_meta.json
+# Ventana del registro de eventos (`event_window`), congelada en la Fase 1. Se lee de ahí
+# para que haya una sola fuente.
+event_clock: configs/data/event_clock.yaml
+
+landmark:
+  landmarks_days: [30, 60, 90]   # L, días desde la venta
+  gap_days: 30                    # G: ≈ 1.700 km al km/día mediano (57); G = 500 km del panel v1 son ≈ 9 d
+  horizon_days: 240               # H: cubre la latencia observada (máximo 268 d post-venta)
+  min_trips: 15                   # viajes post-venta mínimos en (venta, venta + L]
+  feature_window_days: 30         # F5: features de (venta, venta + 30] en todos los hitos
+  usage_feature: true             # F5: feat_log1p_km_per_day en esa ventana
+
+# Negativo resuelto (D2): sano con exposición en la ventana ≥ e_min_days, medida desde
+# max(venta + from_landmark_days + G, inicio de la ventana) hasta el fin de la ventana.
+# Es una propiedad del vehículo: es la misma en sus tres hitos.
+resolved_negative:
+  from_landmark_days: 30
+  e_min_days: 90
+  sensitivity_days: [60, 120]
+
+# Terciles de `ProductionDay` sobre los vehículos de dev (estratos del nulo C1 y de C2).
+production_terciles: 3
+
+# Las cuatro features del índice físico (docs/f3-modelos-candidatos.md §1.1). `column` y
+# `agg` salen de `features_spec`: acá solo va el peso de la celda (vehículo × mes) y su
+# mínimo. Bajo el mínimo el valor del mes queda en NaN (el peso se conserva). El signo de
+# cada una es de P0 y va en su YAML de experimento, no acá.
+fleet_features:
+  - {name: idle_per_1000km,              weight: km,      min_weight: 100}
+  - {name: trips_below_regime_temp_frac, weight: n_valid, min_weight: 5}
+  - {name: speed_kmh_mean,               weight: n_valid, min_weight: 5}
+  - {name: coolant_temp_end_mean,        weight: n_valid, min_weight: 5}
+
+# Estáticas que entran por prefijo. `SalesCountry_cd` solo sirve para armar la celda de la
+# referencia de flota (mercado × mes); el normalizador la consume.
+static_columns: [SalesCountry_cd]
+# Estáticas que viajan como `aux_static_*`, fuera del modelo (auditorías A3 y C2).
+aux_static: [ProductionDay, daysUntilSale, ModelSeries, Engine]
+
+scan:
+  chunksize: 500000
+
+# Los viajes derivados del universo se cachean (leer los crudos lleva minutos). `--refresh`
+# los vuelve a leer.
+trips_cache: ${DATA_DIR}/interim/landmark_trips.parquet
+
+# Folds del cure model (preregistro §6), congelados antes de entrenar con
+#   python scripts/make_splits.py --config configs/data/panel_landmark_ps.yaml
+# Extienden splits_r3.json: los vehículos del panel v1 conservan su fold en cada repetición
+# (la comparación con el finalista queda pareada) y solo se sortean los nuevos.
+splits:
+  n_splits: 5
+  n_repeats: 3
+  seed: 42
+  stratify: {column: label, level: vehicle}
+  min_valid_positives: 5
+  extend_from: ${DATA_DIR}/processed/splits_r3.json
+  guard_by: aux_landmark_day      # ≥ 5 vehículos positivos en validación en cada hito
+
+# Artifacts: `python scripts/log_panel_artifact.py --config configs/data/panel_landmark_ps.yaml`
+wandb:
+  project: ford-fic
+  entity: oromagnoli-
+  artifact: panel-landmark-ps-w30   # panel + folds congelados + meta + YAMLs (panel, features, reloj)
+  holdout_artifact: test-split  # el mismo test_split.json que ya está publicado
+  group: f3-cure
+  tags: [f3, cure, panel-landmark-ps]
+
+output:   # F5: otro panel y otra meta; los folds son los del cure model (mismas filas)
+  panel: ${DATA_DIR}/processed/panel_landmark_ps_w30.parquet
+  meta: ${DATA_DIR}/processed/panel_landmark_ps_w30_meta.json
+  splits: ${DATA_DIR}/processed/splits_landmark_ps_r3.json

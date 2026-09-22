@@ -1,0 +1,74 @@
+# Conjunto externo de la incidencia (F5 §3.2, Track A): los excluidos del universo que el
+# sorteo padre puso del lado dev, en los mercados donde hay fallados y sanos. Una fila por
+# vehículo: el hito de 30 días post-venta, con las features de (venta, venta + 30].
+#
+#   python scripts/build_external_panel.py --config configs/data/panel_external_incidence.yaml --counts-only  # Fase 1
+#   python scripts/build_external_panel.py --config configs/data/panel_external_incidence.yaml                # Fase 3
+#
+# Cada valor de acá está en docs/memoria/f5-preregistro-incidencia-externa.md. Para cambiar
+# uno, primero se commitea el cambio en el preregistro (y por qué), después acá.
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml
+panel_config: configs/data/panel_v1.yaml
+features_spec: configs/data/features_v1.yaml
+
+# El holdout congelado: de acá salen los excluidos y la huella del sorteo padre. Nada de dev
+# ni de test entra a este panel.
+test_split: ${DATA_DIR}/processed/test_split.json
+# Origen del calendario congelado en F2 (estimado sobre dev). Acá no se re-estima sobre dev:
+# se verifica que el puente valga también para el conjunto externo.
+anchor_meta: ${DATA_DIR}/processed/panel_meta.json
+anchor_tolerance_days: 0.5
+event_clock: configs/data/event_clock.yaml
+
+external:
+  side: dev                              # el lado del sorteo padre; el de test no se toca
+  markets: [CNTRY_1, CNTRY_2, CNTRY_5]   # los que tienen fallados y sanos en el conjunto
+
+# Mismas definiciones que el panel del cure model (panel_landmark_ps.yaml), con un solo hito
+# y la ventana de features fija en 30 días.
+landmark:
+  landmarks_days: [30]
+  gap_days: 30
+  horizon_days: 240
+  min_trips: 15
+  feature_window_days: 30
+  usage_feature: true
+
+# Elegibilidad simétrica: la exposición potencial en la ventana del registro según la fecha
+# de venta, medida igual para fallados y sanos desde max(venta + 30 + G, inicio de la
+# ventana). Es el "negativo resuelto" del cure model, aplicado también a los positivos.
+resolved_negative:
+  from_landmark_days: 30
+  e_min_days: 90
+  sensitivity_days: [60, 120]
+
+fleet_features:
+  - {name: idle_per_1000km,              weight: km,      min_weight: 100}
+  - {name: trips_below_regime_temp_frac, weight: n_valid, min_weight: 5}
+  - {name: speed_kmh_mean,               weight: n_valid, min_weight: 5}
+  - {name: coolant_temp_end_mean,        weight: n_valid, min_weight: 5}
+
+static_columns: [SalesCountry_cd]
+aux_static: [ProductionDay, daysUntilSale, ModelSeries, Engine]
+
+# Autos quietos: menos de estos km en la ventana de features (reporte).
+immobile_km: 100
+
+# Clones que se escaparan del dedupe: fracción de los viajes de un vehículo externo, por
+# (inicio, odómetro final), que comparte con algún vehículo del universo. Por encima, falla.
+clone_check:
+  universe_trips: ${DATA_DIR}/interim/landmark_trips.parquet
+  max_shared_trip_frac: 0.5
+
+scan:
+  chunksize: 500000
+
+trips_cache: ${DATA_DIR}/interim/external_trips.parquet
+
+output:
+  panel: ${DATA_DIR}/processed/panel_external_incidence.parquet
+  meta: ${DATA_DIR}/processed/panel_external_incidence_meta.json
+  counts: ${DATA_DIR}/processed/external_incidence_counts.json

@@ -40,6 +40,15 @@ en el índice). **El ensamble de survival stacking con el CNN-LSTM tampoco** (E1
 - Con bagging por vehículo (E2) da lo mismo: 13,8% ± 5,0 y 1,48×.
 - Ficha: [f3-ensamble-e1-e2.md](f3-ensamble-e1-e2.md).
 
+**Aprender *qué auto* con los fallados sin fecha tampoco** (22-09): en los mercados sin fecha el
+rasgo temprano no separa fallados de sanos (AUC 0,513), así que la compuerta paró antes de
+tocar dev. Ficha: [f5-incidencia-externa.md](f5-incidencia-externa.md).
+
+**El mismo survival stacking en días desde la venta, con la ventana del registro, tampoco**
+(22-09). Con la etiqueta corregida (solo filas con el horizonte dentro del registro) empata en
+detección y pierde en lift por vehículo: 1,38× contra 1,66×. Aprende más del *cuándo*, pero su
+score queda dominado por los días desde la venta. Ficha: [f5-ss-post-venta.md](f5-ss-post-venta.md).
+
 ## Por qué survival stacking
 
 - Es el **único** cuyo aporte del "cuándo" (a′) da positivo en las tres repeticiones:
@@ -74,10 +83,14 @@ en el índice). **El ensamble de survival stacking con el CNN-LSTM tampoco** (E1
 
 ## Límites que hay que decir en el pitch
 
-1. **La auditoría de calendario (b) de survival stacking marca +0,049 de ROC con R = 3.** Está
-   pendiente antes de fijarlo como final ([decisiones.md](decisiones.md), 21-09).
+1. **La auditoría de calendario (b) de survival stacking marca +0,049 de ROC con R = 3**
+   ([decisiones.md](decisiones.md), 21-09). El 22-09 se vio de dónde sale: con el conjunto en
+   riesgo de la ventana del registro baja a +0,016. Es exposición al registro, no física
+   ([f5-ss-post-venta.md](f5-ss-post-venta.md)).
 2. **Sus etiquetas vienen del panel v1**, donde el 28% de los horizontes sanos cae en parte fuera
-   de la ventana del registro de eventos ([decisiones.md](decisiones.md), 22-09).
+   de la ventana del registro de eventos ([decisiones.md](decisiones.md), 22-09). **Con la etiqueta
+   corregida detecta 11,9% ± 2,8** (4 / 7 / 5 de 45 fallados), no 15,7%, con el mismo lift por
+   vehículo (1,66×). Ese es el número honesto del punto de operación.
 3. **En números absolutos la señal es modesta.** El PR-AUC por fila (0,172) queda por debajo del
    techo de cohorte (0,263): lo que el modelo sabe es sobre todo *qué auto*, y poco *cuándo*.
 4. **Nada se midió sobre el test** (74 vehículos congelados). Se mide una sola vez, con el modelo
@@ -86,6 +99,7 @@ en el índice). **El ensamble de survival stacking con el CNN-LSTM tampoco** (E1
 ## Lo que sigue
 
 - **F4:** el dashboard contra el panel real, con survival stacking.
-- **Antes de fijar el finalista:** resolver la (b) de calendario.
+- **La (b) de calendario ya tiene explicación** (exposición al registro). Queda como límite
+  declarado: no hay otra corrida en la lista.
 - **Preguntas para Ford:** la ventana real del registro, qué es `IdentificationDate` y la
   prevalencia real.

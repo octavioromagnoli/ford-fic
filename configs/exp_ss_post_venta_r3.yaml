@@ -1,0 +1,81 @@
+# F5 §3.3 · survival stacking en el reloj del evento, con el conjunto en riesgo de la ventana
+#
+# Preregistro: docs/memoria/f5-preregistro-ss-post-venta.md. Mismas filas, mismas 53 features y
+# mismos folds (R = 3) que el finalista (`configs/exp_survival_stacking_r3.yaml`, corrida
+# `f3-survival-stacking-r3-rebuild`), y el mismo booster. Cambia cómo se arma el objetivo:
+# - reloj en días desde que el odómetro llega a c + G, con `feat_cut_dss` en vez de `feat_cut_odo`;
+# - cada fila en riesgo solo dentro de la ventana del registro (entrada tardía, salida en el fin
+#   de la ventana para los sanos);
+# - hazard por tramos con la exposición exacta como offset (Poisson).
+#
+#   export FORD_DATA_DIR=$PWD/data/rebuild-0921
+#   python scripts/build_window_survival_panel.py --config configs/data/panel_survival_ps.yaml
+#   python scripts/train.py --config configs/exp_ss_post_venta_r3.yaml
+#   python scripts/audit_model.py --config configs/exp_ss_post_venta_r3.yaml
+#   python scripts/eval_window_label.py --config configs/exp_ss_post_venta_r3.yaml
+name: f5-ss-post-venta-r3
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel_survival_ps.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json   # los del finalista: misma huella de vehículos
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+target:
+  name: window_survival
+  params: {}                 # las columnas del tramo en riesgo salen del panel
+
+model:
+  name: window_survival_stacking
+  params:
+    # Espejo en días de 500 / 3.000 / 6.000 km a la mediana de las filas de dev (31 d por
+    # 3.000 km, Fase 1). Preregistrados: no se barren.
+    bin_days: 5
+    horizon_days: 30
+    max_horizon_days: 60
+    random_state: 42
+    # Sin `model_params`: los del booster del finalista (`_booster_defaults`).
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+
+# Evaluación con las dos etiquetas (`scripts/eval_window_label.py`, preregistro §3–§4).
+window_eval:
+  reference: f3-survival-stacking-r3-rebuild
+  evaluable_column: aux_eval_in_window
+  decides: corrected                  # corrected (V) | hard (D)
+  floors: [cut_odo, feat_cut_dss]     # a los dos hay que ganarles, con la etiqueta que decide
+  a0_tolerance: 0.02
+  # `--diagnose`: agregado DESPUÉS del veredicto, no preregistrado, no decide nada. Cuánto del
+  # score es la posición en días, el orden de autos en posiciones parecidas y el uso solo.
+  diagnose:
+    position: feat_cut_dss
+    usage: feat_km_per_day
+    early_days: 120
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f5-ss-post-venta
+  job_type: train
+  tags: [f5, survival, stacking, post-venta, ventana, r3]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

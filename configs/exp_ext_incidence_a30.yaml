@@ -1,0 +1,136 @@
+# F5 §3.2 · A-solo: la incidencia aprendida con los fallados sin fecha, aplicada congelada a dev.
+# Preregistro: docs/memoria/f5-preregistro-incidencia-externa.md. Nada de acá se elige mirando D1/D2.
+#
+#   python scripts/build_external_panel.py --config configs/data/panel_external_incidence.yaml
+#   python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps_w30.yaml
+#   python scripts/fit_external_incidence.py --config configs/exp_ext_incidence_a30.yaml   # G1, G2, ajuste, I1
+#   python scripts/train.py --config configs/exp_ext_incidence_a30.yaml                   # A-solo sobre dev
+#   python scripts/audit_cure.py --config configs/exp_ext_incidence_a30.yaml              # A0, C1, C2, C3, C6 + P0
+#
+# Score de una fila de dev: a·s + b·z(log1p km/día), con s el índice de pesos unitarios de P0 y
+# todo (referencia de flota, mediana, escala, a, b) ajustado con la fuente. En dev no se ajusta
+# nada: la CV recorre los folds de P0 para medir con la misma cuenta y los mismos vehículos.
+name: f5-ext-incidence-a30
+seed: 42
+
+data:
+  # Mismas filas y aux_ que panel_landmark_ps.parquet; features de (venta, venta + 30] en los tres hitos.
+  panel: ${DATA_DIR}/processed/panel_landmark_ps_w30.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_landmark_ps_r3.json   # los de P0 (mismas filas)
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+# El scorer trae el pipeline de la fuente (normalizador por mes → mediana → escala).
+preprocessing: none
+
+model:
+  name: external_incidence
+  params:
+    artifact: ${DATA_DIR}/processed/external_incidence_a30.joblib
+
+# Lo que lee scripts/fit_external_incidence.py (solo la fuente).
+source_fit:
+  data_config: configs/data/panel_external_incidence.yaml
+  panel: ${DATA_DIR}/processed/panel_external_incidence.parquet
+  design: index                 # a·s + b·z(uso): dos pendientes (Riley, preregistro §0 y §3)
+  fleet_signs:                  # los signos de P0, fijos
+    fleet_idle_per_1000km: 1
+    fleet_trips_below_regime_temp_frac: 1
+    fleet_speed_kmh_mean: -1
+    fleet_coolant_temp_end_mean: -1
+  usage_column: feat_log1p_km_per_day
+  normalizer:
+    levels: [[month], []]       # mediana por mes de los sanos de la fuente, mercados juntos (§2)
+    min_ref_vehicles: 10
+  firth: true
+  gates:
+    g1:
+      cache: ${DATA_DIR}/interim/external_g1_messages.parquet
+      messages: [full, overloaded]
+      source_markets: [CNTRY_1, CNTRY_2, CNTRY_5]
+      f1_reference: {full: 1.81, overloaded: 2.63}   # f1-senal-postratamiento.md, todos juntos
+    g2:
+      n_boot: 2000
+  informative:
+    n_boot_coef: 1000
+    cv: {n_splits: 5, n_repeats: 3, seed: 42}
+    eligibility_sensitivity: [aux_eligible_e60, aux_eligible_e120, all_positives]
+  output:
+    artifact: ${DATA_DIR}/processed/external_incidence_a30.joblib
+    weights: ${DATA_DIR}/processed/external_incidence_a30_weights.json
+
+eval:
+  legacy_blocks: false
+  carry_columns:
+    - aux_landmark_day
+    - aux_dss_entry
+    - aux_dss_exit
+    - aux_event_in_window
+    - aux_gap_days
+    - aux_dss_window_end
+    - aux_days_to_event_after_cut
+    - aux_resolved_negative
+    - aux_resolved_negative_e60
+    - aux_resolved_negative_e120
+    - aux_production_tercile
+    - static_SalesCountry_cd
+    - aux_static_ProductionDay
+    - aux_sale_day
+    - window_km
+    - aux_landmark_month
+    - aux_air_temp_window_mean
+  landmark:
+    score_column: score               # el score congelado (monótono en a·s + b·z)
+    probability_column: score
+    max_false_alarms_per_1000: 50
+    extra_false_alarms_per_1000: [100]
+    e_min_days_sensitivity: [60, 120]
+    n_boot: 2000
+
+audit_cure:
+  event_clock: configs/data/event_clock.yaml
+  audits: [A0, C1, C2, C3, C6]        # preregistro §5 (A3 no aplica: nada se ajusta en dev)
+  stop_if_c1_fails: false
+  compare_to: f3-cure-p0-unitweight   # veredicto contra P0, mismas filas (se reporta, no adopta)
+  n_boot: 2000
+  a0:
+    permutations: 5
+    d1_tolerance: 0.05
+    d2_tolerance: 0.05
+  c1:
+    permutations: 2000
+    strata: [aux_landmark_day, aux_production_tercile, static_SalesCountry_cd]
+    alpha: 0.05
+  c2:
+    floors:
+      production_day: aux_static_ProductionDay
+      sale_day: aux_sale_day
+    production_column: aux_static_ProductionDay
+    tercile_column: aux_production_tercile
+    max_abs_rho: 0.2
+  c3:
+    km_column: window_km
+  c6:
+    km_column: window_km
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f5-ext-incidence
+  job_type: train
+  tags: [f5, incidence, external, landmark, a-solo, r3]
+  mode: online
+  log_artifacts: true
+
+output_dir: experiments
