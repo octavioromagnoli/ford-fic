@@ -70,6 +70,7 @@ python scripts/build_positional_panel.py --config configs/data/panel_positional.
 python scripts/audit_positional_floor.py f3-survival-stacking         # ¿le gana al odómetro pelado? (piso del eje "cuándo")
 python scripts/rescore_run.py f3-cnn-lstm-r3-regen15                # completa una corrida vieja desde sus predicciones, sin reentrenar
 python scripts/audit_event_clock.py --config configs/data/event_clock.yaml  # reloj y ventana del evento (Fase 1 del cure model)
+python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps.yaml  # panel de hitos post-venta (Fase 3 del cure model)
 python scripts/check_setup.py      # chequeos del harness
 ```
 

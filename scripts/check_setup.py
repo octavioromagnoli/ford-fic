@@ -15,6 +15,9 @@ fallan, invalidan todo lo que venga después:
 5. La agregación a nivel vehículo (MIL) colapsa bolsas sin romper el out-of-fold.
 6. La descomposición cohorte/cuándo: el techo de cohorte es el piso real de un
    PR-AUC por fila, y (a') aísla lo que el modelo sabe del *cuándo*.
+7. El panel de hitos post-venta (cure model): nada posterior al hito entra a una
+   feature, el gap excluye la fila, el riesgo respeta la ventana del registro y los
+   pesos por mes reproducen la ventana.
 """
 
 from __future__ import annotations
@@ -50,7 +53,15 @@ from src.eval.metrics import (  # noqa: E402
     vehicle_scores,
     when_contribution,
 )
-from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
+from src.data.landmark import (  # noqa: E402
+    assign_tercile,
+    build_landmark_panel,
+    landmark_config,
+    load_fleet_features,
+    parse_fleet_column,
+    production_tercile_edges,
+)
+from src.eval.splits import iter_folds, iter_repeats, make_splits, test_split_masks  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import build_preprocessor, run_cv, select_feature_columns  # noqa: E402
 from src.training.targets import build_ordinal_target, build_target  # noqa: E402
@@ -95,6 +106,167 @@ def _raises(call, exception: type[Exception]) -> bool:
     except Exception:
         return False
     return False
+
+
+def _synthetic_landmark_inputs(seed: int = 7) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Seis vehículos vendidos el 01-06-2025, uno por caso que el panel de hitos tiene que resolver.
+
+    A sano (telemetría hasta el 01-01-2026, antes del fin de la ventana) · B fallado a 150 d
+    post-venta, con un julio casi sin viajes · C fallado justo en L + G del primer hito (60 d) · D quieto (solo idle) ·
+    E con menos viajes que el mínimo · F sin fecha de venta. Dos viajes por día: uno de
+    30 km a la mañana y un idle a la tarde; A tiene además un viaje que cruza el hito de 30 d.
+    """
+    rng = np.random.default_rng(seed)
+    sale = pd.Timestamp("2025-06-01", tz="UTC")
+    rows = []
+    for vid in "ABCDEF":
+        days = pd.date_range("2025-05-01", "2026-01-01" if vid == "A" else "2026-05-01", freq="D", tz="UTC")
+        if vid == "E":
+            # Llega a todos los hitos (viaja de nuevo a los 200 d) pero con 10 viajes post-venta.
+            days = (days[days <= sale].append(pd.date_range(sale + pd.Timedelta(days=1), periods=5, freq="D"))
+                    .append(pd.date_range(sale + pd.Timedelta(days=200), periods=5, freq="D")))
+        if vid == "B":
+            # Julio con 2 días de viaje: 4 viajes y 60 km, bajo el mínimo de las cuatro features.
+            july = (days >= pd.Timestamp("2025-07-01", tz="UTC")) & (days < pd.Timestamp("2025-08-01", tz="UTC"))
+            days = days[~july | (days.day <= 2)]
+        for day in days:
+            rows.append((vid, day + pd.Timedelta(hours=8), 40.0, 0.0 if vid == "D" else 30.0))
+            rows.append((vid, day + pd.Timedelta(hours=18), 5.0, 0.0))
+    rows.append(("A", sale + pd.Timedelta(days=30) - pd.Timedelta(hours=1), 120.0, 500.0))
+    trips = pd.DataFrame(rows, columns=["vehicle_id", "TripDatetimeStart", "minutes", "trip_km"])
+    trips = trips.sort_values(["vehicle_id", "TripDatetimeStart"], ignore_index=True)
+    trips["TripNumber"] = trips.groupby("vehicle_id").cumcount().astype(float)
+    trips["TripDatetimeEnd"] = trips["TripDatetimeStart"] + pd.to_timedelta(trips["minutes"], unit="min")
+    trips["OdometerTripEnd"] = trips.groupby("vehicle_id")["trip_km"].cumsum()
+    trips["idle"] = trips["trip_km"].eq(0)
+    moving = ~trips["idle"]
+    trips["below_regime"] = rng.random(len(trips)) < 0.3
+    trips["speed_kmh_moving"] = (trips["trip_km"] / trips["minutes"] * 60).where(moving)
+    trips["CoolantTemperatureEnd_moving"] = pd.Series(rng.normal(85, 5, len(trips))).where(moving)
+    trips["AirTemperatureAvg"] = rng.normal(15, 5, len(trips))
+
+    vehicles = pd.DataFrame(index=pd.Index(list("ABCDEF"), name="vehicle_id"))
+    vehicles["event_observed"] = [0, 1, 1, 0, 0, 0]
+    vehicles["sale_date"] = pd.to_datetime([sale] * 5 + [pd.NaT], utc=True)
+    vehicles["event_dss"] = [np.nan, 150.0, 60.0, np.nan, np.nan, np.nan]
+    vehicles["event_odo_km"] = [np.nan, 8000.0, 3000.0, np.nan, np.nan, np.nan]
+    vehicles["last_trip"] = trips.groupby("vehicle_id")["TripDatetimeStart"].max()
+    vehicles["static_SalesCountry_cd"] = ["X", "Y", "X", "Y", "X", "Y"]
+    vehicles["aux_static_ProductionDay"] = [100.0, 200.0, 300.0, 400.0, 500.0, 600.0]
+    return vehicles, trips
+
+
+def _fleet_columns(panel: pd.DataFrame, feature: str, *, weight: bool) -> list[str]:
+    out = []
+    for column in panel.columns:
+        parsed = parse_fleet_column(column)
+        if parsed is not None and parsed[0] == feature and parsed[2] == weight:
+            out.append(column)
+    return out
+
+
+def landmark_panel_checks() -> None:
+    """7 · El panel de hitos post-venta, sobre datos sintéticos y con los YAML reales."""
+    cfg = load_config("configs/data/panel_landmark_ps.yaml")
+    lm_cfg = landmark_config(cfg, load_config(cfg["event_clock"])["event_window"])
+    features = load_fleet_features(cfg["fleet_features"], cfg["features_spec"])
+    vehicles, trips = _synthetic_landmark_inputs()
+    panel, report = build_landmark_panel(vehicles, trips, lm_cfg, features)
+    first = min(lm_cfg.landmarks_days)
+    at_first = report["landmarks"][f"{first:g}"]
+
+    check(
+        "hitos: una fila por (vehículo, hito)",
+        not panel.duplicated(["vehicle_id", "aux_landmark_day"]).any()
+        and set(panel["aux_landmark_day"]) == set(lm_cfg.landmarks_days),
+    )
+    check(
+        "hitos: un evento en ≤ L + G excluye la fila (regla 1), y se cuenta",
+        "C" not in set(panel["vehicle_id"]) and at_first["evento_antes_o_en_gap"] == 1
+        and bool(panel.loc[panel["vehicle_id"].eq("B"), "label"].eq(1).all()),
+        f"descartes en el hito {first:g}: {at_first}",
+    )
+    check(
+        "hitos: sin fecha de venta o con pocos viajes no hay fila, y se cuentan",
+        not {"E", "F"} & set(panel["vehicle_id"]) and at_first["sin_venta"] == 1 and at_first["pocos_viajes"] == 1,
+    )
+
+    # Nada posterior al hito: se perturban todos los viajes que terminan después del primer
+    # hito y las filas de ese hito no pueden moverse (el viaje de A que cruza el hito incluido).
+    land = vehicles["sale_date"] + pd.Timedelta(days=first)
+    later = trips["TripDatetimeEnd"] > trips["vehicle_id"].map(land)
+    perturbed = trips.copy()
+    perturbed.loc[later, "trip_km"] *= 7
+    perturbed.loc[later, "OdometerTripEnd"] += 1e5
+    perturbed.loc[later, "idle"] = ~perturbed.loc[later, "idle"]
+    perturbed.loc[later, "below_regime"] = ~perturbed.loc[later, "below_regime"]
+    for column in ("speed_kmh_moving", "CoolantTemperatureEnd_moving", "AirTemperatureAvg"):
+        perturbed.loc[later, column] = -perturbed.loc[later, column]
+    moved, _ = build_landmark_panel(vehicles, perturbed, lm_cfg, features)
+    watched = [c for c in panel.columns if c.startswith(("feat_", "aux_raw_"))]
+    watched += ["cut_odo", "window_km", "aux_n_trips_window", "aux_air_temp_window_mean"]
+    a = panel.loc[panel["aux_landmark_day"].eq(first)].set_index("vehicle_id")
+    b = moved.loc[moved["aux_landmark_day"].eq(first)].set_index("vehicle_id").reindex(a.index)
+    common = [c for c in watched if c in b.columns]
+    extra = [c for c in b.columns if c.startswith(("feat_", "aux_raw_")) and c not in panel.columns]
+    changed = [c for c in common if not a[c].equals(b[c])]
+    check(
+        "hitos: ningún viaje posterior al hito entra a una feature (perturbarlos no mueve la fila)",
+        not changed and bool(b[extra].isna().all().all()) and len(common) == len(watched),
+        f"cambian: {changed[:5]}" if changed else "",
+    )
+
+    km_ok = np.allclose(panel[_fleet_columns(panel, "idle_per_1000km", weight=True)].sum(axis=1), panel["window_km"])
+    trips_ok = np.allclose(panel[_fleet_columns(panel, "trips_below_regime_temp_frac", weight=True)].sum(axis=1),
+                           panel["aux_n_trips_window"])
+    july = panel.loc[panel["vehicle_id"].eq("B") & panel["aux_landmark_day"].gt(first)]
+    thin_ok = all(july[f.value_column("2025-07")].isna().all() and july[f.weight_column("2025-07")].gt(0).all()
+                  for f in features)
+    check(
+        "hitos: los pesos por mes suman los km y los viajes de la ventana; bajo el mínimo, valor NaN y peso intacto",
+        km_ok and trips_ok and len(july) > 0 and thin_ok,
+    )
+
+    entry_ok = np.allclose(panel["aux_dss_entry"],
+                           np.maximum(panel["aux_landmark_day"] + lm_cfg.gap_days, panel["aux_dss_window_start"]))
+    exit_ok = bool((panel["aux_dss_exit"] <= panel["aux_dss_window_end"]).all())
+    b_rows = panel.loc[panel["vehicle_id"].eq("B")]
+    check(
+        "hitos: entrada = max(L + G, inicio de la ventana) y salida ≤ fin de la ventana",
+        entry_ok and exit_ok and bool(b_rows["aux_event_in_window"].eq(1).all())
+        and bool(b_rows["aux_dss_exit"].eq(150).all()),
+    )
+    a_rows = panel.loc[panel["vehicle_id"].eq("A")]
+    check(
+        "hitos: la salida de un sano es el fin de la ventana, no su último viaje",
+        len(a_rows) > 0 and bool(a_rows["aux_dss_exit"].eq(a_rows["aux_dss_window_end"]).all())
+        and bool(vehicles.loc["A", "last_trip"] < lm_cfg.window_end),
+    )
+
+    d_rows = panel.loc[panel["vehicle_id"].eq("D")]
+    check(
+        "hitos: un auto quieto queda en NaN en idle por km y conserva los viajes bajo régimen",
+        len(d_rows) > 0
+        and bool(d_rows[_fleet_columns(panel, "idle_per_1000km", weight=False)].isna().all().all())
+        and bool(d_rows[_fleet_columns(panel, "trips_below_regime_temp_frac", weight=False)].notna().any(axis=1).all()),
+    )
+
+    split = {"dev_vehicles": ["A", "B", "C", "E", "F"], "test_vehicles": ["D"], "excluded_vehicles": ["Z"]}
+    dev_mask, test_mask = test_split_masks(panel, split, strict=True)
+    intruder = pd.concat([panel.iloc[:1].assign(vehicle_id="Z"), panel], ignore_index=True)
+    check(
+        "hitos: el recorte a dev no deja pasar vehículos de test, y un excluido hace fallar",
+        not set(panel.loc[dev_mask, "vehicle_id"]) & set(split["test_vehicles"])
+        and bool((dev_mask | test_mask).all())
+        and _raises(lambda: test_split_masks(intruder, split, strict=True), ValueError),
+    )
+
+    production = pd.Series(np.random.default_rng(3).integers(0, 400, 90).astype(float))
+    ours = assign_tercile(production, production_tercile_edges(production, 3))
+    check(
+        "hitos: los terciles de producción siguen la convención de pd.qcut",
+        bool((ours.to_numpy() == pd.qcut(production, 3, labels=False).to_numpy()).all()),
+    )
 
 
 def main() -> int:
@@ -632,6 +804,8 @@ def main() -> int:
         "audit (b): en un panel tabular promover no cambia el orden de las columnas del modelo",
         select_feature_columns(promoted_tab) == select_feature_columns(renamed_tab),
     )
+
+    landmark_panel_checks()
 
     failed = [name for name, ok, _ in _checks if not ok]
     print()
