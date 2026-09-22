@@ -160,6 +160,27 @@ def _build_cure_mixture(params: dict[str, Any]) -> BaseEstimator:
     return CureMixtureModel(**params)
 
 
+@register("vehicle_bagging")
+def _build_vehicle_bagging(params: dict[str, Any]) -> BaseEstimator:
+    """Cualquier modelo del registry, promediado sobre `n_bags` bootstraps de vehículos.
+
+    `params`: `base_model` (nombre en este registry), `base_params` (los hiperparámetros
+    de la corrida sin bagging, sin cambios), `n_bags` y `random_state` (el sorteo de
+    vehículos). Necesita el vehículo en el `y`: `discrete_survival` lo trae y los binarios
+    van con `target: {name: grouped_label}`. Es la pieza de E2
+    (`docs/memoria/f3-preregistro-landmark-ensamble.md`); detalle en `src/models/bagging.py`.
+    """
+    from src.models.bagging import VehicleBaggingClassifier
+
+    if "base_model" not in params:
+        raise KeyError("`vehicle_bagging` necesita `base_model` en model.params")
+    if params["base_model"] == "vehicle_bagging":
+        raise ValueError("`vehicle_bagging` no se anida en sí mismo")
+    params.setdefault("n_bags", 10)
+    params.setdefault("random_state", 42)
+    return VehicleBaggingClassifier(**params)
+
+
 @register("lgbm_ordinal")
 def _build_lgbm_ordinal(params: dict[str, Any]) -> BaseEstimator:
     """LightGBM multiclase chico; `targets.py` acumula clases para recuperar P(evento en H)."""

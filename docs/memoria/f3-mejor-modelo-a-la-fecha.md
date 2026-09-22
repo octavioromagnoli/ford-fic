@@ -34,7 +34,11 @@ alerta sostenida). Pero la diferencia es grande. Además, en las filas que compa
 finalista ordena mejor: D1 0,592 contra 0,543 (A6 de [f3-cure-model.md](f3-cure-model.md)).
 
 GRU, TimesFM, ordinal y GPBoost no superan a estos en las métricas que valen (sus fichas están
-en el índice).
+en el índice). **El ensamble de survival stacking con el CNN-LSTM tampoco** (E1 y E2, 22-09):
+- E1 detecta 12,6% ± 3,2 con lift 1,52×, y pierde en lift. El CNN-LSTM ordena autos peor y el
+  promedio lo diluye.
+- Con bagging por vehículo (E2) da lo mismo: 13,8% ± 5,0 y 1,48×.
+- Ficha: [f3-ensamble-e1-e2.md](f3-ensamble-e1-e2.md).
 
 ## Por qué survival stacking
 

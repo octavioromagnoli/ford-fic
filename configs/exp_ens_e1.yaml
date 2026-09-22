@@ -1,0 +1,46 @@
+# F3 · E1: ensamble por rango de los dos finalistas, sin reentrenar
+#
+# Preregistro: docs/memoria/f3-preregistro-landmark-ensamble.md, E1 (commit 9b7bfb4).
+# Pareja: la del punto de control 1, survival stacking + CNN-LSTM (el CNN-LSTM "sigue como
+# finalista del par para el ensamble", f3-piso-posicional.md, 21-09). Pesos 50/50 fijos.
+#
+#   python scripts/ensemble_rank.py --config configs/exp_ens_e1.yaml --audit
+name: f3-ens-e1-ss-cnnlstm
+seed: 42
+
+ensemble:
+  method: rank_mean          # rango percentil por repetición, empates promediados
+  members:
+    - run: f3-survival-stacking-r3-rebuild
+      config: configs/exp_survival_stacking_r3.yaml   # para reentrenarlo en las auditorías
+      weight: 0.5
+    - run: f3-cnn-lstm-r3-regen15
+      config: configs/exp_cnn_lstm_r3.yaml
+      weight: 0.5
+
+compare:
+  reference: f3-survival-stacking-r3-rebuild        # referencia fija del preregistro
+  # Informativas: el control y la variante con desvío contra la historia, que son las
+  # otras filas R=3 del mismo panel y los mismos folds.
+  against:
+    - f3-lgbm-panel-v1-r3-regen15
+    - f3-survival-stacking-history-r3
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-ensamble
+  job_type: ensemble
+  tags: [f3, ensamble, e1, r3]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments
