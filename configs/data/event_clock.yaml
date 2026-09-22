@@ -1,0 +1,125 @@
+# Fase 1 del cure model: en qué reloj ocurre el evento y en qué ventana de calendario
+# se registra. Solo dev; no entrena nada.
+#
+#   python scripts/audit_event_clock.py --config configs/data/event_clock.yaml
+#
+# Lectura de los resultados: docs/memoria/f3-reloj-y-ventana-del-evento.md.
+seed: 0
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml
+# De acá salen las columnas estáticas que `load_vehicle_static` renombra a `static_*`.
+panel_config: configs/data/panel_v1.yaml
+# Umbrales y topes físicos de `derive_trip_columns` (idle, régimen térmico, etc.).
+features_spec: configs/data/features_v1.yaml
+
+test_split: ${DATA_DIR}/processed/test_split.json
+# Origen del calendario congelado en F2 (`src/data/anchor.py`). El script lo re-estima
+# sobre dev y falla si no coincide.
+anchor_meta: ${DATA_DIR}/processed/panel_meta.json
+# Panel v1, solo para H9 (qué parte de los horizontes sanos cae fuera de la ventana).
+panel_v1: ${DATA_DIR}/processed/panel.parquet
+
+output_dir: experiments/audit_event_clock
+# Los viajes de dev derivados se cachean en output_dir (leer los crudos lleva minutos).
+# `--refresh` los vuelve a leer.
+trips_cache: dev_trips.parquet
+
+# Ventana del registro de eventos: primer y último evento de dev, redondeado al inicio
+# del mes del primero. Se congela acá y el script verifica que ningún evento de dev
+# caiga afuera. Es lo que define hasta dónde un sano está "observado para el evento".
+event_window:
+  start: "2025-09-01"
+  end: "2026-03-11"
+  estimated_on: dev_events
+
+# H1 · escala del evento (Kordonsky–Gertsbakh 1993): la que minimiza la dispersión del
+# momento del evento entre los fallados. Solo fallados con telemetría desde casi 0 km,
+# porque si el historial arranca tarde los acumulados quedan truncados.
+scales:
+  max_first_trip_odo_km: 300
+  min_km_before_event: 500
+  n_bootstrap: 2000
+
+# H2 · dosis-respuesta: uso en los primeros `early_km` contra km y días al evento. Solo
+# fallados con el evento después de early_km + gap_km (la ventana termina antes del gap).
+dose_response:
+  early_km: 2000
+  gap_km: 500
+
+# H3 · autos en riesgo y eventos por mes. "En riesgo" = la edad está dentro del rango de
+# edades al evento de dev en algún día del mes, hay telemetría ese mes o después y no
+# hubo evento antes. El rango de edades sale de los datos.
+calendar:
+  first_month: "2025-06"
+  last_month: "2026-09"
+
+# H4 · tasa por 100 autos-mes dentro de la ventana, por edad y por días desde la venta.
+hazard:
+  age_bins: [0, 120, 180, 240, 300, 360, 420, 600]
+  dss_bins: [-400, 0, 60, 120, 180, 240, 300, 600]
+
+# H5 · exceso de los fallados (viajes post-venta anteriores al evento) contra los sanos
+# del mismo mercado × mes × etapa (pre/post venta), por días antes del evento.
+trajectory:
+  days_before_bins: [0, 30, 60, 90, 120, 180, 100000]
+
+# H6 · rasgo temprano: desvío contra los sanos post-venta del mismo mercado × mes,
+# promediado sobre los viajes post-venta hasta el hito.
+early_trait:
+  landmarks_days: [30, 60, 90, 120, 180]
+  min_trips: 15
+  n_bootstrap: 400
+  # Población comparable: sanos producidos antes que el último fallado y seguidos al
+  # menos tanto como la mayor edad al evento. Los dos límites salen de los eventos de dev.
+  # Chequeo del confusor de producción y nulo estratificado, en este hito:
+  confound_landmark_days: 60
+  production_terciles: 3
+  n_permutations: 2000
+  # Punto de operación contra TODOS los sanos de dev.
+  detection_landmarks_days: [30, 60, 90]
+  healthy_alert_frac: 0.05
+  # Autos "quietos": vendidos pero con menos de estos km post-venta hasta el hito. Sus
+  # viajes son casi todos idle, así que el exceso de idle los pone arriba del ranking.
+  immobile_km: 100
+
+# Conteos del panel de hitos (Fase 3), con la exposición medida dentro de la ventana.
+feasibility:
+  landmarks_days: [30, 60, 90]
+  gap_days: 30
+  horizon_days: 240
+  min_trips: 15
+  exposure_thresholds_days: [60, 90, 120]
+
+# Lo que midieron los scripts de scratch del 22-09 (prompt del cure model, §2). El script
+# imprime cada número al lado del que mide; si una conclusión cambia, la Fase 1 para.
+expected:
+  h1_sdlog_age: 0.24
+  h1_sdlog_odometer: 0.97
+  h1_n_failed: 57
+  h1_diff_odometer_minus_days: 0.72
+  h1_dss_median: 163
+  h1_dss_iqr: [105, 204]
+  h1_dss_max: 268
+  h2_n: 47
+  h2_rho_kmday_km: 0.48
+  h2_rho_kmday_days: -0.06
+  h3_first_event: "2025-09-03"
+  h3_last_event: "2026-03-11"
+  h4_presale_car_months: 748
+  h4_dss_rates: [0.0, 1.5, 6.5, 6.5, 16.1, 18.5]
+  h4_age_rates: [0.4, 3.0, 4.7, 9.9, 15.1]
+  h5_idle_far_near: [0.28, 0.13]
+  h5_below_far_near: [0.39, 0.04]
+  h6_auc_below_30: 0.68
+  h6_null_auc: 0.645
+  h6_null_p: 0.0005
+  h6_detection: ["4/42", "3/55", "2/47"]
+  h9_inside: 0.72
+  h9_exits_after: 0.18
+  h9_fully_after: 0.016
+  h9_starts_before: 0.087
+  feasibility_events: [42, 46, 38]
+  feasibility_healthy: [196, 204, 199]
+  feasibility_exposed_120: [52, 38, 28]
+  feasibility_no_exposure: [77, 98, 109]

@@ -5,6 +5,57 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-22 · (Propuesta) El registro de eventos tiene ventana de calendario: la censura de un sano es su exposición dentro de ella, y el reloj arranca en la venta
+
+**Estado: propuesta.** Es la Fase 1 del cure model y se confirma en su punto de control 1.
+No cambia el finalista ni el panel v1. Evidencia y comando:
+[f3-reloj-y-ventana-del-evento.md](f3-reloj-y-ventana-del-evento.md), con
+`python scripts/audit_event_clock.py --config configs/data/event_clock.yaml`. Solo dev.
+
+**Qué se encontró:**
+- **Los eventos de dev caen todos entre el 03-09-2025 y el 11-03-2026.** Afuera de esa ventana
+  hay 100–180 autos por mes en la edad típica del evento y ningún evento. Es el borde de la
+  extracción, no física.
+- **El evento se ordena por días, no por km.** sd(log) del momento del evento: 0,24 en edad
+  contra 0,97 en odómetro.
+- **Dentro de la ventana, el riesgo lo explican los días desde la venta.** No lo explican ni la
+  edad ni el calendario (Poisson sobre autos-día, LR p = 0,014).
+- **No hay trayectoria previa al evento.** La señal es un rasgo temprano del vehículo: viajes
+  fríos contra la flota, AUC 0,65–0,68 desde los primeros 30 días post-venta, nulo
+  estratificado p = 0,0005. Es débil en la cola, y a 30 días la cola son autos quietos.
+
+**Qué se propone:**
+1. **La censura de un sano es el fin de su exposición dentro de `event_window`**
+   (`configs/data/event_clock.yaml`), no su último viaje. Un sano sin exposición en la ventana
+   no es un negativo.
+2. **El reloj del riesgo arranca en la venta.** Todo panel que modele el *cuándo* lo mide en
+   días post-venta.
+3. Las dos cosas son la base del panel de hitos post-venta del cure model (preregistro en la
+   Fase 2).
+
+**Aviso para el panel v1 (no se corrige acá).** De las 1.062 filas sanas de dev, el horizonte
+`[c+G, c+G+H]` está:
+- entero dentro de la ventana en el 71,8%;
+- saliéndose después del 11-03-2026 en el 17,9%;
+- entero después en el 1,6%;
+- empezando antes del 01-09-2025 en el 8,7%.
+
+El PR-AUC por fila de `results/` contó como negativos verificados horizontes que el registro no
+cubría del todo. Eso no invalida las corridas, porque todas comparten el mismo panel y los mismos
+folds, pero es otra razón para que el sesgo de `ProductionDay` apareciera: los producidos tarde
+casi no estuvieron expuestos.
+
+**Preguntas para Ford o la mentora** (§10 del doc):
+- qué es `IdentificationDate`;
+- cuál es la ventana real de extracción;
+- si se corrigió el error de SQL de la query de eventos;
+- cuál es la prevalencia real;
+- si hay fechas de taller;
+- si `daysUntilSale` es la entrega al cliente: el 26% de los vehículos que llegan al hito de
+  30 días recorrió menos de 100 km desde la "venta".
+
+---
+
 ## 2026-09-21 · El desvío respecto de la historia del vehículo no entra; la (b) del finalista con R=3 marca +0,049
 
 **Alcance:** cierra la primera mitad del punto 1 de "Qué queda abierto" (20-09) y le pone
