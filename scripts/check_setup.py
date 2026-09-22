@@ -12,6 +12,9 @@ fallan, invalidan todo lo que venga después:
 3. Un modelo de tasa base saca PR-AUC ≈ tasa base y ROC-AUC ≈ 0,5 (si saca más,
    hay leakage o un bug en la evaluación).
 4. Las métricas de anticipación premian a un ranker oráculo y castigan al ruido.
+5. La agregación a nivel vehículo (MIL) colapsa bolsas sin romper el out-of-fold.
+6. La descomposición cohorte/cuándo: el techo de cohorte es el piso real de un
+   PR-AUC por fila, y (a') aísla lo que el modelo sabe del *cuándo*.
 """
 
 from __future__ import annotations
@@ -30,11 +33,26 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from scripts.make_dummy import build_dummy_panel  # noqa: E402
 from scripts.build_eda_cache import resolved_eda_config  # noqa: E402
+from scripts.train import vehicle_block  # noqa: E402
 from src.config import load_config, set_seed  # noqa: E402
-from src.eval.metrics import classification_metrics, lead_time_curve, operating_point  # noqa: E402
+from src.eval.metrics import (  # noqa: E402
+    VEHICLE_AGGREGATIONS,
+    classification_metrics,
+    cohort_ceiling,
+    cost_matrix_score,
+    cost_ratio_breakeven,
+    cost_ratio_sweep,
+    lead_time_curve,
+    operating_point,
+    pr_auc_within_failed,
+    vehicle_metrics,
+    vehicle_scores,
+    when_contribution,
+)
 from src.eval.splits import iter_folds, iter_repeats, make_splits  # noqa: E402
 from src.features.trips import DEFAULT_THRESHOLDS  # noqa: E402
 from src.training.cv import run_cv, select_feature_columns  # noqa: E402
+from src.training.targets import build_ordinal_target, build_target  # noqa: E402
 
 CONTRACT_COLUMNS = {
     "vehicle_id": "object",
@@ -66,6 +84,16 @@ _checks: list[tuple[str, bool, str]] = []
 def check(name: str, condition: bool, detail: str = "") -> None:
     _checks.append((name, bool(condition), detail))
     print(f"{'PASS' if condition else 'FAIL'} | {name}" + (f" — {detail}" if detail else ""))
+
+
+def _raises(call, exception: type[Exception]) -> bool:
+    try:
+        call()
+    except exception:
+        return True
+    except Exception:
+        return False
+    return False
 
 
 def main() -> int:
@@ -106,6 +134,120 @@ def main() -> int:
     check(
         "panel: ningún label positivo dentro del gap de blanking",
         bool((panel.loc[panel["label"] == 1, "time_to_event_km"] >= panel.loc[panel["label"] == 1, "gap_km"]).all()),
+    )
+    check(
+        "panel: aux_km_observed_after_cut está en toda fila",
+        "aux_km_observed_after_cut" in panel.columns
+        and bool(panel["aux_km_observed_after_cut"].notna().all()),
+    )
+
+    # 1b · el objetivo de supervivencia es la misma etiqueta escrita sobre el eje de km.
+    # Si esto se rompe, el modelo entrena contra algo que no es lo que se mide.
+    all_rows = np.ones(len(panel), dtype=bool)
+    spec = build_target("discrete_survival", panel, all_rows)
+    duration, event, at_risk = spec.y["duration_km"], spec.y["event"], spec.y["at_risk"]
+    horizon = panel["horizon_km"].to_numpy()
+    derived = (at_risk & (event == 1) & (duration <= horizon)).astype(int)
+    check(
+        "target: `discrete_survival` reconstruye exactamente `label`",
+        bool((derived == panel["label"].to_numpy()).all()),
+        f"{int((derived != panel['label'].to_numpy()).sum())} filas discrepan",
+    )
+    # El dummy genera cortes hasta el evento, así que sí tiene filas dentro del gap:
+    # el chequeo verifica que queden fuera de riesgo y no que no existan.
+    inside_gap = panel["time_to_event_km"].lt(panel["gap_km"]).fillna(False).to_numpy()
+    check(
+        "target: los cortes dentro del gap quedan fuera de riesgo (regla 1)",
+        bool((~at_risk[inside_gap]).all()) and bool((duration[at_risk] >= 0).all())
+        and spec.params["gap_km"] == float(panel["gap_km"].iloc[0]),
+        f"{int(inside_gap.sum())} filas del dummy caen dentro del gap",
+    )
+    check(
+        "target: el `y` está alineado con las filas de train, no con el panel",
+        len(build_target("discrete_survival", panel, panel["label"].eq(0).to_numpy()).y)
+        == int(panel["label"].eq(0).sum()),
+    )
+    check(
+        "target: un modo que no existe falla en vez de entrenar con `label`",
+        _raises(lambda: build_target("no_existe", panel, all_rows), KeyError),
+    )
+
+    # 1b · reformulación ordinal y costo, ambos gobernados por YAML. Se verifican las
+    # DOS variantes registradas, porque la diferencia entre ellas es justamente dónde
+    # cae el último bin respecto de G+H y eso cambia qué mide el target.
+    label_array = panel["label"].to_numpy(dtype=int) == 1
+    observed = panel["event_observed"].to_numpy(dtype=int) == 1
+    ordinal_variants = {
+        "restringidos": "configs/exp_ordinal_horizon.yaml",
+        "extendidos": "configs/exp_ordinal_horizon_ext.yaml",
+    }
+    ordinal_targets = {}
+    ordered_ok, sane_ok, score_ok = True, True, True
+    for variant, path in ordinal_variants.items():
+        cfg_variant = load_config(path)
+        params = cfg_variant["target"]["params"]
+        y = build_ordinal_target(panel, np.ones(len(panel), dtype=bool), **params).y
+        ordinal_targets[variant] = (cfg_variant, y)
+        visible = y > 0
+        ordered = np.argsort(panel.loc[visible, "time_to_event_km"].to_numpy(dtype=float))
+        # Invariantes que valen para cualquier grilla de bins.
+        sane_ok &= bool((y[~observed] == 0).all())
+        ordered_ok &= bool((np.diff(y[visible][ordered]) <= 0).all())
+        # El score comparable es P(clase >= min_class) y tiene que reconstruir `label`
+        # exactamente, cualquiera sea el último bin. Es lo que hace comparable la
+        # corrida con el control binario.
+        bins = np.asarray(params["bins_km"], dtype=float)
+        min_class = len(bins) - int(np.flatnonzero(bins == params["score_max_tte_km"])[0])
+        score_ok &= bool(np.array_equal(y >= min_class, label_array))
+    check("target ordinal: los censurados son clase 0 en toda variante", sane_ok)
+    check("target ordinal: la clase crece con la proximidad al evento", ordered_ok)
+    check(
+        "target ordinal: P(clase >= min_class) reconstruye `label` en toda variante",
+        score_ok,
+    )
+    # La diferencia entre las dos variantes, medida y no supuesta: con el último bin en
+    # G+H el target vive adentro de la clase positiva y no dice nada de las negativas;
+    # extendiéndolo, las clases intermedias se llenan con filas `label = 0`.
+    restricted = ordinal_targets["restringidos"][1]
+    extended = ordinal_targets["extendidos"][1]
+    check(
+        "target ordinal: solo los bins extendidos informan sobre filas negativas",
+        bool(
+            np.array_equal(restricted > 0, label_array)
+            and ((extended > 0) & ~label_array).sum() > 0
+            # Y la clase 0 extendida conserva filas de vehículos con evento: si no,
+            # el target sería la cohorte de muestreo disfrazada de horizonte.
+            and ((extended == 0) & observed).sum() > 0
+        ),
+    )
+    matrix = ordinal_targets["restringidos"][0]["eval"]["cost_matrix"]
+    expected_cost = float(matrix[0][4] + matrix[4][0])
+    check(
+        "métricas: la matriz cobra por clase real/predicha y conserva la asimetría",
+        cost_matrix_score([0, 4], [4, 0], matrix) == expected_cost
+        and matrix[4][0] > matrix[0][4],
+    )
+    # 1c · el barrido de costo: lo que reemplaza a la matriz única en la variante nueva.
+    sweep_ratios = load_config("configs/exp_ordinal_horizon_ext.yaml")["eval"]["cost_ratios"]
+    sweep_label = np.r_[np.ones(20, dtype=int), np.zeros(140, dtype=int)]  # p = 0,125
+    oracle = cost_ratio_sweep(sweep_label, sweep_label.astype(float), sweep_ratios)
+    # Score constante: no ordena nada, así que ningún umbral separa y el óptimo es
+    # siempre una de las dos políticas triviales.
+    flat = cost_ratio_sweep(sweep_label, np.full(len(sweep_label), 0.5), sweep_ratios)
+    check(
+        "costo: el barrido cruza las políticas triviales en (1-p)/p",
+        bool(np.isclose(cost_ratio_breakeven(oracle)["always_beats_never_above_ratio"], 7.0)),
+    )
+    check(
+        "costo: el oráculo ahorra todo y un score constante no ahorra nada",
+        bool(
+            all(row["savings_frac"] == 1.0 for row in oracle)
+            and all(row["savings_vs_trivial"] == 0.0 for row in flat)
+        ),
+    )
+    check(
+        "costo: ningún modelo puede costar más que la mejor política trivial",
+        bool(all(row["model_cost"] <= row["trivial_cost"] + 1e-9 for row in oracle + flat)),
     )
 
     # 2 · splits antileakage
@@ -285,6 +427,180 @@ def main() -> int:
         "métricas: K más alto no aumenta las falsas alarmas",
         float(lead_time_curve(noise, k_consecutive=3)["false_alarms_per_1000"].max())
         <= float(noise_curve["false_alarms_per_1000"].max()) + 1e-9,
+    )
+
+    # 5 · agregación a nivel vehículo (MIL): la capa de decisión, no un modelo nuevo
+    bags = {how: vehicle_scores(predictions, how, k=3) for how in VEHICLE_AGGREGATIONS}
+    check(
+        "MIL: una bolsa por vehículo, etiquetada con event_observed",
+        all(len(b) == predictions["vehicle_id"].nunique() for b in bags.values())
+        and bool(
+            (
+                bags["max"].set_index("vehicle_id")["label"]
+                == predictions.groupby("vehicle_id")["event_observed"].max()
+            ).all()
+        ),
+    )
+    check(
+        "MIL: mean <= topk <= max <= noisy_or en toda bolsa",
+        bool(
+            (bags["mean"]["score"] <= bags["topk"]["score"] + 1e-12).all()
+            and (bags["topk"]["score"] <= bags["max"]["score"] + 1e-12).all()
+            and (bags["max"]["score"] <= bags["noisy_or"]["score"] + 1e-12).all()
+        ),
+    )
+
+    # El oráculo de bolsa: score alto en los vehículos con evento y bajo en los sanos.
+    # Si la agregación funciona, el PR-AUC por vehículo tiene que ser ~1 con cualquiera.
+    vehicle_oracle = predictions.copy()
+    vehicle_oracle["score"] = np.where(vehicle_oracle["event_observed"] == 1, 0.9, 0.1)
+    oracle_metrics = {how: vehicle_metrics(vehicle_oracle, how, k=3) for how in VEHICLE_AGGREGATIONS}
+    check(
+        "MIL: el oráculo por vehículo saca PR-AUC ≈ 1 con max/mean/topk",
+        all(oracle_metrics[how]["pr_auc"] > 0.99 for how in ("max", "mean", "topk")),
+        ", ".join(f"{how}={m['pr_auc']:.3f}" for how, m in oracle_metrics.items()),
+    )
+    # noisy_or ni siquiera con el oráculo: 1 − Π(1 − p) satura con el tamaño de la
+    # bolsa, así que un vehículo sano con muchos cortes supera a uno con evento y
+    # pocos. No es un bug de la implementación, es la agregación: queda medido acá
+    # para que nadie la elija sin saberlo (docs/memoria/f3-mil-agregacion-vehiculo.md).
+    # Entre los sanos el riesgo por corte es constante (0,1), así que lo único que
+    # queda ordenando sus bolsas es cuántos cortes tienen.
+    healthy_bags = vehicle_scores(vehicle_oracle, "noisy_or").query("label == 0")
+    size_rank_corr = float(healthy_bags["score"].corr(healthy_bags["n_cuts"], method="spearman"))
+    check(
+        "MIL: noisy_or satura con el tamaño de la bolsa (mide historia, no riesgo)",
+        oracle_metrics["noisy_or"]["pr_auc"] < 0.99 and size_rank_corr > 0.99,
+        f"PR-AUC del oráculo={oracle_metrics['noisy_or']['pr_auc']:.3f}, "
+        f"corr de rango(score, n_cuts) entre sanos={size_rank_corr:.2f}",
+    )
+    noise_vehicle = vehicle_metrics(noise, "max", k=3)
+    check(
+        "MIL: el ruido por vehículo no le gana a la tasa base de bolsas",
+        noise_vehicle["pr_auc_lift"] < 1.5,
+        f"PR-AUC={noise_vehicle['pr_auc']:.3f} vs tasa base {noise_vehicle['base_rate']:.3f} "
+        f"(la de filas es {oof['base_rate']:.3f}: no son el mismo número)",
+    )
+    check(
+        "MIL: la tasa base de vehículos no es la de filas (no se comparan los PR-AUC)",
+        abs(noise_vehicle["base_rate"] - oof["base_rate"]) > 0.05,
+        f"{noise_vehicle['base_rate']:.3f} vs {oof['base_rate']:.3f}",
+    )
+
+    # noisy_or sobre algo que no es una probabilidad: se niega en vez de calibrar solo.
+    margins = predictions.copy()
+    margins["score"] = 4.0 * (predictions["score"] - 0.5)
+    noisy_error = ""
+    try:
+        vehicle_scores(margins, "noisy_or")
+    except ValueError as exc:
+        noisy_error = str(exc)
+    check(
+        "MIL: noisy_or se niega si los scores no son probabilidades",
+        "probabilidades" in noisy_error,
+        noisy_error.split(".")[0] if noisy_error else "no falló (debería)",
+    )
+
+    # Y si un vehículo tuviera cortes en dos folds, la bolsa dejaría de ser out-of-fold.
+    leaky = predictions.copy()
+    leaky.loc[leaky.index[0], "fold"] = (int(leaky.loc[leaky.index[0], "fold"]) + 1) % 5
+    leak_error = ""
+    try:
+        vehicle_scores(leaky, "max")
+    except ValueError as exc:
+        leak_error = str(exc)
+    check(
+        "MIL: una bolsa repartida entre dos folds hace fallar la agregación",
+        "out-of-fold" in leak_error,
+        leak_error.split(".")[0] if leak_error else "no falló (debería)",
+    )
+
+    # El bloque del YAML: sin la clave se miden las cuatro; con lista vacía, ninguna.
+    default_block = vehicle_block(predictions, {}, 1)
+    check(
+        "MIL: sin `eval.vehicle_aggregation` se miden las cuatro agregaciones",
+        default_block is not None
+        and tuple(default_block["aggregations"]) == VEHICLE_AGGREGATIONS
+        and default_block["n_vehicles"] == predictions["vehicle_id"].nunique(),
+    )
+    check(
+        "MIL: `vehicle_aggregation: []` apaga el eje de vehículo",
+        vehicle_block(predictions, {"vehicle_aggregation": []}, 1) is None
+        and vehicle_block(predictions, {"vehicle_aggregation": None}, 1) is None,
+    )
+    repeated_block = vehicle_block(rep_predictions, {"vehicle_aggregation": ["max"]}, 3)
+    check(
+        "MIL: con R>1 se agrega cada repetición por separado, no el score promediado",
+        repeated_block is not None
+        and len(repeated_block["by_repeat"]["max"]) == 3
+        and abs(
+            repeated_block["aggregations"]["max"]["pr_auc"]
+            - float(np.mean([m["pr_auc"] for m in repeated_block["by_repeat"]["max"]]))
+        )
+        < 1e-12,
+    )
+
+    # 6 · descomposición cohorte / cuándo: contra qué piso se lee un PR-AUC por fila
+    #
+    # El panel dummy no tiene señal, así que acá no se verifican valores del panel real
+    # (eso lo hace `audit_model.py` sobre dev): se verifican las propiedades que hacen
+    # que la descomposición signifique algo.
+    ceiling = cohort_ceiling(predictions["label"], predictions["vehicle_id"])
+    check(
+        "cohorte: el techo es la precisión de marcar todos los cortes de los fallados",
+        abs(ceiling["pr_auc"] - ceiling["n_positive"] / ceiling["n_failed_rows"]) < 1e-9,
+        f"techo={ceiling['pr_auc']:.4f} = {ceiling['n_positive']}/{ceiling['n_failed_rows']}",
+    )
+    check(
+        "cohorte: el techo está por encima de la tasa base (identificar cohorte ya paga)",
+        ceiling["pr_auc"] > ceiling["base_rate"] and ceiling["lift"] > 1.0,
+        f"techo={ceiling['pr_auc']:.4f} vs tasa base={ceiling['base_rate']:.4f} "
+        f"(lift {ceiling['lift']:.2f}x)",
+    )
+    check(
+        "cohorte: puntuar por tasa del vehículo es una cota más laxa que el indicador",
+        ceiling["pr_auc_rate"] >= ceiling["pr_auc"] - 1e-9,
+        f"por tasa={ceiling['pr_auc_rate']:.4f} >= indicador={ceiling['pr_auc']:.4f}",
+    )
+    # El propio indicador de cohorte, puntuado por `pr_auc_within_failed`, no puede
+    # ordenar nada: dentro de los fallados es constante. Ese es el sentido de la métrica.
+    cohort_score = (
+        predictions.groupby("vehicle_id", observed=True)["label"].transform("max").astype(float)
+    )
+    within_cohort = pr_auc_within_failed(
+        predictions["label"], cohort_score, predictions["vehicle_id"]
+    )
+    check(
+        "entre fallados: el identificador de cohorte perfecto no ordena (lift ≈ 1)",
+        abs(within_cohort["lift"] - 1.0) < 1e-9,
+        f"PR-AUC={within_cohort['pr_auc']:.4f} sobre tasa {within_cohort['base_rate']:.4f}",
+    )
+    check(
+        "entre fallados: el azar de referencia es la tasa del subconjunto, no la global",
+        within_cohort["base_rate"] > float(predictions["label"].mean()),
+        f"{within_cohort['base_rate']:.4f} vs {float(predictions['label'].mean()):.4f}",
+    )
+    # (a') sobre un oráculo del *cuándo* (score = -time_to_event_km) tiene que dar
+    # positivo: es un modelo que ordena los cortes dentro del auto y nada más.
+    when_oracle = predictions.copy()
+    when_oracle["score"] = -when_oracle["time_to_event_km"].fillna(
+        when_oracle["time_to_event_km"].max() + 1.0
+    )
+    oracle_when = when_contribution(when_oracle)
+    check(
+        "(a'): un oráculo del cuándo pierde PR-AUC al colapsarse por vehículo",
+        oracle_when["delta"] > 0,
+        f"{oracle_when['pr_auc']:.4f} → {oracle_when['pr_auc_vehicle_mean']:.4f} "
+        f"({oracle_when['delta']:+.4f})",
+    )
+    # Y sobre un score que ya es constante por vehículo tiene que dar exactamente 0:
+    # no había nada del *cuándo* que borrar.
+    flat_when = predictions.copy()
+    flat_when["score"] = cohort_score
+    check(
+        "(a'): un score constante por vehículo no pierde nada (no sabía el cuándo)",
+        abs(when_contribution(flat_when)["delta"]) < 1e-12,
+        f"delta={when_contribution(flat_when)['delta']:+.2e}",
     )
 
     failed = [name for name, ok, _ in _checks if not ok]

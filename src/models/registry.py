@@ -6,6 +6,10 @@ un config, sin tocar el código de entrenamiento.
 
 `baserate` es el piso absoluto (un modelo que no le gana está roto) y `lgbm` el GBM
 chico de referencia de F3, contra el que se miden las familias de features nuevas.
+
+Un builder puede pedir un objetivo de entrenamiento distinto de `label` (los
+`*_survival` piden `discrete_survival`): eso se declara en el `target:` del YAML y lo
+resuelve `src/training/targets.py`, no el registry.
 """
 
 from __future__ import annotations
@@ -107,3 +111,55 @@ def _build_gru_seq(params: dict[str, Any]) -> BaseEstimator:
     params.setdefault("class_weight", "balanced")
     params.setdefault("random_state", 42)
     return GRUSeqClassifier(**params)
+
+
+@register("survival_stacking")
+def _build_survival_stacking(params: dict[str, Any]) -> BaseEstimator:
+    """Supervivencia en tiempo discreto sobre las filas apiladas, sin efecto aleatorio.
+
+    Necesita `target: {name: discrete_survival}` en el YAML: entrena el hazard por bin
+    de km y predice el riesgo acumulado a H. Es el control de `gpboost_survival`: la
+    diferencia entre los dos es lo que aporta el efecto aleatorio por vehículo, y nada
+    más. Detalle en `src/models/survival_stacking.py`.
+    """
+    from src.models.survival_stacking import DiscreteSurvivalStacker
+
+    params.setdefault("backend", "lightgbm")
+    params.setdefault("random_state", 42)
+    return DiscreteSurvivalStacker(**params)
+
+
+@register("gpboost_survival")
+def _build_gpboost_survival(params: dict[str, Any]) -> BaseEstimator:
+    """Lo mismo con un intercept aleatorio por `vehicle_id` (GPBoost, Sigrist).
+
+    Los ~5 cortes de un vehículo comparten auto, conductor y ruta: el efecto aleatorio
+    absorbe ese nivel para que los árboles aprendan lo que cambia **dentro** del
+    vehículo. GPBoost es dependencia opcional (`requirements-gpboost.txt`) y por eso el
+    import vive adentro del builder.
+    """
+    from src.models.survival_stacking import DiscreteSurvivalStacker
+
+    params.setdefault("backend", "gpboost")
+    params.setdefault("random_state", 42)
+    return DiscreteSurvivalStacker(**params)
+
+
+@register("lgbm_ordinal")
+def _build_lgbm_ordinal(params: dict[str, Any]) -> BaseEstimator:
+    """LightGBM multiclase chico; `targets.py` acumula clases para recuperar P(evento en H)."""
+    from lightgbm import LGBMClassifier  # import pesado adentro del builder
+
+    params.setdefault("objective", "multiclass")
+    params.setdefault("n_estimators", 300)
+    params.setdefault("learning_rate", 0.03)
+    params.setdefault("num_leaves", 7)
+    params.setdefault("min_child_samples", 40)
+    params.setdefault("reg_lambda", 5.0)
+    params.setdefault("subsample", 0.8)
+    params.setdefault("subsample_freq", 1)
+    params.setdefault("colsample_bytree", 0.7)
+    params.setdefault("class_weight", "balanced")
+    params.setdefault("random_state", 42)
+    params.setdefault("verbose", -1)
+    return LGBMClassifier(**params)

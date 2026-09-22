@@ -1,0 +1,85 @@
+run: f3-positional-baseline
+logged_on: '2026-09-21'
+note: 'Piso del eje cuando. LightGBM con UNA feature (feat_cut_odo): PR-AUC 0.1426.
+  Pero el piso fuerte es el odometro CRUDO sin ajustar nada (scripts/audit_positional_floor.py):
+  PR-AUC 0.1766 (lift 1.41x), entre fallados 0.3301, (a'') +0.0872, deteccion 7.55%
+  con 7.385 km. Ese piso le GANA en PR-AUC por fila y en las tres metricas del eje
+  cuando a las cuatro corridas finalistas (survival 0.1613, lgbm control 0.1612, cnn-lstm
+  0.1553, gpboost 0.1431). Metricas degeneradas: PR-AUC por fila, PR-AUC entre fallados,
+  (a''). Metricas honestas, donde el piso pierde: punto de operacion y eje vehiculo
+  con agregacion mean (piso 1.018x). No es un candidato: es referencia, como baserate.'
+source:
+  config_path: configs/exp_positional_baseline.yaml
+  config_versioned: true
+  branch: main
+  commit: 0fef03c
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: lgbm
+  pr_auc: 0.14261078612171393
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2931633877169322
+  within_failed_lift: 1.1160984091428086
+  when_delta: 0.04822230936029415
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.3101810909616913
+  vehicle_lift: 1.0007729538575323
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.13956692522331066
+  pr_auc_hi: 0.15629926877481623
+  base_rate: 0.1251848201084278
+  lift: 1.1392019096100692
+  roc_auc: 0.532755905511811
+  brier: 0.2463037912184052
+  detection_rate: 0.05660377358490566
+  median_lead_km: 10210.434585450566
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_positional.parquet
+  panel_generation: null
+  splits: ${DATA_DIR}/processed/splits.json
+  n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+config:
+  name: f3-positional-baseline
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_positional.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: lgbm
+    params:
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-pisos
+    job_type: train
+    tags:
+    - f3
+    - piso
+    - cuando
+    - referencia
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs/exp_positional_baseline.yaml

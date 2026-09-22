@@ -1,0 +1,21 @@
+# Panel del piso posicional: las mismas filas del panel v1 con UNA sola feature,
+# `feat_cut_odo`. Todas las demás `feat_*`/`static_*` se descartan.
+#
+#   python scripts/build_positional_panel.py --config configs/data/panel_positional.yaml
+#
+# Para qué: el eje "cuándo" ((a'), ROC intra-vehículo, PR-AUC entre fallados) se venía
+# leyendo contra cero, y cero no es el piso. Dentro de un vehículo fallado los positivos
+# son exactamente los últimos ~6 cortes, así que cualquier score que crezca con el
+# odómetro acierta ese orden sin saber nada de degradación. Este panel construye el
+# modelo que *solo* sabe eso, para que el piso del eje se pueda medir en vez de suponerse.
+#
+# Es el mismo rol que `configs/exp_baserate.yaml` en el eje "qué auto": no es un
+# candidato, es una referencia. No gasta presupuesto de comparaciones.
+panel_config: configs/data/panel_v1.yaml
+
+# La única feature que sobrevive: el odómetro del corte, copiado tal cual.
+columns:
+  feat_cut_odo: cut_odo
+
+output:
+  panel: ${DATA_DIR}/processed/panel_positional.parquet

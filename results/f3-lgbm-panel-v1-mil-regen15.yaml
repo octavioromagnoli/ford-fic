@@ -1,0 +1,100 @@
+run: f3-lgbm-panel-v1-mil-regen15
+logged_on: '2026-09-20'
+note: 'RE-CORRIDA de f3-lgbm-panel-v1-mil contra el panel POST-1eab4a1 (el registro
+  sin sufijo, PR-AUC 0,1653 / lift vehiculo 1,51x, es del panel pre-fix y NO se compara
+  con este). Misma config, solo --run-name. Por fila 0,1612, exactamente el control
+  post-fix f3-lgbm-panel-v1-regen15: el eje de evaluacion no cambia el PR-AUC por
+  fila, que es el punto de MIL. Por vehiculo con mean el lift es 1,54x (pre-fix daba
+  1,51x): el hallazgo de MIL sobrevive al arreglo del umbral. (a'') = -0,0067, negativo,
+  igual que el control. noisy_or sigue dando mas lift y sigue perdiendo contra un
+  nulo que conserva el tamano de bolsa. Contra el techo de cohorte de 0,2627 no llega.'
+source:
+  config_path: configs/exp_lgbm_panel_v1_mil.yaml
+  config_versioned: true
+  branch: integracion/f3
+  commit: 532f82c
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: lgbm
+  pr_auc: 0.16121376584202757
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2870829464170356
+  within_failed_lift: 1.0929496424617062
+  when_delta: -0.006713251666781772
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.4767501966998375
+  vehicle_lift: 1.53819403086174
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.1580413847744114
+  pr_auc_hi: 0.21302996625641532
+  base_rate: 0.1251848201084278
+  lift: 1.2878060271396612
+  roc_auc: 0.586239325718088
+  brier: 0.1727350893576606
+  detection_rate: 0.07547169811320754
+  median_lead_km: 12322.470813159141
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel.parquet
+  panel_generation: '2026-09-20'
+  splits: ${DATA_DIR}/processed/splits.json
+  n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: 7.0
+  cost_best_savings_frac: 0.14309859154929577
+  cost_matrix: null
+config:
+  name: f3-lgbm-panel-v1-mil
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: lgbm
+    params:
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    vehicle_aggregation:
+    - max
+    - mean
+    - topk
+    - noisy_or
+    vehicle_topk: 3
+    cost_ratios:
+    - 2
+    - 3
+    - 5
+    - 7
+    - 10
+    - 20
+    - 50
+    cost_fp: 1.0
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-feature-ablation
+    job_type: train
+    tags:
+    - f3
+    - lgbm
+    - panel-v1
+    - control
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs/exp_lgbm_panel_v1_mil.yaml

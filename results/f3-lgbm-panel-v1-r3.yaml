@@ -1,15 +1,59 @@
 run: f3-lgbm-panel-v1-r3
-logged_on: '2026-09-19'
-note: ''
+logged_on: '2026-09-20'
+note: '
+
+
+  [NO COMPARABLE · anotado al revisar las auditorias] Esta corrida se midio contra
+  el
+
+  panel ANTERIOR al commit 1eab4a1, que corrigio el umbral de regeneraciones (5 ->
+  15
+
+  puntos) y reconstruyo el panel: mismas filas, mismos vehiculos, mismos folds, otros
+
+  valores en las columnas feat_*regen*. El control se movio de 0,165 a 0,1612 y la
+  tabla
+
+  de results/ separa corridas por ~0,005, o sea menos que ese movimiento: su posicion
+  en
+
+  el ranking puede no sobrevivir. No se compara con las corridas posteriores. Las
+
+  metricas de arriba quedan como estaban, sin tocar.
+
+
+  [AUDITORIA · anotado al revisar los criterios] La auditoria (a) —permutar features
+
+  dentro de cada vehiculo esperando que el PR-AUC cayera a la tasa base— NO es un
+  null en
+
+  este panel: deja intacto que vehiculos fallan, que es de donde sale casi todo el
+  PR-AUC,
+
+  y sube a 0,17-0,21. Cualquier lectura de esta corrida que la haya citado como aprobada
+
+  paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
+  el
+
+  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
 source:
   config_path: data/v364/cfg/exp_lgbm_panel_v1_r3.yaml
   config_versioned: false
-  branch: feat/model-cnn-lstm
-  commit: 36dad79
+  branch: integracion/f3
+  commit: 532f82c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm
   pr_auc: 0.16112725675784997
+  cohort_ceiling: null
+  cohort_lift: null
+  within_failed: null
+  within_failed_lift: null
+  when_delta: null
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.45957022466511055
+  vehicle_lift: 1.4827643097685643
+  vehicle_base_rate: 0.30994152046783624
   pr_auc_lo: 0.16863185113357362
   pr_auc_hi: 0.200079489994229
   base_rate: 0.1251848201084278
@@ -20,8 +64,13 @@ summary:
   median_lead_km: 11802.0
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel.parquet
+  panel_generation: '2026-09-19'
   splits: ${DATA_DIR}/processed/splits_r3.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f3-lgbm-panel-v1-r3
   seed: 42

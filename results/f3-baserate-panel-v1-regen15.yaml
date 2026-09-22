@@ -1,0 +1,82 @@
+run: f3-baserate-panel-v1-regen15
+logged_on: '2026-09-20'
+note: 'Piso de tasa base re-corrido contra el panel POST-1eab4a1: PR-AUC 0,1214, identico
+  al del panel viejo, como tiene que ser (baserate no usa ninguna feature y 1eab4a1
+  cambio features, no etiquetas). Es el control del re-corrido: confirma que las diferencias
+  que se ven en los otros modelos son de las features y no del panel entero. Auditado:
+  (a0) PASS, (a'') +0,0010 -> APROBADA, y eso expone el limite del criterio: un modelo
+  constante ''aprueba'' (a'') con un delta de ruido. (a'') dice si el poco cuando
+  que hay es real, no si alcanza; el tamano se lee contra el techo de cohorte de 0,2627.'
+source:
+  config_path: configs/exp_baserate.yaml
+  config_versioned: true
+  branch: integracion/f3
+  commit: 532f82c
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: baserate
+  pr_auc: 0.12139555574321928
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2545410040875593
+  within_failed_lift: 0.96905964941996
+  when_delta: 0.0010247290759095584
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.3061354579025606
+  vehicle_lift: 0.9877200622893936
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.11976403332725172
+  pr_auc_hi: 0.13004926108374384
+  base_rate: 0.1251848201084278
+  lift: 0.9697306401692595
+  roc_auc: 0.4857147610069868
+  brier: 0.1095329587106025
+  detection_rate: 0.0
+  median_lead_km: .nan
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel.parquet
+  panel_generation: '2026-09-20'
+  splits: ${DATA_DIR}/processed/splits.json
+  n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+config:
+  name: f3-baserate-panel-v1
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: baserate
+    params: {}
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-baselines
+    job_type: train
+    tags:
+    - f3
+    - baseline
+    - panel-v1
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs/exp_baserate.yaml

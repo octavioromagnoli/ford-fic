@@ -1,0 +1,84 @@
+# Paso 1 del proceso gamma de degradación: ¿existe un proxy de carga IRREVERSIBLE?
+#
+#   python scripts/audit_gamma_monotonia.py --config configs/data/gamma_monotonia.yaml
+#
+# Un proceso gamma modela un daño D(km) monótono no decreciente cuyos incrementos
+# tienen tasa dependiente de covariables, y la falla es el primer cruce de un umbral.
+# Antes de escribir una sola línea del modelo hay que verificar las dos condiciones
+# que lo sostienen, sobre los datos reales y **solo sobre dev**:
+#
+#   (a) MONOTONÍA: el proxy de carga elegido sube con el odómetro dentro del vehículo.
+#   (b) SEPARACIÓN: la tasa a la que sube distingue a los que fallan de los sanos.
+#
+# Si (a) o (b) no se sostienen, el modelo no tiene premisa y el hallazgo negativo vale
+# más que la implementación. El resultado está en docs/memoria/f3-proceso-gamma.md.
+#
+# Nada de acá se hardcodea en el script (CLAUDE.md, regla 7): los bins, los mínimos y
+# las ventanas de exposición son decisiones de medición y se discuten leyendo este archivo.
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml   # 13 vehículos duplicados bajo dos códigos (F1)
+panel: configs/data/panel_v1.yaml          # de acá salen los umbrales de `derive_trip_columns`
+
+# Holdout congelado. El universo de la auditoría son los 290 de `dev_vehicles` y nada
+# más: el test no se mira ni en agregado, y los 717 fuera del estudio tampoco.
+test_split: ${DATA_DIR}/processed/test_split.json
+
+scan:
+  chunksize: 500000
+
+audit:
+  # Columna de carga del postratamiento. `AirRegeneration*` == `signals.Acumulation`
+  # al 99,7% (docs/memoria/f2-columnas-airfilter-airregeneration.md): se usa la de
+  # `trips` porque trae el odómetro casi completo.
+  level_column: AirRegenerationEnd
+
+  # Bloque A · monotonía del NIVEL. El nivel crudo sube y baja con cada regeneración;
+  # lo que un proceso gamma modela es el piso que queda. Se resume por bins de
+  # odómetro con tres estadísticos: `min` (el piso literal), `p10` (el piso robusto a
+  # un outlier) y `mean` (el nivel medio, que mezcla piso y hollín).
+  level_bin_km: 2000
+  level_bin_min_trips: 30      # bins con menos viajes no estiman un piso
+  level_min_bins: 3            # menos de 3 bins no definen una tendencia
+  level_min_trips: 200
+
+  # Bloque B · el piso medido donde la física lo pone: el nivel con el que TERMINA una
+  # regeneración. La regeneración quema hollín y no ceniza, así que ese residuo es la
+  # ceniza. El umbral de caída sale de features_v1.yaml (15 puntos, ver
+  # docs/memoria/f2-umbral-regeneraciones.md).
+  regen_min_events: 10         # vehículos con menos regeneraciones no dan tendencia
+  regen_min_span_km: 2000
+
+  # Bloque D · separación de la tasa con la EXPOSICIÓN IGUALADA. Los fallados tienen
+  # historial más corto (se corta en el evento) que los sanos, así que cualquier
+  # pendiente estimada sobre el historial completo compara tramos distintos de la vida
+  # del vehículo. Cada ventana se mide sobre los vehículos que la cubren entera.
+  #
+  # Las cuatro ventanas contestan además una segunda pregunta: la que arranca en 0
+  # incluye el asentamiento del vehículo y las que arrancan más tarde no. Si la
+  # monotonía del bloque A es ceniza, tiene que seguir estando después del km 1.000;
+  # si es asentamiento, desaparece.
+  matched_windows: [[0, 8000], [1000, 8000], [0, 6000], [4000, 16000]]
+  matched_min_coverage: 0.7    # fracción de la ventana que el vehículo tiene que cubrir
+  matched_bin_km: 1000
+  matched_bin_min_trips: 25
+  matched_min_bins: 4
+  matched_min_trips: 150
+
+# Veredicto. Se declara acá y no en el script para que discutir el criterio sea leer
+# este archivo, y para que nadie lo ablande después de ver el resultado.
+veredicto:
+  # (a) Monotonía: se juzga en la ventana que EXCLUYE el asentamiento. Una tendencia que
+  # solo existe en los primeros km no es acumulación irreversible, es el primer llenado.
+  monotonia_window: [1000, 8000]
+  min_frac_rho_positivo: 0.60
+
+  # (b) Separación: hace falta tamaño de efecto Y significancia Y el signo correcto.
+  # La hipótesis dice que el que falla acumula MÁS rápido, así que solo cuenta AUC > 0,5:
+  # un AUC de 0,40 es evidencia en contra, no a favor con otro nombre.
+  min_auc: 0.60
+  max_p: 0.05
+
+output:
+  dir: ${REPO_ROOT}/experiments/gamma/dev

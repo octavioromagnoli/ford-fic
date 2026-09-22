@@ -16,7 +16,7 @@ python scripts/make_splits.py     --config configs/data/splits_panel_v1_r3.yaml 
 # 2 · el modelo y sus controles, todos con los mismos folds
 python scripts/train.py --config configs/exp_gru_seq.yaml          # GRU + atención, signals
 python scripts/train.py --config configs/exp_gru_seq_trips.yaml    # GRU + atención, signals+trips
-python scripts/train.py --config configs/exp_lgbm_panel_v1_r3.yaml # control: 53 agregados
+python scripts/train.py --config configs/exp_lgbm_panel_v1_r3_regen15.yaml # control: 53 agregados
 python scripts/train.py --config configs/exp_cnn_lstm_r3.yaml      # control: baseline de la tutora
 python scripts/train.py --config configs/exp_baserate_r3.yaml      # piso
 

@@ -5,7 +5,8 @@
 
 Hace siempre lo mismo, en este orden: levanta el config, fija la semilla, carga
 el panel, **lo recorta a dev con el holdout congelado**, carga los splits, corre
-la CV agrupada por vehículo, calcula las métricas (clasificación + anticipación),
+la CV agrupada por vehículo, calcula las métricas (clasificación por fila,
+anticipación y clasificación **por vehículo**, que es la unidad de decisión de Ford),
 loguea todo a wandb y deja los outputs en `experiments/<run_name>/`.
 
 El recorte a dev no es opcional ni implícito: el YAML tiene que declarar
@@ -26,6 +27,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -35,11 +37,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import ensure_dir, load_config, repo_root, resolve_path, set_seed  # noqa: E402
 from src.eval.metrics import (  # noqa: E402
+    DEFAULT_TOPK,
+    VEHICLE_AGGREGATIONS,
+    VEHICLE_LABEL_COLUMN,
+    bootstrap_by_vehicle,
     classification_metrics,
+    cohort_ceiling,
+    concordance_index_oof,
+    cost_ratio_breakeven,
+    cost_ratio_sweep,
     dispersion,
     lead_time_curve,
     operating_point,
+    pr_auc_within_failed,
     summarize_folds,
+    vehicle_metrics,
+    when_contribution,
 )
 from src.eval.splits import (  # noqa: E402
     MIN_VALID_POSITIVES,
@@ -55,8 +68,68 @@ from src.eval.splits import (  # noqa: E402
     test_split_masks,
 )
 from src.training.cv import run_cv  # noqa: E402
+from src.training.targets import target_report as build_target_report  # noqa: E402
 
 logger = logging.getLogger("train")
+
+
+def cost_block(predictions: pd.DataFrame, eval_cfg: dict) -> dict | None:
+    """Barrido del ratio `C_FN / C_FP`, si el YAML lo pide. Reporte, no selección.
+
+    Los ratios salen de `eval.cost_ratios`; sin esa clave no se mide nada. La
+    decisión se toma sobre la etiqueta binaria `label` y el score comparable, así
+    que el barrido corre igual para cualquier modelo o target.
+    """
+    ratios = eval_cfg.get("cost_ratios")
+    if not ratios:
+        return None
+    sweep = cost_ratio_sweep(
+        predictions["label"].to_numpy(dtype=int),
+        predictions["score"].to_numpy(dtype=float),
+        ratios,
+        cost_fp=float(eval_cfg.get("cost_fp", 1.0)),
+    )
+    return {"sweep": sweep, **cost_ratio_breakeven(sweep)}
+
+
+def panel_build(panel_path: Path) -> dict | None:
+    """Con qué *build* del panel se midió esta corrida, leído de su `*_meta.json`.
+
+    El path del panel no alcanza para saber contra qué se midió: `panel.parquet` se
+    reescribe cada vez que se reconstruye el dataset, y dos corridas que declaran el
+    mismo archivo pueden estar midiendo paneles distintos (pasó con 1eab4a1, el umbral
+    de regeneraciones: el control se movió de 0,165 a 0,1612, más que lo que separa
+    filas de la tabla de `results/`). Por eso la corrida se queda con el `created_at`
+    del panel, que sí distingue los builds, y `scripts/compare.py` avisa cuando la
+    tabla mezcla dos.
+
+    Los paneles derivados (`panel_survival`, `panel_timesfm`…) no emiten su propio
+    meta: se cae al del panel base del mismo directorio, que es de donde salieron.
+    """
+    candidates = [
+        panel_path.with_name(f"{panel_path.stem}_meta.json"),
+        panel_path.with_name("panel_meta.json"),
+    ]
+    for meta_path in candidates:
+        if not meta_path.exists():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        created = meta.get("created_at")
+        if not created:
+            continue
+        return {
+            "created_at": str(created),
+            # `2026-09-19` alcanza para la columna de la tabla; el timestamp queda
+            # entero para poder ordenar dos builds del mismo día.
+            "generation": str(created)[:10],
+            "meta": meta_path.name,
+            "config": meta.get("config"),
+            "features_spec": meta.get("features_spec"),
+        }
+    return None
 
 
 def select_dev(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
@@ -146,6 +219,144 @@ def repeat_metrics(predictions: pd.DataFrame, n_repeats: int) -> list[dict[str, 
     ]
 
 
+def when_by_repeat(
+    predictions: pd.DataFrame, n_repeats: int
+) -> list[dict[str, dict[str, float]]]:
+    """(a'), PR-AUC entre fallados y detección de CADA repetición, por separado.
+
+    Mismo criterio que `repeat_metrics`: con R > 1 cada repetición tiene su propia
+    columna `score_r{i}` y se mide sola. Promediar los scores antes de medir sería un
+    ensamble de R pasadas, que da mejor que el modelo que se está evaluando — y acá
+    importa el doble, porque lo que se quiere de la CV repetida es justamente **la
+    dispersión** entre repeticiones: sobre el score promediado esa dispersión es cero
+    por construcción y (a') parecería mucho más estable de lo que es.
+    """
+    columns = ["score"] if n_repeats <= 1 else [f"score_r{r}" for r in range(n_repeats)]
+    out = []
+    for column in columns:
+        frame = predictions.assign(score=predictions[column])
+        out.append(
+            {
+                "when": when_contribution(frame),
+                "within_failed": pr_auc_within_failed(
+                    frame["label"], frame["score"], frame["vehicle_id"]
+                ),
+            }
+        )
+    return out
+
+
+def detection_by_repeat(
+    predictions: pd.DataFrame, n_repeats: int, eval_cfg: dict
+) -> list[dict[str, float] | None]:
+    """El punto de operación de cada repetición: detección y anticipación con su sorteo.
+
+    Es el número del pitch, así que su dispersión entre repeticiones es lo que dice si
+    "detectamos el R%" es una propiedad del modelo o del sorteo de folds.
+    """
+    columns = ["score"] if n_repeats <= 1 else [f"score_r{r}" for r in range(n_repeats)]
+    budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
+    out = []
+    for column in columns:
+        frame = predictions.assign(score=predictions[column])
+        curve = lead_time_curve(
+            frame,
+            n_thresholds=int(eval_cfg.get("n_thresholds", 50)),
+            k_consecutive=int(eval_cfg.get("k_consecutive", 2)),
+        )
+        out.append(operating_point(curve, max_false_alarms_per_1000=budget))
+    return out
+
+
+def vehicle_block(
+    predictions: pd.DataFrame, eval_cfg: dict, n_repeats: int
+) -> dict[str, Any] | None:
+    """Las mismas métricas, con el vehículo como unidad de decisión (MIL).
+
+    El PR-AUC por fila contesta "¿el evento cae en el horizonte de este corte?"; la
+    decisión de Ford es "¿marco este auto?". Cada vehículo es una bolsa de cortes y
+    su etiqueta es `event_observed`; las agregaciones que se miden salen de
+    `eval.vehicle_aggregation` en el YAML (lista vacía o `null` para no medir nada).
+
+    Con CV repetida se hace lo mismo que con las métricas por fila: se calcula cada
+    repetición por separado sobre su propio `score_r{i}` y se promedia. Agregar el
+    score promediado entre repeticiones sería un ensamble, y un ensamble de R pasadas
+    da mejor que el modelo que se está evaluando.
+
+    Una agregación que no se puede *medir* (el caso real: `noisy_or` sobre un modelo
+    que no devuelve probabilidades) no tumba la corrida ya entrenada: queda anotada con
+    el motivo en `metrics.json` y las otras se miden igual. Una agregación que no
+    *existe* —un nombre mal escrito en el YAML— sí falla, y antes de medir nada.
+    """
+    hows = eval_cfg.get("vehicle_aggregation", list(VEHICLE_AGGREGATIONS))
+    if hows is None:
+        hows = []
+    if isinstance(hows, str):
+        hows = [hows]
+    if not hows:
+        return None
+    unknown = [how for how in hows if how not in VEHICLE_AGGREGATIONS]
+    if unknown:
+        # Un nombre mal escrito en el YAML tiene que romper acá y no quedar como una
+        # agregación "que no se pudo medir" al final de metrics.json.
+        raise ValueError(
+            f"`eval.vehicle_aggregation` pide agregaciones que no existen: {unknown}. "
+            f"Disponibles: {list(VEHICLE_AGGREGATIONS)}."
+        )
+    k = int(eval_cfg.get("vehicle_topk", DEFAULT_TOPK))
+
+    # Una columna de score (y su fold) por repetición: con R=1, las de siempre.
+    columns = (
+        [("score", "fold")]
+        if n_repeats <= 1
+        else [(f"score_r{r}", f"fold_r{r}") for r in range(n_repeats)]
+    )
+
+    aggregations: dict[str, Any] = {}
+    by_repeat: dict[str, list[dict[str, Any]]] = {}
+    for how in hows:
+        try:
+            runs = [
+                vehicle_metrics(
+                    predictions, how, k=k, score_column=score_column, fold_column=fold_column
+                )
+                for score_column, fold_column in columns
+            ]
+        except (ValueError, KeyError) as exc:
+            logger.warning("Agregación por vehículo `%s` no se pudo medir: %s", how, exc)
+            aggregations[how] = {"skipped": str(exc)}
+            continue
+        # Igual que `oof`: se promedia entre repeticiones lo que es métrica, y lo que
+        # describe la corrida (cuántos vehículos, cuál agregación) se copia tal cual.
+        aggregations[how] = {
+            key: value if key in ("how", "k", "n", "n_positive") else float(np.mean([r[key] for r in runs]))
+            for key, value in runs[0].items()
+        }
+        if len(runs) > 1:
+            by_repeat[how] = runs
+
+    reference = next((m for m in aggregations.values() if "skipped" not in m), None)
+    block: dict[str, Any] = {
+        "label_column": VEHICLE_LABEL_COLUMN,
+        "topk_k": k,
+        "aggregations": aggregations,
+    }
+    if reference is not None:
+        # La tasa base por vehículo no es la de las filas: el PR-AUC de los dos ejes
+        # no se compara. Queda escrito en metrics.json para que nadie lo intente.
+        block["n_vehicles"] = reference["n"]
+        block["n_event_vehicles"] = reference["n_positive"]
+        block["base_rate"] = reference["base_rate"]
+        block["bag_size_mean"] = reference["bag_size_mean"]
+        block["comparabilidad"] = (
+            "El PR-AUC por vehículo tiene otra tasa base que el de filas: se compara el "
+            "lift (`pr_auc_lift`), no el PR-AUC pelado."
+        )
+    if by_repeat:
+        block["by_repeat"] = by_repeat
+    return block
+
+
 def init_wandb(cfg: dict, run_name: str):
     """wandb opcional: `mode: disabled` para iterar rápido, `offline` sin red.
 
@@ -201,6 +412,7 @@ def main() -> None:
     splits = load_or_make_splits(panel, cfg)
 
     model_cfg = cfg["model"]
+    target_cfg = cfg.get("target") or {}
     run_name = args.run_name or cfg.get("name") or f"{model_cfg['name']}-{datetime.now():%Y%m%d-%H%M%S}"
     run = init_wandb(cfg, run_name)
 
@@ -210,12 +422,21 @@ def main() -> None:
         splits,
         model_name=model_cfg["name"],
         model_params=model_cfg.get("params", {}),
+        # Con qué objetivo se entrena (src/training/targets.py). Sin la clave, `label`.
+        # Lo que se mide no cambia: la etiqueta dura, con los mismos folds.
+        target=target_cfg or None,
         strict_splits=bool(cfg.get("splits", {}).get("strict", True)),
         min_valid_positives=options["min_valid_positives"],
     )
 
     eval_cfg = cfg.get("eval", {})
     k_consecutive = int(eval_cfg.get("k_consecutive", 2))
+    target_metrics = build_target_report(
+        target_cfg.get("name"),
+        predictions,
+        cost_matrix=eval_cfg.get("cost_matrix"),
+        **dict(target_cfg.get("params") or {}),
+    )
 
     n_repeats = int(splits.get("n_repeats", 1))
     by_repeat = repeat_metrics(predictions, n_repeats)
@@ -243,6 +464,53 @@ def main() -> None:
     )
     budget = float(eval_cfg.get("max_false_alarms_per_1000", 50))
     point = operating_point(curve, max_false_alarms_per_1000=budget)
+    vehicle = vehicle_block(predictions, eval_cfg, n_repeats)
+    cost = cost_block(predictions, eval_cfg)
+
+    # Descomposición cohorte / cuándo. Va en TODA corrida, no solo en `audit_model.py`:
+    # el PR-AUC por fila de este panel está dominado por *qué* vehículo falla (el techo
+    # de cohorte es 0,2627 sobre dev, contra una tasa base de 0,1252), así que un número
+    # suelto no dice si el modelo anticipa. Las tres piezas son baratas —salen de las
+    # predicciones que ya están en memoria, sin reentrenar nada— y se guardan con claves
+    # nuevas para no tocar lo que ya leen las corridas viejas ni wandb.
+    ceiling = cohort_ceiling(predictions["label"], predictions["vehicle_id"])
+    within_failed = pr_auc_within_failed(
+        predictions["label"], predictions["score"], predictions["vehicle_id"]
+    )
+    when = when_contribution(predictions)
+    # Con R > 1, la misma cuenta por repetición: sin la dispersión, declarar que un
+    # modelo aporta +0,015 del *cuándo* no dice si eso supera el ruido del sorteo.
+    when_repeats = when_by_repeat(predictions, n_repeats)
+    detect_repeats = detection_by_repeat(predictions, n_repeats, eval_cfg)
+    when_spread = {
+        "when_delta": dispersion([r["when"]["delta"] for r in when_repeats]),
+        "within_failed_pr_auc": dispersion(
+            [r["within_failed"]["pr_auc"] for r in when_repeats]
+        ),
+        "within_failed_lift": dispersion(
+            [r["within_failed"]["lift"] for r in when_repeats]
+        ),
+        "detection_rate": dispersion(
+            [p["detection_rate"] for p in detect_repeats if p is not None]
+        ),
+        "median_lead_km": dispersion(
+            [p["median_lead_km"] for p in detect_repeats if p is not None]
+        ),
+    }
+
+    # Secundarias. El C-index mide el orden usando a los sanos como censurados, no como
+    # ceros; el bootstrap por vehículo es el intervalo que corresponde a un panel con ~5
+    # filas correlacionadas por auto (el de folds mide otra cosa: el sorteo de folds).
+    concordance = concordance_index_oof(predictions) if "aux_km_observed_after_cut" in predictions else None
+    by_vehicle = (
+        bootstrap_by_vehicle(
+            predictions,
+            n_boot=int(eval_cfg.get("bootstrap_n_boot", 1000)),
+            seed=seed,
+        )
+        if eval_cfg.get("bootstrap_by_vehicle", False)
+        else None
+    )
 
     metrics = {
         "oof": oof,
@@ -251,21 +519,69 @@ def main() -> None:
         "repeats_spread": repeats_spread,
         "folds": fold_metrics,
         "folds_summary": summary,
+        "concordance": concordance,
+        "cohort_ceiling": ceiling,
+        "pr_auc_within_failed": within_failed,
+        "when_contribution": when,
+        "when_by_repeat": when_repeats,
+        "detection_by_repeat": detect_repeats,
+        "when_spread": when_spread,
+        "bootstrap_by_vehicle": by_vehicle,
         "operating_point": point,
         "operating_point_budget_per_1000": budget,
         "k_consecutive": k_consecutive,
+        "panel": str(panel_path),
+        "panel_build": panel_build(panel_path),
         "stratify": splits.get("stratify"),
         "min_valid_positives": splits.get("min_valid_positives"),
+        "target": target_cfg or None,
+        "target_report": target_metrics or None,
     }
+    if vehicle is not None:
+        metrics["vehicle"] = vehicle
+    if cost is not None:
+        metrics["cost_ratio_sweep"] = cost
 
     logger.info("OOF | PR-AUC=%.4f (tasa base %.4f) | ROC-AUC=%.4f | Brier=%.4f",
                 oof["pr_auc"], oof["base_rate"], oof["roc_auc"], oof["brier"])
+    logger.info(
+        "Cohorte | techo %.4f (lift %.2fx) con %d/%d filas de vehículos fallados — "
+        "el PR-AUC de arriba %s",
+        ceiling["pr_auc"], ceiling["lift"], ceiling["n_positive"], ceiling["n_failed_rows"],
+        "lo supera" if oof["pr_auc"] > ceiling["pr_auc"] else
+        "NO lo supera: identificar la cohorte ya daría más, esto no demuestra anticipación",
+    )
+    logger.info(
+        "Cuándo | PR-AUC entre fallados=%.4f (lift %.2fx sobre %.4f, %d filas) | "
+        "(a') aporte del cuándo=%+.4f (%.4f → %.4f al promediar por vehículo)",
+        within_failed["pr_auc"], within_failed["lift"], within_failed["base_rate"],
+        within_failed["n"], when["delta"], when["pr_auc"], when["pr_auc_vehicle_mean"],
+    )
+    if concordance and np.isfinite(concordance["c_index"]):
+        logger.info("OOF | C-index=%.4f sobre %d filas (%d con evento)",
+                    concordance["c_index"], concordance["n"], concordance["n_events"])
+    if by_vehicle:
+        for name, ci in by_vehicle.items():
+            logger.info("Bootstrap por vehículo (%d vehículos) | %s=%.4f [%.4f, %.4f]",
+                        ci["n_vehicles"], name, ci["point"], ci["lo"], ci["hi"])
     if n_repeats > 1:
         spread = repeats_spread["pr_auc"]
         logger.info(
             "CV repetida (%d pasadas) | PR-AUC por repetición: %.4f ± %.4f (min %.4f, max %.4f)",
             n_repeats, spread["mean"], spread["std"], spread["min"], spread["max"],
         )
+        for key, label, scale in (
+            ("when_delta", "(a') aporte del cuándo", 1.0),
+            ("within_failed_lift", "lift entre fallados", 1.0),
+            ("detection_rate", "detección", 100.0),
+            ("median_lead_km", "anticipación mediana (km)", 1.0),
+        ):
+            d = when_spread[key]
+            logger.info(
+                "CV repetida (%d pasadas) | %-26s %.4f ± %.4f (min %.4f, max %.4f)",
+                n_repeats, label + ":", scale * d["mean"], scale * d["std"],
+                scale * d["min"], scale * d["max"],
+            )
     if point:
         logger.info(
             "Punto de operación (<= %.0f falsas alarmas/1000 sanos): detección %.1f%% | "
@@ -274,6 +590,68 @@ def main() -> None:
         )
     else:
         logger.info("Ningún umbral respeta el presupuesto de %.0f falsas alarmas/1000", budget)
+    if target_metrics and "cost_total" in target_metrics:
+        logger.info(
+            "Costo ordinal OOF | total=%.0f | medio=%.2f | por 1000 filas=%.0f",
+            target_metrics["cost_total"],
+            target_metrics["cost_mean"],
+            target_metrics["cost_per_1000"],
+        )
+
+    if cost is not None:
+        logger.info(
+            "Barrido de costo (C_FP=1, umbral oráculo sobre las mismas OOF: cota superior)"
+        )
+        for row in cost["sweep"]:
+            verdict = (
+                f"ahorra {row['savings_vs_trivial']:.0f} ({100 * row['savings_frac']:.1f}%)"
+                if row["beats_trivial"]
+                else f"no le gana a `{row['best_trivial']}`"
+            )
+            logger.info(
+                "  C_FN/C_FP=%-4g | modelo=%.0f | siempre=%.0f | nunca=%.0f | alertas %4.0f%% | %s",
+                row["ratio"], row["model_cost"], row["always_cost"], row["never_cost"],
+                100 * row["alert_rate"], verdict,
+            )
+        logger.info(
+            "  Alertar siempre le gana a no alertar nunca desde C_FN/C_FP = %.1f× "
+            "((1-p)/p): ahí es donde el modelo tiene dónde ahorrar",
+            cost["always_beats_never_above_ratio"],
+        )
+        if cost["min_material_ratio"] is None:
+            logger.info(
+                "  Punto de quiebre: en ningún ratio barrido el modelo ahorra más del "
+                "%.0f%% contra la mejor política trivial. Revisar todo (o nada) es óptimo.",
+                100 * cost["material_frac"],
+            )
+        else:
+            logger.info(
+                "  Punto de quiebre: el modelo paga con C_FN/C_FP entre %g× y %g× "
+                "(pico %g×, %.1f%% de ahorro); fuera de ese tramo el ahorro baja del %.0f%%.",
+                cost["min_material_ratio"], cost["max_material_ratio"], cost["best_ratio"],
+                100 * cost["best_savings_frac"], 100 * cost["material_frac"],
+            )
+        if cost["saturates_at_grid_edge"]:
+            logger.info(
+                "  Ojo: el último ratio de la grilla todavía ahorra; el quiebre superior "
+                "no se puede leer de esta grilla."
+            )
+
+    if vehicle is not None and "base_rate" in vehicle:
+        logger.info(
+            "Por vehículo (bolsa = %s) | %d vehículos, %d con evento | tasa base %.4f "
+            "(la de filas es %.4f: se compara el lift, no el PR-AUC)",
+            vehicle["label_column"], vehicle["n_vehicles"], vehicle["n_event_vehicles"],
+            vehicle["base_rate"], oof["base_rate"],
+        )
+        for how, m in vehicle["aggregations"].items():
+            if "skipped" in m:
+                logger.info("  %-9s | no medida: %s", how, m["skipped"].split(".")[0])
+                continue
+            logger.info(
+                "  %-9s | PR-AUC=%.4f (lift %.2fx) | ROC-AUC=%.4f | Brier=%.4f",
+                how, m["pr_auc"], m["pr_auc_lift"], m["roc_auc"], m["brier"],
+            )
 
     out_dir = ensure_dir(Path(resolve_path(cfg.get("output_dir", "experiments"))) / run_name)
     predictions.to_parquet(out_dir / "predictions.parquet", index=False)
@@ -291,6 +669,52 @@ def main() -> None:
         flat.update({f"repeats/{k}_{stat}": v
                      for k, stats in repeats_spread.items()
                      for stat, v in stats.items()})
+        if concordance:
+            flat["oof/c_index"] = concordance["c_index"]
+        flat.update({f"cohort/{k}": v for k, v in ceiling.items()})
+        flat.update({f"within_failed/{k}": v for k, v in within_failed.items()})
+        flat.update({f"when/{k}": v for k, v in when.items()})
+        flat.update({f"when_repeats/{k}_{stat}": v
+                     for k, stats in when_spread.items()
+                     for stat, v in stats.items()})
+        if by_vehicle:
+            flat.update({f"vehicle_boot/{k}_{stat}": v
+                         for k, ci in by_vehicle.items()
+                         for stat, v in ci.items()})
+        if vehicle is not None:
+            flat.update(
+                {
+                    f"vehicle/{key}": value
+                    for key, value in vehicle.items()
+                    if isinstance(value, (int, float)) and not isinstance(value, bool)
+                }
+            )
+            flat.update(
+                {
+                    f"vehicle/{how}/{key}": value
+                    for how, m in vehicle["aggregations"].items()
+                    for key, value in m.items()
+                    if isinstance(value, (int, float)) and not isinstance(value, bool)
+                }
+            )
+        flat.update(
+            {
+                f"target/{key}": value
+                for key, value in target_metrics.items()
+                if isinstance(value, (int, float))
+            }
+        )
+        if cost is not None:
+            flat.update(
+                {
+                    f"cost/ratio_{row['ratio']:g}/{key}": row[key]
+                    for row in cost["sweep"]
+                    for key in ("model_cost", "trivial_cost", "savings_frac", "alert_rate")
+                }
+            )
+            flat["cost/max_ratio_with_savings"] = cost["max_ratio_with_savings"] or 0.0
+            flat["cost/best_ratio"] = cost["best_ratio"] or 0.0
+            flat["cost/best_savings_frac"] = cost["best_savings_frac"]
         if point:
             flat.update(
                 {

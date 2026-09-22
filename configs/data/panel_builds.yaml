@@ -1,0 +1,65 @@
+# Con qué *build* del panel se midió cada corrida anterior al 20-09-2026.
+#
+# Desde el 20-09 `scripts/train.py` lo registra solo (`panel_build` en metrics.json,
+# leído del `created_at` del `*_meta.json` del panel) y este archivo no hace falta para
+# las corridas nuevas. Las que ya estaban medidas no lo traen, y el path del panel no
+# alcanza: las 23 declaran `${DATA_DIR}/processed/panel*.parquet`, un archivo que se
+# reescribe en cada reconstrucción. Sin esta declaración la tabla de `results/` mezcla
+# en silencio dos paneles que difieren más que lo que separa sus filas.
+#
+# Las dos generaciones y por qué importan
+# ---------------------------------------
+# `2026-09-19`  panel construido ANTES del commit 1eab4a1 ("Corregir umbral y contrato
+#               de regeneraciones", 20-09 15:43): las columnas `feat_*regen*` salen de
+#               caídas de 5 puntos de `AirRegeneration`, que el umbral corregido mostró
+#               que es ruido (docs/memoria/f2-umbral-regeneraciones.md).
+# `2026-09-20`  panel reconstruido DESPUÉS de 1eab4a1, con el umbral de 15 puntos.
+#
+# Mismas filas, mismos vehículos y mismos folds en las dos; lo que cambia son los
+# valores de las columnas de regeneración. El control se movió de 0,1653 a 0,1612, y la
+# tabla de `results/` separa filas por ~0,005: menos que ese movimiento. **Una corrida
+# `2026-09-19` no se compara con una `2026-09-20`.**
+#
+# Cómo se reconstruyó esta tabla (no es una etiqueta puesta a mano)
+# ----------------------------------------------------------------
+# Cada corrida se atribuyó por el `data/processed/panel.parquet` que veía el checkout
+# donde se ejecutó, que es el que sus `experiments/<corrida>/` acompañan:
+#
+#   stat -f '%Sm %N' "data/v364/processed/panel.parquet"                      # 2026-09-19 01:48
+#   stat -f '%Sm %N' ".claude/worktrees/exp-survival-stacking/data/processed/panel.parquet"  # 2026-09-20 17:38
+#
+# El worktree de supervivencia reconstruyó el panel localmente después del fix; el
+# compartido (`data/v364/`) sigue siendo el de antes. De ahí sale que las corridas con
+# sufijo `-regen15` y las de supervivencia sean `2026-09-20` y el resto `2026-09-19`.
+# El corte se ve además en los números: el mismo `configs/exp_lgbm_panel_v1.yaml` da
+# 0,1653 en `f3-lgbm-panel-v1` y 0,1612 en `f3-lgbm-panel-v1-regen15`.
+
+runs:
+  # --- panel post-1eab4a1 (umbral de 15 puntos) -----------------------------------
+  f3-baserate-panel-v1-regen15: '2026-09-20'
+  f3-cnn-lstm-tutora-regen15: '2026-09-20'
+  f3-lgbm-panel-v1-regen15: '2026-09-20'
+  f3-lgbm-panel-v1-r3-regen15: '2026-09-20'
+  f3-survival-stacking: '2026-09-20'
+  f3-survival-stacking-r3: '2026-09-20'
+  f3-gpboost-survival: '2026-09-20'
+
+  # --- panel pre-1eab4a1 (umbral de 5 puntos: ruido) ------------------------------
+  f3-baserate-panel-v1: '2026-09-19'
+  f3-cnn-lstm-tutora: '2026-09-19'
+  f3-lgbm-panel-v1: '2026-09-19'
+  f3-lgbm-panel-v1-r3: '2026-09-19'
+  f3-lgbm-panel-v1-mil: '2026-09-19'
+  f3-ordinal-horizon: '2026-09-19'
+  f3-ordinal-horizon-ext: '2026-09-19'
+  f3-lgbm-thermal-debt: '2026-09-19'
+  f3-lgbm-thermal-debt-r3: '2026-09-19'
+  f3-lgbm-timesfm: '2026-09-19'
+  f3-lgbm-timesfm-r3: '2026-09-19'
+  f3-lgbm-tfm-full: '2026-09-19'
+  f3-lgbm-tfm-full-nostatic: '2026-09-19'
+  f3-lgbm-tfm-window: '2026-09-19'
+  f3-lgbm-tfm-window-nostatic: '2026-09-19'
+
+  # `f0-dummy-baserate` corre contra `panel_dummy.parquet`, que se regenera con
+  # `scripts/make_dummy.py` y no tiene nada que ver con estas dos generaciones.

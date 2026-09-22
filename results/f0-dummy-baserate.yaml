@@ -1,15 +1,24 @@
 run: f0-dummy-baserate
-logged_on: '2026-09-19'
+logged_on: '2026-09-20'
 note: ''
 source:
   config_path: configs/exp_dummy.yaml
   config_versioned: true
-  branch: feat/model-cnn-lstm
-  commit: 36dad79
+  branch: integracion/f3
+  commit: 532f82c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: baserate
   pr_auc: 0.02091234614198431
+  cohort_ceiling: null
+  cohort_lift: null
+  within_failed: null
+  within_failed_lift: null
+  when_delta: null
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.19749057534129877
+  vehicle_lift: 0.9633686602014575
+  vehicle_base_rate: 0.205
   pr_auc_lo: 0.020859085089830847
   pr_auc_hi: 0.021270946321480508
   base_rate: 0.021090489299351745
@@ -20,8 +29,13 @@ summary:
   median_lead_km: .nan
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel_dummy.parquet
+  panel_generation: null
   splits: ${DATA_DIR}/processed/splits_dummy.json
   n_positive: 475
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f0-dummy-baserate
   seed: 42
@@ -33,6 +47,12 @@ config:
     seed: 42
     build_if_missing: true
     strict: true
+    stratify:
+      column: event_observed
+      level: row
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: null
   model:
     name: baserate
     params: {}

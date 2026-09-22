@@ -1,28 +1,76 @@
 run: f3-lgbm-panel-v1
 logged_on: '2026-09-20'
-note: 'Par del barrido en W=1000 (R=1) sobre el panel reconstruido con umbral 15:
-  lift 1,288 / ROC 0,5862.'
+note: '
+
+
+  [NO COMPARABLE · anotado al revisar las auditorias] Esta corrida se midio contra
+  el
+
+  panel ANTERIOR al commit 1eab4a1, que corrigio el umbral de regeneraciones (5 ->
+  15
+
+  puntos) y reconstruyo el panel: mismas filas, mismos vehiculos, mismos folds, otros
+
+  valores en las columnas feat_*regen*. El control se movio de 0,165 a 0,1612 y la
+  tabla
+
+  de results/ separa corridas por ~0,005, o sea menos que ese movimiento: su posicion
+  en
+
+  el ranking puede no sobrevivir. No se compara con las corridas posteriores. Las
+
+  metricas de arriba quedan como estaban, sin tocar.
+
+
+  [AUDITORIA · anotado al revisar los criterios] La auditoria (a) —permutar features
+
+  dentro de cada vehiculo esperando que el PR-AUC cayera a la tasa base— NO es un
+  null en
+
+  este panel: deja intacto que vehiculos fallan, que es de donde sale casi todo el
+  PR-AUC,
+
+  y sube a 0,17-0,21. Cualquier lectura de esta corrida que la haya citado como aprobada
+
+  paso un test que no mide timing. Los criterios ahora son (a0) y (a''); el piso es
+  el
+
+  techo de cohorte (0,2627 / lift 2,10x), no la tasa base.'
 source:
-  config_path: configs\exp_lgbm_panel_v1.yaml
+  config_path: configs/exp_lgbm_panel_v1.yaml
   config_versioned: true
-  branch: feat/model-gru-seq
-  commit: 08ba21f
+  branch: integracion/f3
+  commit: 532f82c
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: lgbm
-  pr_auc: 0.16121376584202757
-  pr_auc_lo: 0.1580413847744114
-  pr_auc_hi: 0.21302996625641532
+  pr_auc: 0.16532514687898425
+  cohort_ceiling: null
+  cohort_lift: null
+  within_failed: null
+  within_failed_lift: null
+  when_delta: null
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.4689731679421328
+  vehicle_lift: 1.513102107888768
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.17269865333226178
+  pr_auc_hi: 0.22085401956801082
   base_rate: 0.1251848201084278
-  lift: 1.2878060271396612
-  roc_auc: 0.586239325718088
-  brier: 0.1727350893576606
-  detection_rate: 0.07547169811320754
-  median_lead_km: 12322.470813159141
+  lift: 1.320648515816768
+  roc_auc: 0.584194299656205
+  brier: 0.17326897195534893
+  detection_rate: 0.09433962264150944
+  median_lead_km: 10408.0
   budget: 50.0
   panel: ${DATA_DIR}/processed/panel.parquet
+  panel_generation: '2026-09-19'
   splits: ${DATA_DIR}/processed/splits.json
   n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
 config:
   name: f3-lgbm-panel-v1
   seed: 42
@@ -62,4 +110,4 @@ config:
     mode: online
     log_artifacts: false
   output_dir: experiments
-  _config_path: configs\exp_lgbm_panel_v1.yaml
+  _config_path: configs/exp_lgbm_panel_v1.yaml
