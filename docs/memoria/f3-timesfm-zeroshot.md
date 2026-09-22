@@ -101,6 +101,7 @@ la misma resta da 0,560.
   TimesFM: `(media de la historia previa − media de la ventana)` para regeneraciones y
   nivel, calculada hacia atrás desde el corte. Antes de celebrarla, la auditoría (b) del
   doc de F3: el contexto largo abarca meses distintos para vehículos cortados el mismo
-  mes, y el calendario es el atajo conocido de este dataset.
+  mes, y el calendario es el atajo conocido de este dataset. **Medido el 21-09 sobre
+  survival stacking: no suma** ([f3-desvio-historia.md](f3-desvio-historia.md)).
 - Una sola mirada al número: es dev con 53 vehículos con evento. Con 14 en test, la
   confirmación va a tener intervalos anchos.

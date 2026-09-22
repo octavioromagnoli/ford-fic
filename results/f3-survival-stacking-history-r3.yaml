@@ -1,0 +1,102 @@
+run: f3-survival-stacking-history-r3
+logged_on: '2026-09-21'
+note: 'exp/history-deviation: survival stacking R=3 + feat_regenerations_per_1000km_hist_delta
+  y feat_dpf_end_mean_hist_delta (media en la historia previa hasta 25.600 km - media
+  en W; NaN con menos de 1.000 km de historia, 15% de las filas). Mismas filas y folds
+  que f3-survival-stacking-r3-rebuild. Criterio declarado antes de correr: (a'') +-
+  desvio, deteccion @ 50 FA/1000, lift vehiculo mean y piso posicional; el PR-AUC
+  por fila no decide. RESULTADO: NO SUMA. (a'') +0,0219 +- 0,0047 contra +0,0162 +-
+  0,0033: mejora +0,0056, desvio combinado 0,0057 (0,98x); pareado por repeticion
+  +0,0129 / -0,0001 / +0,0041. Deteccion 20,1% +- 5,4 contra 15,7% +- 0,9 (dentro
+  del ruido) y pierde la estabilidad que eligio al finalista: anticipacion 6.027 +-
+  1.987 km contra 8.330 +- 22 (la repeticion que detecta 26% lo hace a 3.507 km).
+  Lift vehiculo mean 1,64x contra 1,62x. PR-AUC por fila 0,1820 +- 0,0133 (sube, no
+  decide). (a0) PASS; (b) +0,0301 (marca; con calendario los dos quedan en ROC 0,65-0,66,
+  asi que buena parte del ROC que suma se superpone con el calendario). Piso posicional:
+  pierde en (a'') y entre fallados, como el control; gana en deteccion y lift. Ficha:
+  docs/memoria/f3-desvio-historia.md.'
+source:
+  config_path: configs\exp_survival_stacking_history_r3.yaml
+  config_versioned: true
+  branch: exp/history-deviation
+  commit: b562e04
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: survival_stacking
+  pr_auc: 0.18199770021987005
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.3045569960494855
+  within_failed_lift: 1.1594748629128049
+  when_delta: 0.02863103804385636
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.5089563545657873
+  vehicle_lift: 1.6421044647311251
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.18210457156265308
+  pr_auc_hi: 0.22775457030392773
+  base_rate: 0.1251848201084278
+  lift: 1.453832022622505
+  roc_auc: 0.6167158330560792
+  brier: 0.11117211846739937
+  detection_rate: 0.20754716981132076
+  median_lead_km: 7353.0
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_history.parquet
+  panel_generation: '2026-09-22'
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+config:
+  name: f3-survival-stacking-history-r3
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_history.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  target:
+    name: discrete_survival
+    params: {}
+  model:
+    name: survival_stacking
+    params:
+      horizon_km: 3000
+      bin_km: 500
+      max_horizon_km: 6000
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-survival
+    job_type: train
+    tags:
+    - f3
+    - survival
+    - stacking
+    - panel-v1
+    - r3
+    - history-deviation
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_survival_stacking_history_r3.yaml

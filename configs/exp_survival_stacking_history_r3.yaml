@@ -1,0 +1,70 @@
+# F3 · survival stacking R=3 + desvío respecto de la historia previa del vehículo
+#
+# Copia EXACTA de configs/exp_survival_stacking_r3.yaml (mismo modelo, mismos
+# hiperparámetros, mismos seeds, mismo splits_r3.json) con una sola diferencia: el panel.
+# `panel_history.parquet` = panel_survival (v1 + feat_cut_odo) + 2 columnas
+# `feat_*_hist_delta` (configs/data/features_history.yaml). Mismas filas, misma huella.
+#
+#   python scripts/build_history_panel.py --config configs/data/panel_history_v1.yaml
+#   python scripts/train.py --config configs/exp_survival_stacking_history_r3.yaml
+#
+# Criterio declarado antes de correr (docs/memoria/f3-desvio-historia.md): contra
+# f3-survival-stacking-r3 en el mismo build, por (a') ± desvío entre repeticiones,
+# detección @ ≤50 FA/1000 y lift por vehículo (`mean`), y contra el piso posicional.
+# El PR-AUC por fila se reporta y no decide.
+name: f3-survival-stacking-history-r3
+seed: 42
+
+data:
+  # Panel de supervivencia + feat_regenerations_per_1000km_hist_delta y
+  # feat_dpf_end_mean_hist_delta. Mismas filas ⇒ el splits_r3.json congelado sirve tal cual.
+  panel: ${DATA_DIR}/processed/panel_history.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json   # R=3, misma huella de panel
+  n_splits: 5
+  seed: 42
+  build_if_missing: false    # los folds los deja scripts/build_dataset.py, sobre dev
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3               # <- la única diferencia con la corrida R=1
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+target:
+  name: discrete_survival
+  params: {}                 # gap_km sale del panel; no se duplica acá
+
+model:
+  name: survival_stacking    # sin efecto aleatorio: el control de gpboost_survival
+  params:
+    horizon_km: 3000         # H del panel: define `label`, así que no se toca sin rehacerlo
+    bin_km: 500              # Δ del panel ⇒ 6 bins de hazard dentro del horizonte
+    # Hasta dónde se entrena el hazard. Más allá de H es donde el apilado gana lo que la
+    # etiqueta binaria no tiene: un vehículo que falla a 5.000 km del corte deja de ser
+    # un cero indistinguible de un sano. El score sigue siendo el riesgo a H.
+    max_horizon_km: 6000
+    random_state: 42
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  # Intervalo remuestreando vehículos, no filas: los ~5 cortes de un auto no son
+  # observaciones independientes y el bootstrap por fila devuelve un intervalo falso.
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-survival
+  job_type: train
+  tags: [f3, survival, stacking, panel-v1, r3, history-deviation]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments
