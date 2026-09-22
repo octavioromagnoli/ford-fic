@@ -1,0 +1,37 @@
+# Desvío respecto de la historia previa del propio vehículo (exp/history-deviation).
+# Lo consume `src/features/windows.py::compute_history_deviation` vía
+# `configs/data/panel_history_v1.yaml`. NO es parte del panel v1: se mide como variante
+# (mismas filas, mismos folds), igual que `feat_tfm_*`.
+#
+#   feat_<name> = agg(historia previa) − agg(ventana)
+#   historia previa = (c − max_context_km, c − W]     ventana = (c − W, c]
+#
+# Origen: `feat_tfm_regen_delta` (pronóstico de TimesFM − ventana reciente) daba ROC
+# 0,614 en dev, y la versión sin modelo 0,602 (docs/memoria/f3-timesfm-zeroshot.md,
+# "Lo que sí dejó"). Es reversión a la media: si en la ventana el vehículo regeneró
+# menos que en su historia, sube el riesgo. Lo que ya está en el panel v1 no lo ve:
+# `regenerations_trend_per_1000km` compara mitades DENTRO de W (ρ −0,002 con esta idea).
+#
+# Las derivadas (`regen_drop` con la caída mínima de 15 puntos, topes físicos) salen del
+# spec del panel v1, no de acá: el lado de la ventana tiene que reproducir las columnas
+# `feat_regenerations_per_1000km` y `feat_dpf_end_mean` del panel, y el builder lo verifica.
+base_spec: configs/data/features_v1.yaml
+
+history:
+  # Hasta dónde se mira hacia atrás desde el corte, W incluido. 25.600 km es el contexto
+  # que usaba TimesFM (256 bins de 100 km), de donde sale el 0,602.
+  max_context_km: 25600
+  # Km recorridos mínimos en la historia previa (antes de c − W). Por debajo, el desvío
+  # es NaN: el corte está al principio del registro y no hay con qué comparar. 1.000 km
+  # = W: la media de la historia descansa en al menos tantos km como la de la ventana.
+  min_history_km: 1000
+
+features:
+  # (name, column, agg): mismo agregador que la columna del panel v1 de la que es desvío.
+  - {name: regenerations_per_1000km_hist_delta, column: regen_drop,         agg: per_1000km}  # vs feat_regenerations_per_1000km
+  - {name: dpf_end_mean_hist_delta,             column: AirRegenerationEnd, agg: mean}        # vs feat_dpf_end_mean
+
+# Cada `_window` de aux tiene que ser idéntico a esta columna del panel v1.
+window_check:
+  regenerations_per_1000km_hist_delta: feat_regenerations_per_1000km
+  dpf_end_mean_hist_delta: feat_dpf_end_mean

@@ -5,6 +5,37 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-21 · El desvío respecto de la historia del vehículo no entra; la (b) del finalista con R=3 marca +0,049
+
+**Alcance:** cierra la primera mitad del punto 1 de "Qué queda abierto" (20-09) y le pone
+número R=3 al punto 4. No cambia el finalista.
+
+**El desvío no suma.** Se agregaron a survival stacking `feat_regenerations_per_1000km_hist_delta`
+y `feat_dpf_end_mean_hist_delta` (historia previa hasta 25.600 km menos ventana, sin
+TimesFM; ROC univariado 0,598 y 0,579, que reproduce el 0,602 del doc de TimesFM). El
+criterio se declaró antes de correr: (a′) ± desvío. Dio +0,0219 ± 0,0047 contra
++0,0162 ± 0,0033. La mejora es de **0,98× el desvío combinado**, pareado +0,0129 / −0,0001 /
++0,0041. La detección sube dentro del ruido (20,1 ± 5,4% contra 15,7 ± 0,9%), anticipando
+menos. La anticipación pierde su estabilidad: **±1.987 km contra ±22**, que era uno de los
+dos argumentos del §4 de abajo. El lift por vehículo no se mueve (1,64× contra 1,62×). Así
+que **no entra al set base**.
+
+**La (b) del finalista, con R=3: +0,0493 de ROC** (0,602 → 0,652 al darle las `aux_` de
+calendario), contra el +0,0230 del registro R=1 que cita el §4. El control re-corrido para
+esta comparación reproduce el registro dígito a dígito, así que la diferencia es de R, no
+de build. **Sigue siendo el pendiente antes de fijar el finalista, y ahora con un número
+peor.**
+
+**Por qué importa para lo que sigue:** con el calendario disponible, el modelo con desvío
+y el que no lo tiene terminan en el mismo ROC (0,656 contra 0,652). Buena parte de la
+señal que suman features de "contexto largo" se superpone con el calendario. Toda feature
+futura de este tipo necesita la (b) con R=3 al lado, no con R=1.
+
+Evidencia, comandos y el detalle del rebuild del panel (el local no traía
+`aux_km_observed_after_cut`): [f3-desvio-historia.md](f3-desvio-historia.md).
+
+---
+
 ## 2026-09-20 · Cierre de F3: el PR-AUC por fila mide *qué auto*, no *cuándo*. El finalista es survival stacking, elegido por (a′) y estabilidad
 
 **Alcance: decisión de proyecto, no de una rama.** Consolida las tres ramas con las que

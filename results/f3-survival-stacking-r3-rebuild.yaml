@@ -1,0 +1,98 @@
+run: f3-survival-stacking-r3-rebuild
+logged_on: '2026-09-21'
+note: 'CONTROL de exp/history-deviation: f3-survival-stacking-r3 re-corrido (misma
+  config, solo --run-name) sobre el panel RECONSTRUIDO el 21-09 en un FORD_DATA_DIR
+  aparte. El panel.parquet local del 20-09 no traia aux_km_observed_after_cut (se
+  construyo desde un checkout sin 4ff381e) y survival stacking no corre sin esa columna.
+  El rebuild es identico al panel 2026-09-20 en todas las columnas (comparado columna
+  por columna) + aux_km_observed_after_cut, y su splits.json coincide con el congelado
+  (misma huella); se uso el splits_r3.json congelado. La columna Panel dice 2026-09-22
+  porque es el created_at en UTC del rebuild, no otro build. Reproduce el registro
+  f3-survival-stacking-r3 digito a digito: PR-AUC 0,1721 +- 0,0135, (a'') +0,0162
+  +- 0,0033, deteccion 15,7% +- 0,9, anticipacion 8.330 +- 22 km, lift vehiculo mean
+  1,62x. Auditoria (b) con R=3: +0,0493 de ROC al darle las aux_ de calendario (el
+  +0,0230 del registro R=1 subestimaba el atajo). (a0) 0,1215 vs 0,1252 PASS.'
+source:
+  config_path: configs\exp_survival_stacking_r3.yaml
+  config_versioned: true
+  branch: exp/history-deviation
+  commit: 6f2e793
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: survival_stacking
+  pr_auc: 0.17206257071022169
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.28978354432825815
+  within_failed_lift: 1.103231052619786
+  when_delta: 0.02004980363843517
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.5008168485061345
+  vehicle_lift: 1.6158430395197925
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.17630347804544408
+  pr_auc_hi: 0.20748603272645294
+  base_rate: 0.1251848201084278
+  lift: 1.374468330594645
+  roc_auc: 0.5968733133710399
+  brier: 0.11232969033309977
+  detection_rate: 0.1509433962264151
+  median_lead_km: 7531.717292725283
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_survival.parquet
+  panel_generation: '2026-09-22'
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+config:
+  name: f3-survival-stacking-r3
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_survival.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  target:
+    name: discrete_survival
+    params: {}
+  model:
+    name: survival_stacking
+    params:
+      horizon_km: 3000
+      bin_km: 500
+      max_horizon_km: 6000
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-survival
+    job_type: train
+    tags:
+    - f3
+    - survival
+    - stacking
+    - panel-v1
+    - r3
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_survival_stacking_r3.yaml

@@ -185,6 +185,7 @@ src/data/panel.py        cortes en grilla de Δ, etiqueta con gap y horizonte, c
 src/features/trips.py    derivadas a nivel viaje (idle/moving, velocidad recalculada, topes físicos, regen = caída de AirRegeneration)
 src/features/signals.py  una booleana por nivel de Message; regen_marker solo como aux
 src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agregadores (per_1000km, half_*, gap_*, km_since_last…)
+                         + compute_history_deviation(): agg(historia previa) − agg(ventana), NaN sin historia mínima
 src/features/sequences.py  la ventana en T bins de km × C canales (entrada de modelos secuenciales), aplanada a feat_seq_*
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
 src/models/timesfm_zeroshot.py  series por km + TimesFM 3.0 zero-shot sobre los cortes del panel (no es del registry)
@@ -219,6 +220,9 @@ scripts/build_seq_panel.py  panel secuencial: mismas filas que el panel v1, feat
 scripts/make_splits.py   rearma splits.json sobre un panel que ya existe (cambiar folds no es reconstruir el panel)
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
+scripts/build_history_panel.py  panel_history.parquet = panel_survival + feat_*_hist_delta (mismas filas; verifica
+                         que el lado de la ventana reproduzca el panel v1)
+scripts/audit_history_univariate.py  ROC en dev y ρ con mes/cut_odo/largo de historia de las feat_*_hist_delta
 scripts/train.py         entrypoint único de entrenamiento
 scripts/audit_mil_bagsize.py  ¿el lift por vehículo es señal o tamaño de bolsa? (nulo de permutación)
 scripts/audit_ordinal_horizon.py  las tres auditorías obligatorias de cualquier corrida: permutación
@@ -258,8 +262,9 @@ revisar el YAML para no duplicar con otro nombre. Resumen:
 
 Medidos como variante del panel (mismas filas, mismos folds) y **fuera** del set base porque
 no le suman al LightGBM de control: los resúmenes de TimesFM (`feat_tfm_*`,
-docs/memoria/f3-timesfm-zeroshot.md). Queda una pista: el desvío de la ventana respecto de
-la historia previa del vehículo, que el panel v1 no tiene.
+docs/memoria/f3-timesfm-zeroshot.md), y el desvío de la ventana respecto de la historia
+previa del vehículo (`feat_*_hist_delta`, `configs/data/features_history.yaml`), que no le
+suma a survival stacking más allá del sorteo (docs/memoria/f3-desvio-historia.md).
 
 Lo que **no** se construye y por qué: elevación y presión de neumáticos (no hay
 columna), `accumulation_*` desde `signals` (es la misma variable que `AirRegeneration`),

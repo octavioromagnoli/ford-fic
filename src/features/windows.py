@@ -345,3 +345,105 @@ def _time_coverage(trips: VehicleArrays, i0: int, i1: int) -> tuple[float, pd.Ti
     last = valid_end.max() if valid_end.size else valid_start.max()
     days = (last - valid_start.min()) / 86_400e9
     return max(float(days), 1.0), pd.Timestamp(int(last), unit="ns", tz="UTC")
+
+
+# --------------------------------------------------------------------------------------
+# Desvío respecto de la historia previa del propio vehículo
+# --------------------------------------------------------------------------------------
+@dataclass(frozen=True)
+class HistoryDeviationSpec:
+    """`agg(historia previa) − agg(ventana)` de una columna de `trips`.
+
+    La historia previa de un corte `c` es `(c − max_context_km, c − W]`: todo lo que el
+    vehículo recorrió antes de la ventana, hasta un largo máximo. La ventana es la misma
+    `(c − W, c]` de `compute_window_features`, así que el lado de la ventana reproduce la
+    columna del panel v1 con el mismo agregador (y el builder lo verifica).
+    """
+
+    name: str
+    column: str
+    agg: str
+
+    @property
+    def output(self) -> str:
+        return f"{FEAT_PREFIX}{self.name}"
+
+
+@dataclass(frozen=True)
+class HistoryDeviationConfig:
+    max_context_km: float        # largo máximo mirado hacia atrás desde el corte (incluye W)
+    min_history_km: float        # km recorridos mínimos en la historia previa; si no, NaN
+    specs: tuple[HistoryDeviationSpec, ...]
+
+    def __post_init__(self) -> None:
+        if self.min_history_km <= 0:
+            raise ValueError("`min_history_km` tiene que ser > 0: sin historia no hay desvío que medir")
+
+
+def load_history_deviation_config(path: str | Path) -> HistoryDeviationConfig:
+    """Lee `history:` y `features:` de un YAML como `configs/data/features_history.yaml`."""
+    cfg = load_config(path)
+    history = cfg["history"]
+    specs = []
+    for entry in cfg.get("features") or []:
+        spec = HistoryDeviationSpec(name=str(entry["name"]), column=str(entry["column"]), agg=str(entry["agg"]))
+        if spec.agg not in AGGREGATORS:
+            raise ValueError(f"Feature `{spec.name}`: agregador desconocido `{spec.agg}`")
+        if not spec.name.endswith("_hist_delta"):
+            raise ValueError(f"Feature `{spec.name}`: las de desvío se llaman `*_hist_delta`")
+        specs.append(spec)
+    if not specs:
+        raise ValueError(f"El YAML {path} no declara ninguna feature de desvío")
+    return HistoryDeviationConfig(
+        max_context_km=float(history["max_context_km"]),
+        min_history_km=float(history["min_history_km"]),
+        specs=tuple(specs),
+    )
+
+
+def _range_context(trips: VehicleArrays, lo: float, hi: float) -> tuple[int, int, WindowContext]:
+    i0, i1 = trips.window(lo, hi)
+    km = trips.trip_km[i0:i1] if trips.trip_km is not None else np.zeros(i1 - i0)
+    km_covered = float(np.nansum(np.clip(km, 0, None))) if i1 > i0 else 0.0
+    days_covered, _ = _time_coverage(trips, i0, i1)
+    ctx = WindowContext(positions=trips.positions[i0:i1], cut_odo=float(hi), window_km=float(hi - lo),
+                        km_covered=km_covered, days_covered=days_covered)
+    return i0, i1, ctx
+
+
+def compute_history_deviation(
+    trips: VehicleArrays,
+    cuts: np.ndarray,
+    *,
+    window_km: float,
+    config: HistoryDeviationConfig,
+) -> pd.DataFrame:
+    """Una fila por corte: `feat_<name>` = agg(historia previa) − agg(ventana).
+
+    Estrictamente hacia atrás (regla 3): las dos partes terminan en el corte, y un viaje
+    se ubica por su `OdometerTripEnd` igual que en `compute_window_features`. Si la
+    historia previa recorre menos de `min_history_km` —el corte está al principio del
+    registro—, el desvío es NaN: no se inventa una historia de ceros.
+
+    Sale también, fuera del modelo, lo necesario para auditar que esto no sea el largo
+    del historial disfrazado: `aux_hist_km_covered` (km de la historia usada) y el valor
+    de cada lado (`aux_<name>_hist`, `aux_<name>_window`).
+    """
+    if config.max_context_km <= window_km:
+        raise ValueError(f"`max_context_km`={config.max_context_km} no deja historia antes de W={window_km}")
+    rows: list[dict[str, float]] = []
+    for cut in np.asarray(cuts, dtype="float64"):
+        w0, w1, wctx = _range_context(trips, cut - window_km, cut)
+        h0, h1, hctx = _range_context(trips, cut - config.max_context_km, cut - window_km)
+        enough = hctx.km_covered >= config.min_history_km
+        row: dict[str, float] = {f"{AUX_PREFIX}hist_km_covered": hctx.km_covered}
+        for spec in config.specs:
+            values = trips.columns[spec.column]
+            win = AGGREGATORS[spec.agg](values[w0:w1], wctx) if w1 > w0 else np.nan
+            hist = AGGREGATORS[spec.agg](values[h0:h1], hctx) if (enough and h1 > h0) else np.nan
+            base = spec.output[len(FEAT_PREFIX):]
+            row[f"{AUX_PREFIX}{base}_hist"] = hist
+            row[f"{AUX_PREFIX}{base}_window"] = win
+            row[spec.output] = hist - win
+        rows.append(row)
+    return pd.DataFrame(rows)

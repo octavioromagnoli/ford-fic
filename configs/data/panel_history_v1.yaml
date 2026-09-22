@@ -1,0 +1,18 @@
+# Variante del panel v1 con el desvío respecto de la historia previa del vehículo.
+#
+#   python scripts/build_survival_panel.py --config configs/data/panel_survival.yaml   # si no existe
+#   python scripts/build_history_panel.py  --config configs/data/panel_history_v1.yaml
+#
+# Panel de supervivencia (v1 + `feat_cut_odo`) + `feat_*_hist_delta`. Mismas filas, mismo
+# orden ⇒ misma huella ⇒ el `splits_r3.json` congelado sirve tal cual (no se regenera).
+# Se compara con configs/exp_survival_stacking_history_r3.yaml contra
+# configs/exp_survival_stacking_r3.yaml.
+panel_config: configs/data/panel_v1.yaml          # crudos, universo, dedupe y W
+base_panel: ${DATA_DIR}/processed/panel_survival.parquet
+features: configs/data/features_history.yaml
+
+scan:
+  chunksize: 500000
+
+output:
+  panel: ${DATA_DIR}/processed/panel_history.parquet
