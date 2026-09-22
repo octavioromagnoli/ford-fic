@@ -1,0 +1,65 @@
+run: f3-lgbm-w2000
+logged_on: '2026-09-20'
+note: 'Par del barrido en W=2000: LightGBM con los 53 agregados, mismos folds. lift
+  1,288 / ROC 0,5809.'
+source:
+  config_path: configs\exp_lgbm_w2000.yaml
+  config_versioned: true
+  branch: feat/model-gru-seq
+  commit: 08ba21f
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: lgbm
+  pr_auc: 0.16817440762232655
+  pr_auc_lo: 0.15425604213796631
+  pr_auc_hi: 0.2106949084499837
+  base_rate: 0.1306032097399004
+  lift: 1.2876743837862037
+  roc_auc: 0.5809427224373982
+  brier: 0.16770670664807638
+  detection_rate: 0.17391304347826086
+  median_lead_km: 7355.0
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_w2000.parquet
+  splits: ${DATA_DIR}/processed/splits_w2000.json
+  n_positive: 236
+config:
+  name: f3-lgbm-w2000
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_w2000.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_w2000.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: lgbm
+    params:
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-barrido-ventana
+    job_type: train
+    tags:
+    - f3
+    - lgbm
+    - barrido-ventana
+    - w2000
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_lgbm_w2000.yaml

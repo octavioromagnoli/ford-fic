@@ -97,6 +97,22 @@ def _build_cnn_lstm(params: dict[str, Any]) -> BaseEstimator:
     return CNNLSTMClassifier(**params)
 
 
+@register("gru_seq")
+def _build_gru_seq(params: dict[str, Any]) -> BaseEstimator:
+    """GRU unidireccional sobre la secuencia de la ventana, con pooling por atención y las estáticas al final.
+
+    La pregunta que responde: ¿el ORDEN en km de la ventana aporta algo que los 53
+    agregados del panel v1 tiran? Solo corre sobre un panel secuencial
+    (`scripts/build_seq_panel.py`): la forma del tensor sale de `sequence_meta`.
+    Arquitectura y defaults en `src/models/gru_seq.py`.
+    """
+    from src.models.gru_seq import GRUSeqClassifier  # import adentro: torch es opcional
+
+    params.setdefault("class_weight", "balanced")
+    params.setdefault("random_state", 42)
+    return GRUSeqClassifier(**params)
+
+
 @register("survival_stacking")
 def _build_survival_stacking(params: dict[str, Any]) -> BaseEstimator:
     """Supervivencia en tiempo discreto sobre las filas apiladas, sin efecto aleatorio.

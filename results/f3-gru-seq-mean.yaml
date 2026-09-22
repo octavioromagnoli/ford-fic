@@ -1,0 +1,83 @@
+run: f3-gru-seq-mean
+logged_on: '2026-09-20'
+note: 'Ablacion de pooling: promedio de los estados (invariante a la posicion del
+  bin). 5 semillas x R=3: 0,1588 +- 0,0070 / ROC 0,5770. Queda entre attention y last,
+  asi que la posicion dentro de la ventana aporta algo, pero poco: la diferencia last
+  - mean es 0,006 de PR-AUC.'
+source:
+  config_path: configs\exp_gru_seq_mean.yaml
+  config_versioned: true
+  branch: feat/model-gru-seq
+  commit: 08ba21f
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: gru_seq
+  pr_auc: 0.164980001010314
+  pr_auc_lo: 0.17645744159206123
+  pr_auc_hi: 0.2043733752306972
+  base_rate: 0.1251848201084278
+  lift: 1.3178914253934135
+  roc_auc: 0.5862119699826254
+  brier: 0.22924039810160948
+  detection_rate: 0.11320754716981132
+  median_lead_km: 3573.0024948666005
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 254
+config:
+  name: f3-gru-seq-mean
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: gru_seq
+    params:
+      sequence_meta: ${DATA_DIR}/processed/panel_seq_v1_meta.json
+      pooling: mean
+      hidden: 24
+      num_layers: 1
+      attention_hidden: 16
+      static_hidden: 4
+      head_hidden: 16
+      dropout: 0.3
+      epochs: 40
+      batch_size: 64
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      grad_clip: 1.0
+      class_weight: balanced
+      device: cpu
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-secuenciales
+    job_type: train
+    tags:
+    - f3
+    - gru
+    - panel-seq-v1
+    - ablacion
+    - pooling-mean
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_gru_seq_mean.yaml

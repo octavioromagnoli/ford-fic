@@ -1,0 +1,78 @@
+# F3 · ABLACIÓN OBLIGATORIA: el mismo GRU sin la rama estática (`static_hidden: 0`).
+#
+# `SalesCountry_cd` sola da ROC 0,566 sobre este panel (invertida; ver
+# docs/memoria/f3-cnn-lstm-tutora.md): el mercado es sesgo de muestreo de F1, no
+# física del vehículo. Si al apagar la rama estática el número se cae al piso, lo que
+# el modelo aprendió es de dónde viene el auto, y eso no predice nada para Ford.
+# Todo lo demás es idéntico a `exp_gru_seq.yaml`, incluida la semilla.
+#
+#   python scripts/train.py --config configs/exp_gru_seq_nostatic.yaml
+#
+# Necesita PyTorch (opcional): `uv pip install -r requirements-dl.txt`.
+name: f3-gru-seq-nostatic
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel_seq_v1.parquet
+
+splits:
+  # Los folds del panel v1 con R = 3 (el panel secuencial tiene las mismas filas, así
+  # que la huella coincide). La repetición 0 son exactamente los folds de `splits.json`:
+  # el número de R=1 de las corridas viejas sigue siendo comparable, y las otras dos
+  # repeticiones dicen cuánto de la diferencia entre modelos es el sorteo de folds.
+  path: ${DATA_DIR}/processed/splits_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+model:
+  name: gru_seq
+  params:
+    # Forma del tensor (T bins × C canales) y geometría de la ventana (L, bin_km):
+    # las escribe el builder del panel secuencial. Nada de esto se hardcodea.
+    sequence_meta: ${DATA_DIR}/processed/panel_seq_v1_meta.json
+    # Rama dinámica
+    pooling: attention      # `last` reproduce a la CNN-LSTM; `mean` ignora el orden
+    hidden: 24
+    num_layers: 1
+    attention_hidden: 16
+    # Rama estática (hoy solo el one-hot de SalesCountry_cd); 0 la apaga
+    static_hidden: 0
+    # Cabeza después de la fusión
+    head_hidden: 16
+    dropout: 0.3
+    # Entrenamiento: épocas fijas, sin early stopping (ver docstring del modelo)
+    epochs: 40
+    batch_size: 64
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    grad_clip: 1.0
+    class_weight: balanced  # pos_weight = negativos/positivos del train del fold
+    device: cpu
+    # Una semilla no es un resultado: la media y el rango sobre >= 5 semillas salen de
+    # `python scripts/seed_spread.py --config configs/exp_gru_seq.yaml`.
+    random_state: 42
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f3-secuenciales
+  job_type: train
+  tags: [f3, gru, panel-seq-v1, ablacion, sin-estaticas]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

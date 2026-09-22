@@ -43,6 +43,7 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 | [f3-proceso-gamma.md](f3-proceso-gamma.md) | Proceso gamma de degradación: por qué no se implementó — no hay carga irreversible medible a estos kilometrajes |
 | [f3-ordinal-horizonte.md](f3-ordinal-horizonte.md) | Target ordinal: dos variantes de bins (la restringida no aporta información), el costo como barrido de C_FN/C_FP y la permutación intra-vehículo que ningún modelo del repo supera |
 | [f3-piso-posicional.md](f3-piso-posicional.md) | El odómetro solo le gana a los cuatro finalistas en PR-AUC por fila y en las tres métricas del eje "cuándo": qué métricas quedan descalificadas y cuáles dos sobreviven |
+| [f3-gru-secuencial.md](f3-gru-secuencial.md) | GRU sobre la ventana en bins de km: `last` le gana por poco al LightGBM (p = 0,05), la atención pierde y la ventana larga no ayuda |
 | [decisiones.md](decisiones.md) | Qué se decidió, cuándo y por qué. **Su primera entrada cierra F3**: el techo de cohorte, el piso posicional, por qué el PR-AUC por fila mide *qué auto* y no *cuándo*, y por qué el finalista se elige por el punto de operación |
 | [../f2-feature-engineering-candidatas.md](../f2-feature-engineering-candidatas.md) | Candidatas de feature engineering medidas el 17-09. Lo que se adoptó y lo que se retiró está en el archivo de arriba |
 

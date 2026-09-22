@@ -1,0 +1,66 @@
+run: f3-lgbm-w3000
+logged_on: '2026-09-20'
+note: 'Par del barrido en W=3000: LightGBM con los 53 agregados. lift 1,208 / ROC
+  0,5152, el peor ROC de la tabla entre los modelos que no son el piso: los agregados
+  pierden la ventana larga.'
+source:
+  config_path: configs\exp_lgbm_w3000.yaml
+  config_versioned: true
+  branch: feat/model-gru-seq
+  commit: 08ba21f
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: lgbm
+  pr_auc: 0.16647952144351724
+  pr_auc_lo: 0.14670329373862723
+  pr_auc_hi: 0.25837584581304734
+  base_rate: 0.13784301212507977
+  lift: 1.2077472689907014
+  roc_auc: 0.5151876524933521
+  brier: 0.1695155459059948
+  detection_rate: 0.15
+  median_lead_km: 3087.0163536944474
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_w3000.parquet
+  splits: ${DATA_DIR}/processed/splits_w3000.json
+  n_positive: 216
+config:
+  name: f3-lgbm-w3000
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_w3000.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_w3000.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: lgbm
+    params:
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-barrido-ventana
+    job_type: train
+    tags:
+    - f3
+    - lgbm
+    - barrido-ventana
+    - w3000
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_lgbm_w3000.yaml
