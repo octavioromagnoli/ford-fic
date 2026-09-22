@@ -76,6 +76,14 @@ que todavía no falló" de "curado". La MV se va al borde (π → 1, informació
 penalización vale −∞ en ese borde. Es un diagnóstico de convergencia, sin β ni D1/D2.
 Solo cambia la calibración que se reporta de P0, porque sus D1/D2 salen de s.
 
+## Pesos fijos (F5 §3.2, I2)
+
+`fixed_weight` es P0 con otros pesos: s = Σ w_j·z_j, con los w_j que se aprendieron **afuera**
+(la incidencia externa, `src/models/incidence.py`) y que llegan en un JSON
+(`fixed_weights_path`). Tampoco se ajusta ninguno en dev: lo que cambia respecto de aplicar el
+modelo externo congelado es que la referencia de flota, la mediana y la escala salen del
+train de cada fold, como en P0. El puntaje s viaja en la misma columna `unit_weight_score`.
+
 ## Qué no esperar
 
 Con latencia sin covariables, **dentro de un hito el orden es el de π_L**. El cure model
@@ -127,7 +135,7 @@ from src.training.transformers import MARKET_COLUMN, FleetReferenceNormalizer
 
 logger = logging.getLogger(__name__)
 
-INCIDENCES = ("unit_weight", "firth", "tabpfn")
+INCIDENCES = ("unit_weight", "fixed_weight", "firth", "tabpfn")
 LATENCIES = ("weibull",)
 LANDMARK_COLUMN = "feat_landmark_day"
 UNIT_WEIGHT_SCORE = "unit_weight_score"
@@ -516,6 +524,8 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
     - `incidence`: `firth` (P1), `unit_weight` (P0) o `tabpfn` (P2, condicional).
     - `unit_weight_signs`: `{columna: ±1}` para `unit_weight`. Las claves son las columnas
       que salen del normalizador (`fleet_<feature>`) y tienen que ser exactamente esas.
+    - `fixed_weights_path`: para `fixed_weight`, un JSON `{columna: peso}` con un peso por
+      covariable (las mismas claves que exige `unit_weight_signs`).
     - `latency`: solo `weibull`.
     - `per_landmark`: un ajuste por hito (el preregistrado). Con `False`, uno solo para
       todas las filas.
@@ -536,6 +546,7 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         *,
         incidence: str = "firth",
         unit_weight_signs: Mapping[str, float] | None = None,
+        fixed_weights_path: str | None = None,
         latency: str = "weibull",
         per_landmark: bool = True,
         landmark_column: str = LANDMARK_COLUMN,
@@ -550,6 +561,7 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
     ) -> None:
         self.incidence = incidence
         self.unit_weight_signs = unit_weight_signs
+        self.fixed_weights_path = fixed_weights_path
         self.latency = latency
         self.per_landmark = per_landmark
         self.landmark_column = landmark_column
@@ -566,6 +578,21 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
 
     def _key(self, landmark: float) -> float | None:
         return float(landmark) if self.per_landmark else None
+
+    def _fixed_weights(self, covariates: Sequence[str]) -> np.ndarray:
+        import json
+
+        from src.config import resolve_path
+
+        if not self.fixed_weights_path:
+            raise ValueError("`fixed_weight` necesita `fixed_weights_path`")
+        weights = json.loads(resolve_path(self.fixed_weights_path).read_text(encoding="utf-8"))
+        if set(weights) != set(covariates):
+            raise ValueError(
+                f"`fixed_weights_path` tiene que traer un peso por covariable: faltan "
+                f"{sorted(set(covariates) - set(weights))}, sobran {sorted(set(weights) - set(covariates))}"
+            )
+        return np.asarray([float(weights[c]) for c in covariates])
 
     def _signs(self, covariates: Sequence[str]) -> np.ndarray:
         signs = dict(self.unit_weight_signs or {})
@@ -592,7 +619,7 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
 
     def _design(self, standardized: np.ndarray) -> np.ndarray:
         ones = np.ones((len(standardized), 1))
-        if self.incidence == "unit_weight":
+        if self.incidence in ("unit_weight", "fixed_weight"):
             return np.hstack([ones, (standardized @ self.signs_)[:, None]])
         return np.hstack([ones, standardized])
 
@@ -630,7 +657,8 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         self.covariates_ = [c for c in normalized.columns if c != self.landmark_column]
         if not self.covariates_:
             raise ValueError("No quedó ninguna covariable de incidencia después del normalizador")
-        self.signs_ = self._signs(self.covariates_) if self.incidence == "unit_weight" else None
+        self.signs_ = (self._signs(self.covariates_) if self.incidence == "unit_weight" else
+                       self._fixed_weights(self.covariates_) if self.incidence == "fixed_weight" else None)
 
         # La ventana del score es del diseño del panel, no del ajuste: una por hito.
         self.score_windows_ = {}
@@ -704,7 +732,7 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
         normalized = self._normalized(X)
         out = {name: np.full(len(X), np.nan)
                for name in ("score", "pi_incidence", "p_horizon", "latency_shape", "latency_scale")}
-        if self.incidence == "unit_weight":
+        if self.incidence in ("unit_weight", "fixed_weight"):
             out[UNIT_WEIGHT_SCORE] = np.full(len(X), np.nan)
         for landmark in np.unique(landmarks):
             rows = landmarks == landmark
@@ -718,7 +746,7 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
             out["latency_shape"][rows] = model.fit.latency.shape
             out["latency_scale"][rows] = model.fit.latency.scale
             out["score"][rows] = pi * p_horizon
-            if self.incidence == "unit_weight":
+            if self.incidence in ("unit_weight", "fixed_weight"):
                 out[UNIT_WEIGHT_SCORE][rows] = standardized @ self.signs_
         return out
 
@@ -732,7 +760,8 @@ class CureMixtureModel(ClassifierMixin, BaseEstimator):
     @property
     def summary_(self) -> dict[str, dict[str, Any]]:
         """Por hito: coeficientes con nombre, (k, λ), convergencia y fracción susceptible."""
-        names = ["intercept", UNIT_WEIGHT_SCORE] if self.incidence == "unit_weight" else ["intercept", *self.covariates_]
+        names = (["intercept", UNIT_WEIGHT_SCORE] if self.incidence in ("unit_weight", "fixed_weight")
+                 else ["intercept", *self.covariates_])
         summary = {}
         for key, model in self.landmarks_.items():
             fit = model.fit

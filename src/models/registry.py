@@ -160,6 +160,20 @@ def _build_cure_mixture(params: dict[str, Any]) -> BaseEstimator:
     return CureMixtureModel(**params)
 
 
+@register("external_incidence")
+def _build_external_incidence(params: dict[str, Any]) -> BaseEstimator:
+    """Incidencia aprendida con el conjunto externo y aplicada congelada (F5 §3.2, A-solo).
+
+    `fit` no aprende nada: carga el ajuste de la fuente (`artifact`, el `.joblib` de
+    `scripts/fit_external_incidence.py`) y puntúa. Va con `preprocessing: none`, porque la
+    normalización contra la flota, la imputación y la escala son las de la fuente. Detalle en
+    `src/models/incidence.py`; qué decide, en `docs/memoria/f5-preregistro-incidencia-externa.md`.
+    """
+    from src.models.incidence import FrozenIncidenceScorer
+
+    return FrozenIncidenceScorer(**params)
+
+
 @register("vehicle_bagging")
 def _build_vehicle_bagging(params: dict[str, Any]) -> BaseEstimator:
     """Cualquier modelo del registry, promediado sobre `n_bags` bootstraps de vehículos.

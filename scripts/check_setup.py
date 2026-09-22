@@ -31,6 +31,10 @@ fallan, invalidan todo lo que venga después:
 12. E1/E2: el bagging por vehículo sortea autos enteros y pasa por el loop de CV, y el
     ensamble por rango alinea por clave, se niega a juntar folds distintos y aplica la
     regla de veredicto del preregistro.
+13. La incidencia externa (F5 §3.2): el sorteo padre se reproduce y se verifica contra su
+    huella, el conjunto externo no toca dev ni test, la ventana de features fija no mueve
+    las filas ni mira después de venta + 30, el ajuste de la fuente recupera la señal y el
+    scorer congelado no aprende nada en `fit`.
 """
 
 from __future__ import annotations
@@ -940,6 +944,174 @@ def landmark_metric_checks() -> None:
     )
 
 
+def _external_source(seed: int = 11, n: int = 360) -> pd.DataFrame:
+    """Fuente sintética: tres mercados, dos meses, dos features de flota y el uso.
+
+    Cada feature es un corrimiento por mes más el rasgo del vehículo; el riesgo sube con
+    `a`, baja con `b` y baja con el uso, y el intercepto cambia por mercado (el estrato).
+    """
+    rng = np.random.default_rng(seed)
+    markets = np.array(["X", "Y", "Z"])[np.arange(n) % 3]
+    latent = rng.normal(size=(n, 3))
+    alpha = {"X": -0.6, "Y": 0.0, "Z": 0.5}
+    eta = np.array([alpha[m] for m in markets]) + 0.9 * (latent[:, 0] - latent[:, 1]) - 0.7 * latent[:, 2]
+    label = (rng.random(n) < expit(eta)).astype(int)
+    frame = pd.DataFrame({"vehicle_id": [f"S{i:03d}" for i in range(n)], "label": label,
+                          "event_observed": label, "static_SalesCountry_cd": markets,
+                          "feat_landmark_day": 30.0, "feat_log1p_km_per_day": 3.0 + 0.8 * latent[:, 2],
+                          "aux_eligible": (rng.random(n) < 0.9).astype(int)})
+    for month, shift in (("2025-09", 10.0), ("2025-10", 14.0)):
+        frame[f"feat_fm__a__{month}"] = shift + 2.0 * latent[:, 0] + rng.normal(scale=0.3, size=n)
+        frame[f"feat_fm__w_a__{month}"] = 100.0
+        frame[f"feat_fm__b__{month}"] = shift + 2.0 * latent[:, 1] + rng.normal(scale=0.3, size=n)
+        frame[f"feat_fm__w_b__{month}"] = 20.0
+    return frame
+
+
+def external_incidence_checks() -> None:
+    """13 · El conjunto externo, la ventana fija y la incidencia congelada (F5 §3.2)."""
+    import json
+    import tempfile
+
+    from src.data.external import reproduce_parent_split, select_external
+    from src.eval.splits import make_test_split, restrict_test_split
+    from src.models.incidence import FrozenIncidenceScorer, fit_external_incidence, save_incidence
+
+    # -- el sorteo padre y quién entra ----------------------------------------------------
+    rng = np.random.default_rng(4)
+    vehicles = pd.DataFrame({"vehicle_id": [f"V{i:03d}" for i in range(200)],
+                             "event_observed": (rng.random(200) < 0.3).astype(int),
+                             "static_SalesCountry_cd": np.array(["A", "B", "C"])[rng.integers(0, 3, 200)],
+                             "static_daysUntilSale": 80.0})
+    vehicles["event_day_since_production"] = np.where(vehicles["event_observed"].eq(1),
+                                                      np.where(rng.random(200) < 0.5, 80.0, 200.0), np.nan)
+    full = make_test_split(vehicles, test_size=0.2, seed=42)
+    keep = vehicles.loc[vehicles["static_SalesCountry_cd"].eq("A") & ~(vehicles["event_day_since_production"] == 80.0),
+                        "vehicle_id"]
+    frozen = restrict_test_split(full, keep, events=vehicles.set_index("vehicle_id")["event_observed"])
+    parent = reproduce_parent_split(vehicles, frozen)
+    other_seed = {**frozen, "seed": 43}
+    other_print = {**frozen, "parent": {**frozen["parent"], "test_vehicles_sha256_16": "0" * 16}}
+    check(
+        "externo: el sorteo padre se reproduce contra su huella; con otra semilla u otra huella falla",
+        parent["dev"] == full["dev_vehicles"] and parent["test"] == full["test_vehicles"]
+        and _raises(lambda: reproduce_parent_split(vehicles, other_seed), ValueError)
+        and _raises(lambda: reproduce_parent_split(vehicles, other_print), ValueError),
+    )
+    external, report = select_external(vehicles, frozen, parent, side="dev", markets=["B", "C"])
+    ids = set(external["vehicle_id"])
+    kept = set(frozen["dev_vehicles"]) | set(frozen["test_vehicles"])
+    try:
+        every_market, _ = select_external(vehicles, frozen, parent, side="dev", markets=None)
+        all_markets_ok = not set(every_market["vehicle_id"]) & kept and set(every_market["vehicle_id"]) <= set(
+            frozen["excluded_vehicles"])
+    except ValueError:
+        all_markets_ok = False
+    check(
+        "externo: solo excluidos del lado dev del padre y de los mercados pedidos; nada de dev ni de test",
+        ids <= set(frozen["excluded_vehicles"]) and ids <= set(parent["dev"]) and not ids & kept
+        and set(external["static_SalesCountry_cd"]) <= {"B", "C"} and len(ids) > 0 and all_markets_ok
+        and report["excluded_on_other_side_untouched"] == len(set(frozen["excluded_vehicles"]) - set(parent["dev"])),
+    )
+
+    # -- la ventana de features fija ---------------------------------------------------------
+    cfg = load_config("configs/data/panel_landmark_ps.yaml")
+    window = load_config(cfg["event_clock"])["event_window"]
+    features = load_fleet_features(cfg["fleet_features"], cfg["features_spec"])
+    cfg30 = {**cfg, "landmark": {**cfg["landmark"], "feature_window_days": 30, "usage_feature": True}}
+    lm, lm30 = landmark_config(cfg, window), landmark_config(cfg30, window)
+    veh, trips = _synthetic_landmark_inputs()
+    base, _ = build_landmark_panel(veh, trips, lm, features)
+    fixed, _ = build_landmark_panel(veh, trips, lm30, features)
+    same_rows = ["vehicle_id", "aux_landmark_day", "cut_odo", "window_km", "label", "aux_dss_entry", "aux_dss_exit",
+                 "aux_event_in_window", "aux_n_trips_window", "aux_resolved_negative"]
+    first = fixed.loc[fixed["aux_landmark_day"].eq(30)].set_index("vehicle_id")
+    fm_first = [c for c in first.columns if c.startswith("feat_fm__")]
+    later_equal = all(
+        np.allclose(fixed.loc[fixed["aux_landmark_day"].eq(L)].set_index("vehicle_id")
+                    .reindex(index=first.index, columns=fm_first).to_numpy(float),
+                    first[fm_first].to_numpy(float), equal_nan=True)
+        for L in (60, 90))
+    fm_base = [c for c in base.columns if c.startswith("feat_fm__")]
+    check(
+        "ventana fija: mismas filas y aux_ que el panel del cure; en el hito 30 las mismas features",
+        fixed[same_rows].equals(base[same_rows])
+        and np.allclose(base.loc[base["aux_landmark_day"].eq(30), fm_base].to_numpy(float),
+                        fixed.loc[fixed["aux_landmark_day"].eq(30)].reindex(columns=fm_base).to_numpy(float),
+                        equal_nan=True),
+    )
+    sale = veh["sale_date"]
+    after = trips["TripDatetimeEnd"] > trips["vehicle_id"].map(sale + pd.Timedelta(days=30))
+    moved = trips.copy()
+    moved.loc[after, "trip_km"] *= 5
+    moved.loc[after, "below_regime"] = ~moved.loc[after, "below_regime"]
+    moved.loc[after, "speed_kmh_moving"] = -moved.loc[after, "speed_kmh_moving"]
+    shaken, _ = build_landmark_panel(veh, moved, lm30, features)
+    watched = [c for c in fixed.columns if c.startswith(("feat_fm__", "aux_raw_")) or c == "feat_log1p_km_per_day"]
+    check(
+        "ventana fija: en los hitos 60 y 90 las features son las de los primeros 30 días, y lo posterior no entra",
+        later_equal and shaken.reindex(columns=watched).equals(fixed[watched]),
+    )
+    a30 = trips.loc[trips["vehicle_id"].eq("A") & (trips["TripDatetimeStart"] > sale["A"])
+                    & (trips["TripDatetimeEnd"] <= sale["A"] + pd.Timedelta(days=30)), "trip_km"].sum()
+    a_row = fixed.loc[fixed["vehicle_id"].eq("A") & fixed["aux_landmark_day"].eq(90)]
+    check(
+        "ventana fija: km/día es log1p(km en (venta, venta + 30] / 30) y la exposición potencial no mira el desenlace",
+        np.isclose(float(a_row["feat_log1p_km_per_day"].iloc[0]), np.log1p(a30 / 30.0))
+        and bool(fixed.loc[fixed["event_observed"].eq(1), "aux_potential_exposure_days"].notna().all())
+        and np.allclose(fixed.loc[fixed["event_observed"].eq(0), "aux_potential_exposure_days"],
+                        fixed.loc[fixed["event_observed"].eq(0), "aux_resolved_exposure_days"]),
+    )
+
+    # -- el ajuste de la fuente y el scorer congelado --------------------------------------
+    source = _external_source()
+    kwargs = {"fleet_signs": {"fleet_a": 1, "fleet_b": -1}, "usage_column": "feat_log1p_km_per_day",
+              "normalizer_params": {"levels": [["month"], []], "min_ref_vehicles": 10}}
+    model = fit_external_incidence(source, design="index", **kwargs)
+    five = fit_external_incidence(source, design="separate", **kwargs)
+    X = source[select_feature_columns(source)]
+    z = model.standardized(X)
+    by_weights = z[list(model.weights())].to_numpy() @ np.asarray(list(model.weights().values()))
+    check(
+        "incidencia: el índice recupera a > 0 y b < 0, y el score es Σ w·z sin intercepto",
+        model.slopes[0] > 0 and model.slopes[1] < 0 and np.allclose(model.linear_predictor(X), by_weights)
+        and five.slopes[0] > 0 and five.slopes[1] < 0 and five.slopes[2] < 0,
+        f"a {model.slopes[0]:+.2f} · b {model.slopes[1]:+.2f}",
+    )
+    target = X.assign(static_SalesCountry_cd="W")
+    check(
+        "incidencia: un mercado que la fuente no vio cae a la referencia del mes (sin NaN, sin error)",
+        bool(np.isfinite(model.linear_predictor(target)).all())
+        and np.allclose(model.linear_predictor(target), model.linear_predictor(X)),
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        path = save_incidence(model, Path(tmp) / "m.joblib")
+        one = FrozenIncidenceScorer(artifact=str(path)).fit(X.iloc[:50], source["label"].iloc[:50])
+        two = FrozenIncidenceScorer(artifact=str(path)).fit(X.iloc[200:], 1 - source["label"].iloc[200:])
+        missing = X.drop(columns=["feat_log1p_km_per_day"])
+        check(
+            "incidencia: el scorer congelado no aprende nada en `fit` y falla si falta una covariable",
+            np.array_equal(one.predict_proba(X), two.predict_proba(X))
+            and np.allclose(one.decision_function(X), model.linear_predictor(X))
+            and _raises(lambda: FrozenIncidenceScorer(artifact=str(path)).fit(missing), KeyError),
+        )
+        panel = _cure_panel()
+        spec = build_target("cure_window", panel, np.ones(len(panel), dtype=bool))
+        Xc = panel[select_feature_columns(panel)]
+        weights_path = Path(tmp) / "w.json"
+        weights_path.write_text(json.dumps({"fleet_a": 1.0, "fleet_b": -1.0}), encoding="utf-8")
+        unit = CureMixtureModel(incidence="unit_weight", unit_weight_signs={"fleet_a": 1, "fleet_b": -1}).fit(Xc, spec.y)
+        fixed_w = CureMixtureModel(incidence="fixed_weight", fixed_weights_path=str(weights_path)).fit(Xc, spec.y)
+        same = np.allclose(unit.predict_components(Xc)[UNIT_WEIGHT_SCORE],
+                           fixed_w.predict_components(Xc)[UNIT_WEIGHT_SCORE])
+        weights_path.write_text(json.dumps({"fleet_a": 1.0}), encoding="utf-8")
+        check(
+            "cure_mixture: `fixed_weight` con pesos ±1 es P0, y un peso faltante falla",
+            same and _raises(lambda: CureMixtureModel(incidence="fixed_weight",
+                                                      fixed_weights_path=str(weights_path)).fit(Xc, spec.y), ValueError),
+        )
+
+
 def _fold_of(splits: dict, repeat: int) -> dict[str, int]:
     return {str(v): int(f["fold"]) for f in splits["repeats"][repeat]["folds"] for v in f["valid_vehicles"]}
 
@@ -1659,6 +1831,7 @@ def main() -> int:
     landmark_metric_checks()
     extend_splits_checks()
     bagging_ensemble_checks()
+    external_incidence_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()
