@@ -31,13 +31,25 @@ no separa fallados de sanos (AUC 0,513), así que nada se aplicó a dev
 del registro (F5 §3.3) aprende el *cuándo* pero pierde en lift por vehículo, así que no se adopta
 (`docs/memoria/f5-ss-post-venta.md`). Deja dos cosas: la (b) del finalista es exposición al
 registro, y con la etiqueta corregida el finalista detecta 11,9%, no 15,7%. Lo que sí cambia todo panel es la ventana
-del registro de eventos (abajo). **Lo siguiente es F4 (dashboard contra el panel real)**; las
-ideas que quedaron sin probar siguen en `docs/f3-modelos-candidatos.md`.
+del registro de eventos (abajo).
+
+**F6 (22-09) cambió el finalista.** Hubo una lista preregistrada de tres candidatos
+(`docs/memoria/f6-preregistro-deteccion-vehiculo.md`), y el nuevo finalista es **survival stacking
+con el conjunto en riesgo de la ventana del registro, en km y con horizonte completo** (K2,
+`configs/exp_ss_hw_r3.yaml`, target `window_km_survival`).
+- Con la etiqueta corregida detecta 17,0% ± 3,8 contra 11,9% ± 2,8, con el mismo lift y el mismo
+  Brier, y la (b) de calendario baja de +0,049 a +0,020.
+- La mejora es modesta: +2,3 autos de 45, y el bootstrap por vehículo no la separa del cero.
+  Con la etiqueta dura empata (`docs/memoria/f6-deteccion-vehiculo.md`).
+
+**Lo siguiente es F4 (dashboard contra el panel real, con K2)**; las ideas que quedaron sin probar
+siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha de F6.
 
 **El presupuesto de comparaciones está agotado** (§0, punto 2 de ese doc): con ~12
 eventos por fold, agregar candidatos sobre la marcha garantiza que "el mejor" sea ruido.
 Una corrida nueva se justifica por hacer comparable una fila que ya existe, no por sumar
-un modelo.
+un modelo. F6 gastó uno nuevo, explícito y cerrado: tres candidatos preregistrados con una
+regla más estricta. Otro candidato necesita su propio preregistro.
 
 **Antes de tocar los datos, leer [`docs/memoria/`](docs/memoria/README.md).** Ahí
 están los hallazgos de F1/F2 y las decisiones tomadas, con la evidencia y el comando
@@ -221,7 +233,8 @@ src/models/registry.py   get_model(name, params); agregar un modelo = registrar 
 src/models/timesfm_zeroshot.py  series por km + TimesFM 3.0 zero-shot sobre los cortes del panel (no es del registry)
 src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia + rama estática (torch, opcional)
 src/models/survival_stacking.py  supervivencia en tiempo discreto: apila (fila × bin de km), hazard por bin,
-                         score = 1 − S(H|x). Backend lightgbm o gpboost (efecto aleatorio por vehículo, opcional)
+                         score = 1 − S(H|x). Backend lightgbm o gpboost (efecto aleatorio por vehículo, opcional).
+                         Entrada tardía opcional (`entry_km` en el `y`, target `window_km_survival`)
 src/models/bagging.py    bagging por vehículo (`vehicle_bagging`): N bootstraps de autos del train del fold, promedio;
                          el vehículo llega por el `y` (`discrete_survival` o `grouped_label`)
 src/models/cure.py       mixture cure model por hito (incidencia Firth + FLIC, pesos unitarios o pesos fijos de afuera,
@@ -237,7 +250,8 @@ src/training/transformers.py  FleetReferenceNormalizer: desvío contra la median
 src/training/targets.py  con qué se entrena (no con qué se mide) y cómo la salida del modelo vuelve a un
                          score comparable: registro por nombre, `discrete_survival`, `ordinal_horizon` y
                          `cure_window` (exposición en la ventana del registro, para el cure model) y
-                         `window_survival` (el tramo en riesgo del panel v1 en días, F5 §3.3).
+                         `window_survival` (el tramo en riesgo del panel v1 en días, F5 §3.3) y
+                         `window_km_survival` (el mismo tramo en km, con entrada tardía: el finalista de F6).
                          Lo que se evalúa sigue siendo `label`; cv.py no sabe qué modos hay
 src/eval/splits.py       splits antileakage + serialización a splits.json
                          estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML;
@@ -274,6 +288,11 @@ scripts/fit_external_incidence.py  compuertas G1/G2, ajuste congelado e I1 de la
 scripts/build_window_survival_panel.py  panel v1 + reloj en días y ventana (`panel_survival_ps.parquet`) + embudo (`--counts-only`)
 scripts/eval_window_label.py  una corrida contra la referencia con la etiqueta dura y la corregida por ventana, pisos y
                          veredicto del preregistro (`--diagnose`: diagnóstico posterior, no preregistrado)
+scripts/build_km_window_panel.py  panel del finalista + tramo en riesgo de la ventana en km (`panel_survival_kmw.parquet`,
+                         F6) + embudo (`--counts-only`)
+scripts/smooth_scores.py media acumulada causal del score por vehículo sobre una corrida existente (F6 K1/K3), con (a0)/(b)
+scripts/audit_detection_null.py  la detección contra un nulo que conserva el largo de cada historial (regla 6) +
+                         bootstrap pareado por vehículo contra la referencia
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/build_history_panel.py  panel_history.parquet = panel_survival + feat_*_hist_delta (mismas filas; verifica
@@ -290,7 +309,7 @@ scripts/ensemble_rank.py ensamble por rango de corridas existentes (mismas filas
 scripts/rescore_run.py   re-mide una corrida vieja desde su predictions.parquet con la misma cuenta que train.py
                          (`evaluate_predictions`), sin reentrenar; falla si lo ya medido no se reproduce
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (158 chequeos)
+scripts/check_setup.py   smoke test del harness (166 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4
