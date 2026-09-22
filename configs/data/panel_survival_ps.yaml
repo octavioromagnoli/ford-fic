@@ -1,0 +1,51 @@
+# Panel v1 en el reloj del evento, con el conjunto en riesgo de la ventana del registro (F5 §3.3).
+#
+#   python scripts/build_window_survival_panel.py --config configs/data/panel_survival_ps.yaml --counts-only
+#   python scripts/build_window_survival_panel.py --config configs/data/panel_survival_ps.yaml
+#
+# Mismas filas, mismas 53 features y mismos folds que el panel del finalista
+# (`panel_survival.parquet`). Cambia la posición de la fila: `feat_cut_dss` (días desde la venta
+# en el corte) en vez de `feat_cut_odo`. Agrega las `aux_` del tramo en riesgo en días
+# (`src/data/window_risk.py`), que lee el target `window_survival`, y la marca de fila evaluable
+# con la etiqueta corregida (horizonte entero dentro de la ventana).
+seed: 42
+
+# El panel v1 del build de la referencia (`FORD_DATA_DIR=data/rebuild-0921`): trae
+# `aux_km_observed_after_cut` y es idéntico al del 20-09 en el resto de las columnas.
+panel_in: ${DATA_DIR}/processed/panel.parquet
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml
+# Estáticas (`load_vehicle_static` las renombra a `static_*` según este YAML).
+panel_config: configs/data/panel_v1.yaml
+# Umbrales de `derive_trip_columns`, por si hay que releer los viajes crudos.
+features_spec: configs/data/features_v1.yaml
+
+test_split: ${DATA_DIR}/processed/test_split.json
+# Origen del calendario congelado en F2. Se re-estima sobre dev y falla si no coincide.
+anchor_meta: ${DATA_DIR}/processed/panel_meta.json
+# Ventana del registro (`event_window`), congelada en la Fase 1 del cure model: una sola fuente.
+event_clock: configs/data/event_clock.yaml
+# Los folds del finalista. El panel nuevo tiene los mismos vehículos (misma huella), y el
+# embudo cuenta por fold cuántas filas evaluables quedan con la etiqueta corregida.
+splits: ${DATA_DIR}/processed/splits_r3.json
+
+# Los mismos viajes derivados del universo que el panel de hitos (fecha de inicio y odómetro
+# al final de cada viaje). `--refresh` los vuelve a leer de los crudos.
+trips_cache: ${DATA_DIR}/interim/landmark_trips.parquet
+scan:
+  chunksize: 500000
+
+# Reloj del modelo, para el embudo: los mismos valores que `configs/exp_ss_post_venta_r3.yaml`.
+# Bins, horizonte del score y horizonte de entrenamiento son el espejo en días de 500 / 3.000 /
+# 6.000 km del finalista. La traducción sale del embudo (Fase 1): en las filas de dev el horizonte
+# de 3.000 km dura 31 d de mediana. El km/día post-venta mediano por vehículo (57) daría 54 d, pero
+# el panel tiene un corte cada 500 km, así que las filas pesan más a los autos que andan más.
+clock:
+  bin_days: 5
+  horizon_days: 30
+  max_horizon_days: 60
+
+output:
+  panel: ${DATA_DIR}/processed/panel_survival_ps.parquet
+  meta: ${DATA_DIR}/processed/panel_survival_ps_meta.json
