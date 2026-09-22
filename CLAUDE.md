@@ -22,7 +22,9 @@ finalista es survival stacking— es la primera entrada de
 volver a comparar modelos: cambia el criterio. **El 22-09 se midió el cure model por hito
 post-venta**, con preregistro y lista cerrada. El rasgo temprano existe, pero no le gana al piso
 de producción y empata con un solo número de uso. No se adopta y **el finalista sigue siendo
-survival stacking** (`docs/memoria/f3-cure-model.md`). Lo que sí cambia todo panel es la ventana
+survival stacking** (`docs/memoria/f3-cure-model.md`). El mismo día corrió el ensamble
+preregistrado con el CNN-LSTM (E1/E2): pierde en lift por vehículo
+(`docs/memoria/f3-ensamble-e1-e2.md`). Lo que sí cambia todo panel es la ventana
 del registro de eventos (abajo). **Lo siguiente es F4 (dashboard contra el panel real)**; las
 ideas que quedaron sin probar siguen en `docs/f3-modelos-candidatos.md`.
 
@@ -208,6 +210,8 @@ src/models/timesfm_zeroshot.py  series por km + TimesFM 3.0 zero-shot sobre los 
 src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia + rama estática (torch, opcional)
 src/models/survival_stacking.py  supervivencia en tiempo discreto: apila (fila × bin de km), hazard por bin,
                          score = 1 − S(H|x). Backend lightgbm o gpboost (efecto aleatorio por vehículo, opcional)
+src/models/bagging.py    bagging por vehículo (`vehicle_bagging`): N bootstraps de autos del train del fold, promedio;
+                         el vehículo llega por el `y` (`discrete_survival` o `grouped_label`)
 src/models/cure.py       mixture cure model por hito (incidencia Firth + FLIC o pesos unitarios, latencia Weibull
                          con entrada tardía, EM que falla si la verosimilitud baja); trae su propio pipeline
 src/training/cv.py       loop de CV agrupada; selección de features por prefijo; hooks `target:`,
@@ -258,10 +262,12 @@ scripts/audit_ordinal_horizon.py  las tres auditorías obligatorias de cualquier
                          (nulo global y nulo intra-vehículo), aux_ de calendario como feat_, importancias
 scripts/compare.py       tabla comparativa de corridas (markdown)
 scripts/results.py       registro versionado en results/: métricas + config completa por corrida (log/table/show)
+scripts/ensemble_rank.py ensamble por rango de corridas existentes (mismas filas y folds, verificado), medido con
+                         `evaluate_predictions` y juzgado con la regla del preregistro; `--audit` agrega (a0) y (b)
 scripts/rescore_run.py   re-mide una corrida vieja desde su predictions.parquet con la misma cuenta que train.py
                          (`evaluate_predictions`), sin reentrenar; falla si lo ya medido no se reproduce
 scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
-scripts/check_setup.py   smoke test del harness (129 chequeos)
+scripts/check_setup.py   smoke test del harness (139 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

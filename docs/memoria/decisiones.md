@@ -5,6 +5,45 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-22 · El ensamble de finalistas (E1, E2) no se adopta: pierde en lift por vehículo
+
+**Alcance:** corre E1 y E2 del preregistro del 21-09
+([f3-preregistro-landmark-ensamble.md](f3-preregistro-landmark-ensamble.md)) sin cambios. **No
+cambia el finalista.** Evidencia, auditorías y comandos: [f3-ensamble-e1-e2.md](f3-ensamble-e1-e2.md).
+Solo dev, R = 3; test sin tocar.
+
+**Qué se decidió, con la regla del preregistro:**
+1. **E1** (rango percentil 50/50 de survival stacking y CNN-LSTM, sin reentrenar) **pierde**.
+   - Lift por vehículo 1,515 contra 1,616: diferencia −0,101 contra un desvío combinado de 0,073.
+   - En detección empata: 12,6% ± 3,2 contra 15,7% ± 0,9.
+   - *"El ensamble no suma y el finalista sigue siendo survival stacking solo."*
+2. **E2** (lo mismo con los dos finalistas embolsados por vehículo, 10 bolsas) **pierde**.
+   - Lift 1,480: diferencia −0,136 contra 0,078.
+   - Contra E1 baja el desvío de anticipación (4.121 contra 4.748 km) y sube el de detección
+     (5,0 contra 3,2 puntos).
+   - Por la letra de la regla de descarte, el bagging no queda descartado, porque bajó uno de
+     los dos desvíos. Pero no hay nada que adoptar: perdió contra la referencia y sus
+     componentes no son candidatos.
+
+**Por qué el negativo es creíble:**
+- Las dos corridas miembro se reproducen bit a bit.
+- Las filas, las etiquetas y los folds se verificaron idénticos.
+- (a0) cae a la tasa base.
+- El ensamble le gana al piso posicional en las dos métricas que valen.
+
+Pierde por una razón que se ve en los números: **el CNN-LSTM ordena autos bastante peor** (lift
+1,33×), y el promedio 50/50 diluye lo que mejor hace survival stacking. La baja correlación
+entre los dos (0,24–0,36) no alcanza cuando uno de los dos tiene menos señal.
+
+**Qué se queda:**
+- `vehicle_bagging`, `grouped_label` y `scripts/ensemble_rank.py`, que arma cualquier ensamble
+  de corridas existentes con la cuenta de `train.py` y aplica el veredicto del preregistro.
+- El componente survival stacking embolsado da 18,2% ± 3,2 de detección. No es candidato, y
+  contra la referencia empata con más desvío.
+- **La (b) sigue marcando** en todo lo que lleva survival stacking (+0,039 en E1, +0,046 en E2).
+
+---
+
 ## 2026-09-22 · El cure model por hito post-venta no se adopta: el rasgo temprano no se separa del piso de producción ni del uso
 
 **Alcance:** cierra el preregistro del cure model ([f3-preregistro-cure.md](f3-preregistro-cure.md)).

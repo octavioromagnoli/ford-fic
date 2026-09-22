@@ -1,0 +1,99 @@
+run: f3-ens-e2-ss-cnnlstm-bag10
+logged_on: '2026-09-22'
+note: 'E2 del preregistro 9b7bfb4: el ensamble de E1 sobre los dos finalistas embolsados
+  por vehículo (10 bolsas). Detección 13,8% ± 5,0 (5/11/6 de 53), lift veh. mean 1,480
+  ± 0,048: PIERDE contra la referencia en lift (−0,136 vs desvío combinado 0,078).
+  Contra E1: desvío de detección 5,0 vs 3,2 (sube), de anticipación 4.121 vs 4.748
+  km (baja). Brier de oof = rango; Platt OOF 0,108. (a0) PASS, (b) +0,046 marca. docs/memoria/f3-ensamble-e1-e2.md'
+source:
+  config_path: configs\exp_ens_e2.yaml
+  config_versioned: true
+  branch: exp/ensamble-e1-e2
+  commit: 6c4d958
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: rank_ensemble
+  pr_auc: 0.17927936974903405
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.2966785744786597
+  within_failed_lift: 1.1294810296097004
+  when_delta: 0.030421274897327932
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.4588293977280971
+  vehicle_lift: 1.4803740945566908
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: null
+  pr_auc_hi: null
+  base_rate: 0.1251848201084278
+  lift: 1.432117485121221
+  roc_auc: 0.6078067354256774
+  brier: 0.28772928906058576
+  detection_rate: 0.16981132075471697
+  median_lead_km: 3059.593714527051
+  budget: 50.0
+  panel: null
+  panel_generation: '2026-09-22'
+  splits: null
+  n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: f3-ens-e2-ss-cnnlstm-bag10
+  seed: 42
+  ensemble:
+    method: rank_mean
+    members:
+    - run: f3-survival-stacking-r3-bag10
+      config: configs/exp_survival_stacking_r3_bag10.yaml
+      weight: 0.5
+    - run: f3-cnn-lstm-r3-bag10
+      config: configs/exp_cnn_lstm_r3_bag10.yaml
+      weight: 0.5
+  compare:
+    reference: f3-survival-stacking-r3-rebuild
+    against:
+    - f3-cnn-lstm-r3-regen15
+    - f3-lgbm-panel-v1-r3-regen15
+    - f3-survival-stacking-history-r3
+    - f3-ens-e1-ss-cnnlstm
+    stability_against: f3-ens-e1-ss-cnnlstm
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f3-ensamble
+    job_type: ensemble
+    tags:
+    - f3
+    - ensamble
+    - e2
+    - bagging
+    - r3
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_ens_e2.yaml
+  model:
+    name: rank_ensemble
+    members:
+    - f3-survival-stacking-r3-bag10
+    - f3-cnn-lstm-r3-bag10
