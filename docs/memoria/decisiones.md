@@ -5,6 +5,44 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-22 · El cure model por hito post-venta no se adopta: el rasgo temprano no se separa del piso de producción ni del uso
+
+**Alcance:** cierra el preregistro del cure model ([f3-preregistro-cure.md](f3-preregistro-cure.md)).
+**No cambia el finalista**, que sigue siendo survival stacking sobre el panel v1, ni el panel v1.
+Evidencia, auditorías y comandos: [f3-cure-model.md](f3-cure-model.md). Solo dev, R = 3; test sin tocar.
+
+**Qué se decidió, aplicando la regla del preregistro en orden:**
+1. **P0 (pesos unitarios) le gana a su nulo estratificado:** C1 p = 0,0045, así que no se para.
+2. **P1 (Firth + FLIC) empata con P0:** D1 −0,015, IC pareado [−0,077; 0,045]. Se queda P0 y P2
+   no corre.
+3. **P0 no le gana al piso de producción:** +0,110 contra −ProductionDay, IC pareado
+   [−0,005; 0,221]. **No se adopta nada.**
+
+**Por qué el negativo es creíble y no mala suerte:**
+- **La señal es chica.** D1 = 0,599 y D2 = 4,2%: al 5% de falsas alarmas detecta 2 o 3 autos de 55.
+- **Es casi toda uso.** El piso −km/L da D1 = 0,581 y empata con P0 (IC [−0,038; 0,074]).
+- **La normalización contra la flota no suma.** Sin normalizar, P1 da 0,611 (A5).
+- **No hay fuga** (A0) y **el calendario no está detrás** (A3 baja D1; |ρ| con ProductionDay
+  < 0,2).
+- **En las filas que comparten, el finalista ordena mejor:** 0,592 contra 0,543 (A6, informativo).
+
+**Qué se queda aunque el modelo no entre:**
+- la ventana del registro y el reloj post-venta (la entrada de abajo): valen para cualquier
+  panel que modele el *cuándo*;
+- la infraestructura, que sirve para medir cualquier candidato futuro sobre hitos:
+  - panel de hitos, `cure_mixture` y `FleetReferenceNormalizer`;
+  - `landmark_metrics`: D1/D2 con entrada tardía y bootstrap pareado por vehículo;
+  - `extend_splits`, que conserva folds para comparar pareado;
+  - `audit_cure.py`;
+  - los bloques `eval.landmark`, `eval.legacy_blocks` y `eval.carry_columns`, y el hook
+    `preprocessing`.
+
+**Para el pitch:** "alertamos desde el primer mes post-venta" no se sostiene con estos datos (4%
+al 5% de falsas alarmas). Lo que sí se puede decir es que el riesgo se ordena por días desde la
+venta y que el registro solo ve una ventana de seis meses.
+
+---
+
 ## 2026-09-22 · El registro de eventos tiene ventana de calendario: la censura de un sano es su exposición dentro de ella, y el reloj arranca en la venta
 
 **Estado: confirmada en el punto de control 1 (22-09).** Es la Fase 1 del cure model. Se
