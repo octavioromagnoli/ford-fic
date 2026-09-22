@@ -135,6 +135,15 @@ Reglas comunes:
 - **D1 y D2 se miden con `s`.**
 - El cure model con incidencia `sigmoid(a + b·s)` se ajusta **solo para reportar
   calibración**: es monótono en `s` dentro de cada hito y no cambia D1.
+- **(a, b) se estiman con el mismo Firth + FLIC que P1** (enmienda del 22-09, Fase 5, antes
+  de cualquier corrida).
+  - Por MV sin penalizar, la calibración degenera (π → 1, información singular) en 2 de 11
+    submuestras del 80% de dev en el hito de 30 días; con Firth, en ninguna. La penalización
+    vale −∞ en ese borde.
+  - Con una ventana de 191 días no alcanza el seguimiento para separar "susceptible que
+    todavía no falló" de "curado".
+  - Es un diagnóstico de convergencia: se miraron iteraciones, k, λ y π̄, **no** β, D1 ni D2.
+  - No cambia D1 ni D2 de P0, que salen de `s`; solo la calibración que se reporta.
 - **P0 no compite por un lugar.** Es el piso que P1 tiene que superar, y el respaldo si nadie
   lo supera.
 
