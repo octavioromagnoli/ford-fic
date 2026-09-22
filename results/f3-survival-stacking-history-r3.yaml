@@ -17,9 +17,9 @@ note: 'exp/history-deviation: survival stacking R=3 + feat_regenerations_per_100
   docs/memoria/f3-desvio-historia.md.'
 source:
   config_path: configs\exp_survival_stacking_history_r3.yaml
-  config_versioned: false
+  config_versioned: true
   branch: exp/history-deviation
-  commit: 6f2e793
+  commit: b562e04
   note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
 summary:
   model: survival_stacking
