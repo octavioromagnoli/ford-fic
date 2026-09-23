@@ -1,17 +1,21 @@
-# El mejor modelo al 22-09: survival stacking, y por qué el cure model no lo reemplaza
+# El mejor modelo al 22-09: survival stacking con la ventana del registro (K2)
 
-**Fecha:** 2026-09-22 · **Fase:** fin de F3 · **Alcance:** solo dev, R = 3; **test sin tocar.**
+**Fecha:** 2026-09-22 · **Fase:** F6 · **Alcance:** solo dev, R = 3; **test sin tocar.**
 Es el resumen para el equipo y para el pitch. La evidencia vive en
-[decisiones.md](decisiones.md) (cierre de F3, 20-09, y el cure model, 22-09),
-[f3-piso-posicional.md](f3-piso-posicional.md) y [f3-cure-model.md](f3-cure-model.md). Si
-cambia el finalista, se edita este archivo.
+[decisiones.md](decisiones.md) (cierre de F3, 20-09; cure model y F6, 22-09),
+[f6-deteccion-vehiculo.md](f6-deteccion-vehiculo.md), [f3-piso-posicional.md](f3-piso-posicional.md)
+y [f3-cure-model.md](f3-cure-model.md). Si cambia el finalista, se edita este archivo.
 
 ## La respuesta corta
 
-**El mejor modelo sigue siendo survival stacking sobre el panel v1.** Con un 5% de falsas
-alarmas encuentra a 1 de cada 6 autos que van a fallar, con unos 5 meses de anticipación. Es
-el único con probabilidades calibradas. El cure model nuevo avisa mucho antes (a los 30–90
-días de la venta), pero casi nunca acierta, y no se separa de dos reglas triviales.
+**El mejor modelo es survival stacking con el conjunto en riesgo de la ventana del registro, en km
+y con horizonte completo** (K2, `configs/exp_ss_hw_r3.yaml`).
+- Con un 5% de falsas alarmas encuentra a **1 de cada 6 autos** que van a fallar (17%), con unos 4
+  meses de anticipación.
+- El finalista anterior encontraba a 1 de cada 8 (12%) con la misma cuenta.
+- Es el mismo modelo con una sola corrección: ya no aprende como "sanos" los cortes de autos que
+  después fallan, ni los km que el registro de eventos no cubría.
+- Sigue dando probabilidades calibradas.
 
 ## La tabla
 
@@ -20,43 +24,51 @@ Se usan las dos métricas que sobrevivieron a las auditorías del proyecto (ver
 lift por vehículo. El PR-AUC por fila **no** elige: lo supera un score que es solo el
 odómetro.
 
-| modelo | detecta (5% de falsas alarmas) | anticipación | lift por vehículo | calibración (Brier) |
+**Con la etiqueta corregida** (solo los cortes cuyo horizonte cubrió el registro de eventos; es el
+número honesto, y el que decide desde el 22-09):
+
+| modelo | detecta (5% de falsas alarmas) | anticipación mediana | lift por vehículo | calibración (Brier) |
 |---|---|---|---|---|
-| **survival stacking** | **15,7% ± 0,9** (8–9 de 53) | ~8.300 km (≈ 5 meses a 57 km/día) | **1,62×** | **0,112** |
+| **K2: survival stacking + ventana del registro** | **17,0% ± 3,8** (6–10 de 45) | ~7.400 km (≈ 4 meses a 57 km/día) | **1,66×** | **0,112** |
+| survival stacking (finalista anterior) | 11,9% ± 2,8 (4–7 de 45) | ~9.400 km | 1,66× | 0,112 |
+| survival stacking en días post-venta (F5 §3.3) | 9,6% ± 2,8 | ~7.700 km | 1,38× | — |
+| piso: solo el odómetro | 4,4% | 8.300 km | 1,16× | — |
+
+**Con la etiqueta dura** (todas las filas, como en las fichas anteriores al 22-09):
+
+| modelo | detecta | anticipación | lift por vehículo | calibración (Brier) |
+|---|---|---|---|---|
+| **K2** | 15,1% ± 3,1 (6–10 de 53) | ~8.800 km | **1,67×** | **0,112** |
+| survival stacking (finalista anterior) | 15,7% ± 0,9 (8–9 de 53) | ~8.300 km | 1,62× | 0,112 |
 | LightGBM de control | 11,9% ± 3,2 | 9.400 km, muy inestable (± 2.200 km según los folds) | 1,49× | 0,171 |
 | CNN-LSTM (la de la tutora) | 11,9% ± 3,6 | 10.400 km | 1,33× | 0,228 |
 | piso: solo el odómetro | 7,6% | 7.400 km | 1,02× | — |
 | cure model P0 (panel de hitos) | 4,2% (2–3 de 55) | decide a los 30–90 días de la venta | — | no se puede leer |
 
-La última fila no se compara uno a uno con las demás: otro panel, otros negativos (los
-resueltos dentro de la ventana del registro) y otra regla de alerta (primer hito en vez de
-alerta sostenida). Pero la diferencia es grande. Además, en las filas que comparten, el
-finalista ordena mejor: D1 0,592 contra 0,543 (A6 de [f3-cure-model.md](f3-cure-model.md)).
+La última fila no se compara uno a uno con las demás. Usa otro panel, otros negativos (los
+resueltos dentro de la ventana del registro) y otra regla de alerta (primer hito en vez de alerta
+sostenida). Pero la diferencia es grande.
 
-GRU, TimesFM, ordinal y GPBoost no superan a estos en las métricas que valen (sus fichas están
-en el índice). **El ensamble de survival stacking con el CNN-LSTM tampoco** (E1 y E2, 22-09):
-- E1 detecta 12,6% ± 3,2 con lift 1,52×, y pierde en lift. El CNN-LSTM ordena autos peor y el
-  promedio lo diluye.
-- Con bagging por vehículo (E2) da lo mismo: 13,8% ± 5,0 y 1,48×.
-- Ficha: [f3-ensamble-e1-e2.md](f3-ensamble-e1-e2.md).
+**Lo que no le ganó a survival stacking** (fichas en el índice):
+- GRU, TimesFM, ordinal y GPBoost;
+- el ensamble con el CNN-LSTM, E1 y E2 ([f3-ensamble-e1-e2.md](f3-ensamble-e1-e2.md));
+- la incidencia aprendida con los fallados sin fecha ([f5-incidencia-externa.md](f5-incidencia-externa.md));
+- el reloj en días post-venta ([f5-ss-post-venta.md](f5-ss-post-venta.md));
+- promediar el score hacia atrás, K1 y K3 ([f6-deteccion-vehiculo.md](f6-deteccion-vehiculo.md)).
 
-**Aprender *qué auto* con los fallados sin fecha tampoco** (22-09): en los mercados sin fecha el
-rasgo temprano no separa fallados de sanos (AUC 0,513), así que la compuerta paró antes de
-tocar dev. Ficha: [f5-incidencia-externa.md](f5-incidencia-externa.md).
+## Por qué K2
 
-**El mismo survival stacking en días desde la venta, con la ventana del registro, tampoco**
-(22-09). Con la etiqueta corregida (solo filas con el horizonte dentro del registro) empata en
-detección y pierde en lift por vehículo: 1,38× contra 1,66×. Aprende más del *cuándo*, pero su
-score queda dominado por los días desde la venta. Ficha: [f5-ss-post-venta.md](f5-ss-post-venta.md).
-
-## Por qué survival stacking
-
-- Es el **único** cuyo aporte del "cuándo" (a′) da positivo en las tres repeticiones:
-  +0,016 ± 0,003.
-- Detecta el **doble** que el piso del odómetro, y es **estable** entre sorteos de folds: la
-  anticipación varía ±22 km, contra ±2.237 del control.
-- Es el único que da **probabilidades calibradas**, porque el hazard se entrena sin reponderar.
-  "Este auto tiene 13% de riesgo" sirve para priorizar un taller; un puntaje ordinal no.
+- **Cumple las seis condiciones del preregistro F6** con la etiqueta que decide:
+  - gana en detección en las tres repeticiones y no pierde en lift;
+  - la anticipación no cae más que su desvío;
+  - les gana a los dos pisos y pasa (a0);
+  - le saca a un score al azar el doble de ventaja que el finalista anterior: +9,5 contra +4,1
+    puntos.
+- **Arregla el límite principal del finalista anterior.** Darle las columnas de calendario mueve
+  el ROC +0,020, contra +0,049. Ese atajo era exposición al registro, y K2 lo saca.
+- **Sigue calibrado** (Brier 0,112): "este auto tiene 13% de riesgo" sirve para priorizar un
+  taller.
+- **Ordena mejor en el tiempo:** C-index 0,603 contra 0,582, y (a′) +0,019 contra +0,016.
 
 ## El cure model, en criollo
 
@@ -72,34 +84,26 @@ score queda dominado por los días desde la venta. Ficha: [f5-ss-post-venta.md](
   - "el auto que se usa poco falla más": solo los km por día dan 0,58 contra 0,60 del modelo;
   - ordenar por fecha de producción: el modelo le gana por 0,11, pero el intervalo de confianza
     roza el cero.
-- **La versión ajustada (Firth, P1) no mejora a la suma simple (P0).**
-- **Lo que queda del trabajo:**
-  - el registro de eventos solo cubre sep-2025 → mar-2026;
-  - el riesgo se mide en días desde la venta, no en km;
-  - la señal temprana es, sobre todo, intensidad de uso.
-
-  Las tres cosas valen para cualquier modelo futuro. También quedó la infraestructura para medir
-  cualquier candidato sobre hitos post-venta.
+- **Lo que queda:** el registro de eventos solo cubre sep-2025 → mar-2026, y el riesgo se mide
+  en días desde la venta. K2 usa lo primero.
 
 ## Límites que hay que decir en el pitch
 
-1. **La auditoría de calendario (b) de survival stacking marca +0,049 de ROC con R = 3**
-   ([decisiones.md](decisiones.md), 21-09). El 22-09 se vio de dónde sale: con el conjunto en
-   riesgo de la ventana del registro baja a +0,016. Es exposición al registro, no física
-   ([f5-ss-post-venta.md](f5-ss-post-venta.md)).
-2. **Sus etiquetas vienen del panel v1**, donde el 28% de los horizontes sanos cae en parte fuera
-   de la ventana del registro de eventos ([decisiones.md](decisiones.md), 22-09). **Con la etiqueta
-   corregida detecta 11,9% ± 2,8** (4 / 7 / 5 de 45 fallados), no 15,7%, con el mismo lift por
-   vehículo (1,66×). Ese es el número honesto del punto de operación.
-3. **En números absolutos la señal es modesta.** El PR-AUC por fila (0,172) queda por debajo del
-   techo de cohorte (0,263): lo que el modelo sabe es sobre todo *qué auto*, y poco *cuándo*.
-4. **Nada se midió sobre el test** (74 vehículos congelados). Se mide una sola vez, con el modelo
+1. **Es una mejora modesta en números absolutos:** +2,3 autos de 45 en promedio. Un bootstrap por
+   vehículo no la separa del cero (P = 0,74). Con la etiqueta dura, K2 empata en detección y gana
+   en lift. Lo que la sostiene es la regla preregistrada, cumplida en las tres repeticiones.
+2. **Los autos que suma los detecta más cerca de su evento.** La anticipación mediana con la
+   etiqueta corregida baja de ~9.400 a ~7.400 km.
+3. **La señal sigue siendo modesta.** El PR-AUC por fila (0,176) queda por debajo del techo de
+   cohorte (0,263): lo que el modelo sabe es sobre todo *qué auto*, y poco *cuándo*.
+4. **La ventana del registro se estimó con los eventos de dev.** Si Ford da otra, se reconstruye
+   el panel y K2 se re-corre con el mismo YAML.
+5. **Nada se midió sobre el test** (74 vehículos congelados). Se mide una sola vez, con el modelo
    elegido.
 
 ## Lo que sigue
 
-- **F4:** el dashboard contra el panel real, con survival stacking.
-- **La (b) de calendario ya tiene explicación** (exposición al registro). Queda como límite
-  declarado: no hay otra corrida en la lista.
+- **F4:** el dashboard contra el panel real, con K2.
+- **Test:** decidir en equipo cuándo se mide K2 sobre el holdout congelado.
 - **Preguntas para Ford:** la ventana real del registro, qué es `IdentificationDate` y la
   prevalencia real.

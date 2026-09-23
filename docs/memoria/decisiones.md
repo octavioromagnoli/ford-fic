@@ -5,6 +5,61 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-22 · Nuevo finalista: survival stacking con la ventana del registro en km y horizonte completo (K2)
+
+**Alcance:** cierra el preregistro F6 ([f6-preregistro-deteccion-vehiculo.md](f6-preregistro-deteccion-vehiculo.md),
+b12056c). **Cambia el finalista.** Evidencia, auditorías y comandos:
+[f6-deteccion-vehiculo.md](f6-deteccion-vehiculo.md). Solo dev, R = 3, con las mismas filas,
+features y folds; test sin tocar.
+
+**El pedido:** un modelo que detecte más autos que van a fallar, con antelación. Para eso se gastó un
+presupuesto de comparaciones nuevo y cerrado: tres candidatos, con una regla más estricta que la de
+F5.
+
+**Qué se decidió, con la regla del preregistro** (decide la etiqueta corregida V):
+1. **K2 se adopta.** Es `survival_stacking` con el target `window_km_survival`:
+   - entrada tardía en el odómetro del 01-09-2025;
+   - un sano sale en `min(último odómetro, odómetro del 11-03-2026)`;
+   - se entrena hasta 55.000 km.
+
+   Lo demás no cambia: features, booster y score.
+   - **Detección 17,0% ± 3,8 (7 / 10 / 6 de 45) contra 11,9% ± 2,8 (4 / 7 / 5).** Gana en las
+     tres repeticiones: +0,067 / +0,067 / +0,022.
+   - Lift por vehículo 1,658 contra 1,655, y anticipación mediana 7.438 km contra 9.354.
+   - Les gana a los dos pisos y pasa (a0).
+   - Su exceso sobre el nulo de tamaño de bolsa es +9,5 puntos, contra +4,1 del finalista anterior.
+2. **K1** (media acumulada causal del score del finalista) y **K3** (K2 + esa media) empatan con más
+   desvío. No se adoptan.
+
+**Por qué K2 y no otra cosa:** el finalista anterior entrenaba como supervivencia dos cosas que no lo
+eran:
+- **514 cortes de autos que después fallan**, porque su evento caía más allá de 6.000 km;
+- **1,2 millones de km sanos después del cierre del registro.**
+
+Como el rasgo que predice es del auto y está desde el primer mes, eso le enseñaba a llamar "sano" a un
+auto que va a fallar. K2 solo corrige el conjunto en riesgo.
+
+**Lo que hay que decir junto con el número:**
+- **Es una mejora modesta:** +2,3 autos de 45 en promedio. El bootstrap pareado por vehículo no la
+  separa del cero: +5,5 puntos, IC90 [−8,9; +17,8]. Con la etiqueta dura, K2 empata en detección
+  (15,1% ± 3,1 contra 15,7% ± 0,9) y ordena mejor los autos (1,67× contra 1,62×).
+- **Los autos que suma los detecta más cerca del evento:** la anticipación mediana con V baja unos
+  1.900 km. Pasa la guarda preregistrada.
+- **La (b) de calendario baja de +0,049 a +0,020.** El límite principal del finalista anterior
+  queda casi resuelto: el atajo de calendario era exposición al registro.
+- **Suavizar el score hacia atrás no suma.** Le quita al score la ventaja artificial de las bolsas
+  largas, pero la alerta llega más tarde o no llega.
+
+**Qué se queda:**
+- el target `window_km_survival` y `entry_km` en `DiscreteSurvivalStacker`;
+- `scripts/build_km_window_panel.py`;
+- `scripts/smooth_scores.py`;
+- `scripts/audit_detection_null.py`: el nulo de tamaño de bolsa para la detección, que ninguna
+  corrida anterior tenía. Un score al azar detecta ~7,5% con V;
+- 8 chequeos (166 en verde).
+
+---
+
 ## 2026-09-22 · Survival stacking en días post-venta con la ventana no se adopta: aprende el *cuándo* y pierde el *qué auto*
 
 **Alcance:** cierra el preregistro de F5 §3.3

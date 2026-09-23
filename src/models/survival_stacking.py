@@ -136,9 +136,12 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         event: np.ndarray,
         at_risk: np.ndarray,
         groups: np.ndarray | None,
+        entry_km: np.ndarray | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray]:
         """Filas apiladas: una por `(fila del panel, bin en riesgo)`.
 
+        Con `entry_km` (entrada tardía, target `window_km_survival`) la fila se apila desde
+        el bin que contiene la entrada: los km anteriores no son supervivencia verificada.
         Devuelve `(X_apilada, hazard, grupos_apilados, índice de la fila original)`.
         """
         edges = self._train_edges_
@@ -150,7 +153,10 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         # administrativamente. El borde derecho va cerrado, igual que `label`.
         beyond = duration_km > upper
         last_bin = np.minimum(np.floor(duration_km / float(self.bin_km)).astype(int), n_bins - 1)
-        n_at_risk = np.where(at_risk, last_bin + 1, 0)
+        entry = np.zeros(len(duration_km)) if entry_km is None else np.asarray(entry_km, dtype=float)
+        first_bin = np.floor(entry / float(self.bin_km)).astype(int)
+        # Una fila que entra después del final del entrenamiento no está en riesgo en ningún bin.
+        n_at_risk = np.where(at_risk & (entry < upper), np.maximum(last_bin - first_bin + 1, 0), 0)
 
         rows = np.repeat(np.arange(len(duration_km)), n_at_risk)
         if rows.size == 0:
@@ -158,7 +164,7 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
                 "Ninguna fila de train quedó en riesgo: ¿el gap se come todo el "
                 "seguimiento? Revisá `gap_km` y `aux_km_observed_after_cut`."
             )
-        bins = _ranges(n_at_risk)
+        bins = _ranges(n_at_risk) + first_bin[rows]
         # Hazard = 1 solo en el bin donde cae el evento, y solo si el evento se observó
         # antes de que se acabe la ventana de entrenamiento.
         hazard = ((bins == last_bin[rows]) & (event[rows] == 1) & ~beyond[rows]).astype(np.int8)
@@ -173,7 +179,7 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         if self.backend not in BACKENDS:
             raise ValueError(f"backend `{self.backend}` desconocido. Opciones: {BACKENDS}")
         X = np.asarray(X, dtype=float)
-        duration_km, event, at_risk, groups = _unpack_target(y)
+        duration_km, event, at_risk, groups, entry_km = _unpack_target(y)
         if len(duration_km) != len(X):
             raise ValueError(f"X tiene {len(X)} filas y el target {len(duration_km)}")
 
@@ -186,7 +192,7 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         self._train_edges_ = self._bin_edges(upper)
         self._score_bins_ = int(np.ceil(float(self.horizon_km) / float(self.bin_km) - 1e-9))
 
-        stacked, hazard, stacked_groups, _ = self._stack(X, duration_km, event, at_risk, groups)
+        stacked, hazard, stacked_groups, _ = self._stack(X, duration_km, event, at_risk, groups, entry_km)
         self.n_features_in_ = X.shape[1]
         self.classes_ = np.array([0, 1])
         self.stacking_ = {
@@ -346,8 +352,11 @@ def _booster_defaults(model_params: dict[str, Any] | None, random_state: int) ->
     return params
 
 
-def _unpack_target(y) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
-    """`(duración, evento, en riesgo, grupo)` desde el array estructurado del target."""
+def _unpack_target(y) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None]:
+    """`(duración, evento, en riesgo, grupo, entrada)` desde el array estructurado del target.
+
+    La entrada (`entry_km`) solo la trae `window_km_survival`; sin ella, toda fila entra en 0.
+    """
     y = np.asarray(y)
     if y.dtype.names is None or "duration_km" not in y.dtype.names:
         raise TypeError(
@@ -359,7 +368,8 @@ def _unpack_target(y) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | 
         y["at_risk"].astype(bool) if "at_risk" in y.dtype.names else duration >= 0
     )
     groups = y["group"].astype(str) if "group" in y.dtype.names else None
-    return duration, y["event"].astype(int), at_risk, groups
+    entry = y["entry_km"].astype(float) if "entry_km" in y.dtype.names else None
+    return duration, y["event"].astype(int), at_risk, groups, entry
 
 
 def _ranges(counts: np.ndarray) -> np.ndarray:
