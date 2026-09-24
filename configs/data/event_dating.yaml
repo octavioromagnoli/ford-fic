@@ -1,0 +1,78 @@
+# Fase 0 de "datar eventos": ¿la telemetría deja una marca de intervención en la fecha
+# del evento? Solo dev (fallados con fecha y sanos); no toca a los excluidos ni al test,
+# no cambia ninguna etiqueta y no entrena nada.
+#
+#   python scripts/audit_event_dating.py --config configs/data/event_dating.yaml
+#
+# Motivación: docs/memoria/f2-eda-revision-y-features.md §3.3 (después de la fecha el uso
+# cambia en ~80% de los fallados: la fecha marca una intervención real). Si una marca
+# ubica los eventos conocidos, la Fase 1 la aplica a los 33 fallados sin fecha de
+# CNTRY_3/4. Lectura: docs/memoria/f8-datar-eventos-fase0.md.
+#
+# REGLA DE ORO: las marcas NO son features del panel ni se derivan de ellas. Fechar con
+# una variable que el modelo usa pone la regla de fechado en la etiqueta (p. ej. fechar
+# donde bajan los viajes bajo régimen hace que "antes" tenga más bajo régimen por
+# construcción). Por eso solo hay marcas de intervención discretas, entre viajes.
+seed: 0
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml
+panel_config: configs/data/panel_v1.yaml
+test_split: ${DATA_DIR}/processed/test_split.json
+anchor_meta: ${DATA_DIR}/processed/panel_meta.json
+
+output_dir: experiments/audit_event_dating
+# Leer los crudos lleva minutos; `--refresh` los vuelve a leer.
+trips_cache: dev_trips_markers.parquet
+signals_cache: dev_signals_markers.parquet
+
+# Ventana del registro (la misma de configs/data/event_clock.yaml).
+event_window:
+  start: "2025-09-01"
+  end: "2026-03-11"
+
+# Un fallado entra a la medición si tiene telemetría antes y después del evento, con
+# margen: primer viaje <= evento − coverage_days y último viaje >= evento + coverage_days.
+coverage_days: 30
+
+# Marcas de intervención. Cada una es un intervalo de calendario [a, b] (entre el fin de
+# un viaje y el inicio del siguiente, o el día del mensaje). Umbrales fijados ANTES de
+# mirar la distancia al evento.
+markers:
+  gap:            # el auto no se usa: días sin viajes (¿taller?)
+    min_days: 3
+  gap_long:
+    min_days: 7
+  oil_reset:      # la vida de aceite sube entre dos viajes (service)
+    min_jump_points: 30
+  dpf_offtrip:    # el nivel del DPF baja con el motor apagado (reseteo o regeneración de taller)
+    min_drop_points: 15
+  odo_jump:       # km recorridos sin telemetría entre dos viajes
+    min_km: 20
+  manual_clean:   # mensajes de limpieza manual (trips.AirFilter* o signals.Message)
+    slugs: [cleaning_manual, stopped_manual]
+  severe_msg:     # nivel del filtro al límite (signals.Message)
+    slugs: [over_limit, at_limit]
+
+# Tolerancias de la distancia marca–evento, en días.
+tolerances_days: [7, 14, 30]
+
+# Nulo dentro del mismo auto: los días de su historia a más de `null_min_distance_days`
+# del evento (con margen de la tolerancia a los bordes). Conserva la frecuencia de marcas
+# de cada auto, que es lo que un nulo tiene que conservar acá (regla 6).
+null_min_distance_days: 45
+n_monte_carlo: 10000
+
+# Regla de fechado que usaría la Fase 1 sobre un fallado sin fecha: la PRIMERA marca del
+# tipo dentro de [max(venta, inicio de la ventana), min(fin de la ventana, último viaje)].
+# Se mide su error sobre los fallados con fecha, y qué fracción de sanos tiene alguna
+# marca en su intervalo equivalente (si todos la tienen, la marca no dice "es un fallado").
+
+# Criterio de pase, por marca, fijado antes de medir (tolerancia de decisión: 14 días):
+decision:
+  tolerance_days: 14
+  min_hit_rate: 0.50          # (i) ≥ 50% de los fallados elegibles con la marca a ±14 d
+  min_excess_over_null: 0.25  # (ii) acierto − nulo ≥ 0,25 ...
+  max_p_value: 0.01           #      ... con p < 0,01 (Monte Carlo sobre el nulo por auto)
+  min_rule_within: 0.50       # (iii) la regla de fechado cae a ±14 d en ≥ 50% de los elegibles
+# Si ninguna marca pasa las tres, la Fase 1 no corre y queda escrito por qué.
