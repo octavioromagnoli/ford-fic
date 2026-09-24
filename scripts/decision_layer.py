@@ -188,7 +188,8 @@ def main() -> int:
 
         pts = pd.DataFrame(points)
         summary = pts.groupby("budget_per_1000").agg(
-            detection=("detection", "mean"), det_sd=("detection", lambda x: x.std(ddof=1)),
+            # ddof = 0, como `src.eval.metrics.dispersion` (el ±3,8 de K2 en las fichas)
+            detection=("detection", "mean"), det_sd=("detection", lambda x: x.std(ddof=0)),
             detected=("n_detected", lambda x: "/".join(map(str, x))), of=("n_event_vehicles", "first"),
             fa_realized=("fa_realized_per_1000", "mean"), lead_km=("median_lead_km", "mean"),
             null=("null_mean", "mean"), null_p95=("null_p95", "mean")).reset_index()
@@ -200,7 +201,7 @@ def main() -> int:
         hs = ho.groupby(["alpha", "method"]).agg(
             fa_heldout=("fa_heldout", "mean"), fa_max=("fa_heldout", "max"),
             n_fa=("n_fa_heldout", lambda x: "/".join(map(str, x))), of_healthy=("n_healthy", "first"),
-            detection=("detection_heldout", "mean"), det_sd=("detection_heldout", lambda x: x.std(ddof=1)),
+            detection=("detection_heldout", "mean"), det_sd=("detection_heldout", lambda x: x.std(ddof=0)),
             detected=("n_detected", lambda x: "/".join(map(str, x))), lead_km=("median_lead_km", "mean"),
             fa_in_sample=("fa_in_sample", "mean"), fa_in_ci95_hi=("fa_in_sample_ci95_hi", "mean")).reset_index()
         print(f"\n-- ¿se sostiene fuera de muestra? (umbral con los sanos de los otros folds) --")
