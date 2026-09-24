@@ -1,0 +1,38 @@
+# Dashboard de F4 contra el panel real, con el finalista K2. Solo dev: no muestra el test.
+#
+#   streamlit run scripts/dashboard_k2/app.py
+#   (con FORD_DATA_DIR=$PWD/data/rebuild-0921; K2 y la capa de decisión tienen que estar corridos)
+#
+# Los números oficiales (detección, anticipación, nulo, fuera de muestra) salen de los JSON que
+# dejan las corridas; el dashboard solo recalcula lo que depende de un vehículo o de un umbral,
+# con las mismas funciones de src/eval/metrics.py.
+
+# La corrida de K2: su YAML da el panel, `eval` (k_consecutive, n_thresholds) y `window_eval`.
+run_config: configs/exp_ss_hw_r3.yaml
+# Salida de scripts/decision_layer.py --config configs/exp_decision_k2.yaml
+decision_layer: experiments/decision-k2/decision_layer.json
+decision_config: configs/exp_decision_k2.yaml
+
+# Etiqueta por defecto: V (corregida por la ventana del registro) es la que decide.
+default_label: corrected
+default_budget_per_1000: 50
+
+# Perfil de uso del vehículo: features del panel que se pueden graficar contra el odómetro,
+# con la mediana de los sanos de dev como contexto (la hipótesis física de F2 §3.2).
+profile_features:
+  feat_trips_below_regime_temp_frac: Viajes que no llegan a régimen térmico
+  feat_idle_frac: Fracción de arranques sin moverse (idle)
+  feat_speed_kmh_mean: Velocidad media [km/h]
+  feat_engine_temp_max_median: Temperatura máxima de motor [°C]
+  feat_km_per_day: Km por día
+  feat_oil_life_mean: Vida de aceite [%]
+  feat_dpf_end_mean: Nivel del DPF al final del viaje [%]
+  feat_regenerations_per_1000km: Regeneraciones cada 1.000 km
+# Ancho de los tramos de odómetro para la mediana de la flota sana.
+profile_bin_km: 1000
+
+# Documentación que el dashboard enlaza.
+docs:
+  finalist: docs/memoria/f6-deteccion-vehiculo.md
+  decision: docs/memoria/f8-capa-decision-k2.md
+  variance: docs/memoria/f7-varianza-k2.md
