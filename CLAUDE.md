@@ -307,6 +307,8 @@ scripts/audit_detection_null.py  la detección contra un nulo que conserva el la
                          bootstrap pareado por vehículo contra la referencia
 scripts/audit_event_dating.py  ¿una marca de intervención (aceite, días sin uso, DPF con motor apagado) fecha el
                          evento? Solo dev, criterio en configs/data/event_dating.yaml (F8, no pasó)
+scripts/cost_scenarios.py  punto de operación de K2 bajo escenarios de costo con fuente (configs/cost_scenarios_k2.yaml),
+                         con el ahorro sobre el azar; reporte, nunca selección
 scripts/decision_layer.py  capa de decisión sobre una corrida: curva a varios presupuestos de falsas alarmas con
                          su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson)
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
