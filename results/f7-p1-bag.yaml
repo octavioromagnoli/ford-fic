@@ -1,0 +1,119 @@
+run: f7-p1-bag
+logged_on: '2026-09-24'
+note: 'F7 P1 (preregistro 0b29b2b, implementación 88660e7): K2 embolsado por vehículo
+  (10 bolsas). V (decide): 15,6% ± 0,0 (7/7/7 de 45) contra K2 17,0% ± 3,8; lift 1,680
+  contra 1,658; exceso sobre el nulo +7,7 contra +9,5. Falla condiciones 1, 3 y 6:
+  NO SE ADOPTA. Baja la varianza como prometía; con D 17,0% ± 1,5 contra 15,1% ± 3,1.
+  (a0) +0,0045, (b) +0,032. docs/memoria/f7-varianza-k2.md'
+source:
+  config_path: configs\exp_f7_p1_bag.yaml
+  config_versioned: true
+  branch: exp/f7-varianza-k2
+  commit: 88660e7
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: vehicle_bagging
+  pr_auc: 0.1837087405450519
+  cohort_ceiling: 0.2626680455015512
+  cohort_lift: 2.098241985522234
+  within_failed: 0.305943047205621
+  within_failed_lift: 1.1647516797158877
+  when_delta: 0.02154505795350692
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.5053288864739663
+  vehicle_lift: 1.6304007469254387
+  vehicle_base_rate: 0.30994152046783624
+  pr_auc_lo: 0.18837729114491744
+  pr_auc_hi: 0.22975121551278677
+  base_rate: 0.1251848201084278
+  lift: 1.467500136086261
+  roc_auc: 0.596831910095745
+  brier: 0.1104561227362781
+  detection_rate: 0.20754716981132076
+  median_lead_km: 8302.0
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_survival_kmw.parquet
+  panel_generation: '2026-09-24'
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 254
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: f7-p1-bag
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_survival_kmw.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  target:
+    name: window_km_survival
+    params: {}
+  model:
+    name: vehicle_bagging
+    params:
+      base_model: survival_stacking
+      base_params:
+        horizon_km: 3000
+        bin_km: 500
+        max_horizon_km: 55000
+        random_state: 42
+      n_bags: 10
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  window_eval:
+    reference: f6-ss-hw-r3
+    evaluable_column: aux_eval_in_window
+    decides: corrected
+    floors:
+    - cut_odo
+    - aux_cut_dss
+    a0_tolerance: 0.02
+  detection_null:
+    n_permutations: 200
+    seed: 0
+    n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f7-varianza
+    job_type: train
+    tags:
+    - f7
+    - survival
+    - stacking
+    - ventana
+    - horizonte-completo
+    - r3
+    - bagging
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_f7_p1_bag.yaml

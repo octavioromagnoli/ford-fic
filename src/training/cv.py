@@ -66,11 +66,18 @@ def select_feature_columns(
     return columns
 
 
-def build_preprocessor(features: pd.DataFrame) -> ColumnTransformer:
-    """Numéricas: mediana + estandarizado. Categóricas: moda + one-hot tolerante."""
+def build_preprocessor(features: pd.DataFrame, *, named_output: bool = False) -> ColumnTransformer:
+    """Numéricas: mediana + estandarizado. Categóricas: moda + one-hot tolerante.
+
+    Con `named_output` la salida es un DataFrame con los nombres de columna (y el one-hot
+    denso, que es lo que pandas admite). Lo pide un modelo que decide algo **por nombre de
+    feature** —restricciones monótonas, un subconjunto de columnas—; los valores son los
+    mismos, y sin pedirlo el modelo recibe la matriz de siempre.
+    """
     numeric = features.select_dtypes(include=["number", "bool"]).columns.tolist()
     categorical = [c for c in features.columns if c not in numeric]
-    return ColumnTransformer(
+    onehot_kwargs = {"sparse_output": False} if named_output else {}
+    transformer = ColumnTransformer(
         transformers=[
             (
                 "num",
@@ -84,7 +91,7 @@ def build_preprocessor(features: pd.DataFrame) -> ColumnTransformer:
                 Pipeline(
                     [
                         ("impute", SimpleImputer(strategy="most_frequent")),
-                        ("onehot", OneHotEncoder(handle_unknown="ignore", min_frequency=5)),
+                        ("onehot", OneHotEncoder(handle_unknown="ignore", min_frequency=5, **onehot_kwargs)),
                     ]
                 ),
                 categorical,
@@ -93,6 +100,7 @@ def build_preprocessor(features: pd.DataFrame) -> ColumnTransformer:
         remainder="drop",
         verbose_feature_names_out=False,
     )
+    return transformer.set_output(transform="pandas") if named_output else transformer
 
 
 def run_cv(
@@ -192,10 +200,12 @@ def run_cv(
         expected_extra_names: set[str] | None = None
 
         for fold, train_mask, valid_mask in masks:
+            model = get_model(model_name, model_params)
+            named = bool(getattr(model, "wants_feature_names", False))
             pipeline = Pipeline(
                 [
-                    *([("prep", build_preprocessor(X))] if preprocessing == "standard" else []),
-                    ("model", get_model(model_name, model_params)),
+                    *([("prep", build_preprocessor(X, named_output=named))] if preprocessing == "standard" else []),
+                    ("model", model),
                 ]
             )
             fit_target = (

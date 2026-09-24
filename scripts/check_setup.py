@@ -1545,6 +1545,151 @@ def extend_splits_checks() -> None:
     )
 
 
+def _km_window_dummy() -> pd.DataFrame:
+    """El panel dummy con el tramo en riesgo en km de K2: uno de cada cuatro cortes entra tarde.
+
+    La entrada es de 1.200 km, más allá del primer bin de 500: una entrada dentro del primer bin
+    apila igual que sin entrada, y un chequeo de "le llegó la entrada" no la podría ver.
+    """
+    from scripts.build_km_window_panel import ENTRY_KM, EVENT_KM, EXIT_KM
+
+    dummy = build_dummy_panel(SMALL_PANEL)
+    observed = dummy["event_observed"].to_numpy(int) == 1
+    tte = dummy["time_to_event_km"].to_numpy(float) - dummy["gap_km"].to_numpy(float)
+    dummy[ENTRY_KM] = np.where(np.arange(len(dummy)) % 4 == 0, 1200.0, 0.0)
+    dummy[EXIT_KM] = np.where(observed, tte, 5000.0)
+    dummy[EVENT_KM] = (observed & (tte >= dummy[ENTRY_KM])).astype(int)
+    dummy[EXIT_KM] = np.where(observed & (tte < dummy[ENTRY_KM]), dummy[ENTRY_KM] - 1.0, dummy[EXIT_KM])
+    return dummy
+
+
+def f7_variance_checks() -> None:
+    """16 · F7: los tres candidatos que bajan la varianza de K2 (monótono, columnas, hazard logístico, bagging)."""
+    import numpy.lib.recfunctions as rfn
+
+    from src.models.bagging import VehicleBaggingClassifier, vehicle_bootstrap_rows
+    from src.models.survival_stacking import (DiscreteSurvivalStacker, _monotone_vector,
+                                              _resolve_columns, natural_spline_basis)
+
+    # -- el mapa monótono, por nombre ----------------------------------------------------------
+    check(
+        "F7 monótono: el signo cae en la columna que se nombra, 0 en las demás; una feature que no "
+        "existe o un signo que no es ±1 fallan",
+        _monotone_vector({"b": 1, "c": -1}, ["a", "b", "c"]) == [0, 1, -1]
+        and _raises(lambda: _monotone_vector({"z": 1}, ["a", "b"]), KeyError)
+        and _raises(lambda: _monotone_vector({"a": 2}, ["a", "b"]), ValueError),
+    )
+
+    # Hazard sintético que sube con `x` y no depende de `ruido`. Con +1 el riesgo predicho no
+    # puede bajar al barrer `x`; con −1 no puede subir. Un mapa que invirtiera el signo, o que
+    # lo pusiera en otra columna, rompe una de las dos.
+    rng = np.random.default_rng(11)
+    n = 600
+    X = pd.DataFrame({"x": rng.normal(size=n), "ruido": rng.normal(size=n)})
+    duration = rng.exponential(4000.0 / np.exp(0.8 * X["x"].to_numpy()))
+    y = np.empty(n, dtype=[("duration_km", "f8"), ("event", "i1"), ("at_risk", "?"), ("group", "U4")])
+    y["duration_km"] = np.minimum(duration, 5000.0)
+    y["event"] = (duration < 5000.0).astype(int)
+    y["at_risk"] = True
+    y["group"] = [f"v{i}" for i in range(n)]
+    sweep = pd.DataFrame({"x": np.linspace(-3, 3, 61), "ruido": 0.0})
+    base = {"horizon_km": 1000, "bin_km": 500, "max_horizon_km": 5000,
+            "model_params": {"n_estimators": 60, "min_child_samples": 20}}
+    up = DiscreteSurvivalStacker(**base, monotone={"x": 1}).fit(X, y).predict_proba(sweep)[:, 1]
+    down = DiscreteSurvivalStacker(**base, monotone={"x": -1}).fit(X, y).predict_proba(sweep)[:, 1]
+    check(
+        "F7 monótono: con +1 el riesgo no baja al subir la feature, con −1 no sube (y sin nombres falla)",
+        bool(np.all(np.diff(up) >= -1e-12)) and bool(np.all(np.diff(down) <= 1e-12)) and up[-1] > up[0]
+        and _raises(lambda: DiscreteSurvivalStacker(**base, monotone={"x": 1}).fit(X.to_numpy(), y), TypeError),
+        f"Δ mínimo con +1 {np.diff(up).min():.2e} · Δ máximo con −1 {np.diff(down).max():.2e}",
+    )
+
+    # -- columnas por nombre -------------------------------------------------------------------
+    names = ["feat_idle_frac", "feat_idle_frac_trend", "static_pais_A", "static_pais_B", "feat_otra"]
+    check(
+        "F7 columnas: el nombre exacto no arrastra a otra que empieza igual; la categórica entra con "
+        "sus dummies; una columna que no existe falla",
+        _resolve_columns(["feat_idle_frac"], names).tolist() == [0]
+        and _resolve_columns(["static_pais", "feat_otra"], names).tolist() == [2, 3, 4]
+        and _raises(lambda: _resolve_columns(["feat_no_existe"], names), KeyError),
+    )
+    Xc = X.assign(fuera=rng.normal(size=n))
+    for backend in ("lightgbm", "logistic"):
+        params = base if backend == "lightgbm" else {**base, "model_params": None}
+        model = DiscreteSurvivalStacker(**params, backend=backend, columns=["x", "ruido"]).fit(Xc, y)
+        moved = Xc.assign(fuera=Xc["fuera"] * 100.0 + 5.0)
+        check(
+            f"F7 columnas ({backend}): una columna fuera de la lista no mueve la predicción, y la "
+            "importancia sigue alineada con el preprocesado (0 en la que no ve)",
+            np.array_equal(model.predict_proba(Xc), model.predict_proba(moved))
+            and len(model.feature_importances_) == Xc.shape[1] + 1
+            and model.feature_importances_[2] == 0.0,
+        )
+
+    # -- el hazard logístico ---------------------------------------------------------------------
+    knots = np.array([500.0, 2000.0, 4000.0, 6000.0, 9000.0])
+    grid = np.arange(0.0, 20000.0, 500.0)
+    basis = natural_spline_basis(grid, knots)
+    tail = basis[grid >= 9000.0]
+    check(
+        "F7 spline natural: K nodos dan K − 1 columnas, la primera es lineal y la base es lineal "
+        "después del último nodo",
+        basis.shape == (len(grid), len(knots) - 1)
+        and np.allclose(basis[:, 0], grid / 1000.0)
+        and np.allclose(np.diff(tail, n=2, axis=0), 0.0, atol=1e-9),
+    )
+    logistic = DiscreteSurvivalStacker(**{**base, "model_params": None}, backend="logistic").fit(X, y)
+    risk = logistic.predict_proba(sweep)[:, 1]
+    check(
+        "F7 hazard logístico: aprende el signo del hazard sintético y da riesgos en (0, 1)",
+        bool(np.all(np.diff(risk) > 0)) and risk.min() > 0 and risk.max() < 1
+        and logistic.booster_.coef_.ravel()[0] > 0,
+    )
+
+    # -- por el loop de CV, con la ventana en km de K2 ---------------------------------------------
+    dummy = _km_window_dummy()
+    splits = make_splits(dummy, n_splits=3, seed=1)
+    km = {"horizon_km": 3000, "bin_km": 500, "max_horizon_km": 6000}
+    window = {"name": "window_km_survival", "params": {}}
+    runs = {
+        "P2 monótono": ("survival_stacking", {**km, "monotone": {"feat_idle_per_1000km": 1, "feat_speed_kmh_mean": -1}}),
+        "P3 logístico": ("survival_stacking", {**km, "backend": "logistic", "columns": [
+            "feat_idle_per_1000km", "feat_trips_below_regime_temp_frac", "feat_speed_kmh_mean",
+            "feat_coolant_temp_end_mean", "feat_km_per_day", "static_SalesCountry_cd"]}),
+        "P1 embolsado": ("vehicle_bagging", {"base_model": "survival_stacking", "base_params": km, "n_bags": 2}),
+    }
+    for label, (name, params) in runs.items():
+        predictions, _ = run_cv(dummy, splits, model_name=name, model_params=params, target=window)
+        check(
+            f"F7 {label}: pasa por el loop de CV con la ventana en km y scores en [0, 1]",
+            bool(predictions["score"].between(0, 1).all()) and predictions["score"].nunique() > 10,
+        )
+    plain, _ = run_cv(dummy, splits, model_name="survival_stacking", model_params=km, target=window)
+    again, _ = run_cv(dummy, splits, model_name="survival_stacking", model_params={**km, "monotone": {}},
+                      target=window)
+    check(
+        "F7: sin `monotone` ni `columns` el modelo recibe la matriz de siempre y predice lo mismo",
+        np.array_equal(plain["score"].to_numpy(), again["score"].to_numpy()),
+    )
+
+    # -- P1: cada bolsa es un bootstrap de autos y le llega el target entero (con la entrada) -----
+    full = build_target("window_km_survival", dummy, np.ones(len(dummy), dtype=bool)).y
+    Xd = dummy[["feat_idle_per_1000km", "feat_speed_kmh_mean"]].to_numpy(float)
+    bag = VehicleBaggingClassifier(base_model="survival_stacking", base_params=km, n_bags=1,
+                                   random_state=5).fit(Xd, full)
+    rows, _ = vehicle_bootstrap_rows(full["group"].astype(str), np.random.default_rng(5))
+    alone = DiscreteSurvivalStacker(**km).fit(Xd[rows], full[rows])
+    no_entry = DiscreteSurvivalStacker(**km).fit(
+        Xd[rows], rfn.drop_fields(full[rows], "entry_km", usemask=False))
+    check(
+        "F7 P1: la bolsa entrena con los autos sorteados enteros y con su entrada tardía (el apilado "
+        "coincide con el de esas filas, y no con el de las mismas filas sin entrada)",
+        bag.estimators_[0].stacking_ == alone.stacking_
+        and bag.estimators_[0].stacking_["rows_stacked"] != no_entry.stacking_["rows_stacked"],
+        f"{bag.estimators_[0].stacking_['rows_stacked']} apiladas contra {alone.stacking_['rows_stacked']}",
+    )
+
+
 def bagging_ensemble_checks() -> None:
     """E1/E2: el bagging sortea autos enteros y el ensamble por rango solo junta lo comparable."""
     from scripts.ensemble_rank import align_members, compare, rank_ensemble
@@ -2181,6 +2326,7 @@ def main() -> int:
     external_incidence_checks()
     window_survival_checks()
     km_window_detection_checks()
+    f7_variance_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()

@@ -228,7 +228,7 @@ def importances(panel: pd.DataFrame, cfg: dict, *, top: int = 20) -> pd.DataFram
         return None
 
     X = panel[select_feature_columns(panel)]
-    prep = build_preprocessor(X)
+    prep = build_preprocessor(X, named_output=bool(getattr(model, "wants_feature_names", False)))
     Xt = prep.fit_transform(X)
     names = list(prep.get_feature_names_out())
 

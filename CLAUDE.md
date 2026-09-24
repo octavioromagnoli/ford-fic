@@ -42,6 +42,11 @@ con el conjunto en riesgo de la ventana del registro, en km y con horizonte comp
 - La mejora es modesta: +2,3 autos de 45, y el bootstrap por vehículo no la separa del cero.
   Con la etiqueta dura empata (`docs/memoria/f6-deteccion-vehiculo.md`).
 
+**F7 (24-09) no lo cambió.** Tres candidatos preregistrados para bajar la varianza de K2 (embolsado,
+monótono, hazard logístico con cinco covariables): ninguno cumple las seis condiciones
+(`docs/memoria/f7-varianza-k2.md`). Lo que deja: la versión embolsada de K2 detecta 7 de 45 en las
+tres repeticiones, así que **el 17,0% es la lectura optimista y el pitch cita ~15–17%**.
+
 **Lo siguiente es F4 (dashboard contra el panel real, con K2)**; las ideas que quedaron sin probar
 siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha de F6.
 
