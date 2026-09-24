@@ -5,6 +5,43 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-24 · F8: sin Ford no se recuperan eventos, y el punto de operación de K2 se sostiene
+
+**Alcance:** dos trabajos exploratorios que no consumen presupuesto de comparaciones. **No cambian
+el finalista.** Evidencia y comandos: [f8-datar-eventos-fase0.md](f8-datar-eventos-fase0.md) y
+[f8-capa-decision-k2.md](f8-capa-decision-k2.md). Solo dev; test sin tocar.
+
+**1 · Fechar a los fallados sin fecha desde la telemetría: no se puede.** La idea era sumar los 33
+fallados sin fecha de CNTRY_3/4 (+55% de eventos, misma población) fechándolos con una marca de
+intervención. El criterio se commiteó antes de medir.
+- Ninguna marca pasa: aceite, días sin uso, DPF con motor apagado, km sin telemetría, mensajes.
+- La caída del DPF con motor apagado se concentra cerca del evento (+0,31 sobre el nulo del mismo
+  auto), pero es demasiado frecuente para fechar: 14% a ±14 d.
+- **Descartado en la misma discusión: SMOTE para "subir a 1.000 autos".** Interpola entre los 45
+  fallados, así que no agrega eventos. Hecho antes del split, filtra entre folds, y rompe la
+  calibración del hazard. `docs/f3-modelos-candidatos.md` §4 ya lo prohibía.
+- **Consecuencia:** las vías para tener más eventos sin Ford están cerradas (esta, y la incidencia
+  externa de F5). Lo que queda sin Ford son cambios de modelo, que desde F6 mueven ±2 autos de 45,
+  dentro del ruido. **Para mejorar la detección de forma medible hace falta la respuesta de Ford**
+  sobre la fecha por defecto (o un registro de taller). Queda abierta una sola idea con datos: usar
+  la firma del DPF para probar "es el mismo evento" y sumar a esos autos censurados por intervalo,
+  con su preregistro.
+
+**2 · La capa de decisión sobre K2.**
+- El umbral del 5%, fijado con los sanos de otros folds, da **3,5% de falsas alarmas realizadas y
+  15,6% de detección**: no estaba sobreajustado.
+- **A 10% de falsas alarmas detecta 26,7%**, con el mismo exceso sobre el nulo que el 5%. **Al 2% es
+  azar.**
+- **Neyman-Pearson:** garantizar ≤ 10% con 95% de confianza equivale a ~4% realizado, con 17,0% de
+  detección. Garantizar ≤ 5% es demasiado conservador con 95 sanos (5% de detección).
+- **Para el pitch:** "~15–17% a ≤ 5% de falsas alarmas, verificado fuera de muestra", la garantía
+  de ≤ 10%, y el dial a 10% como decisión de costo de Ford. No prometer alertas con ≤ 2% de falsas
+  alarmas.
+
+**Qué se queda:** `scripts/audit_event_dating.py`, `scripts/decision_layer.py` y sus dos configs.
+
+---
+
 ## 2026-09-24 · F7 no cambia el finalista: ningún candidato que baja la varianza de K2 cumple la regla
 
 **Alcance:** cierra el preregistro F7 ([f7-preregistro-varianza-k2.md](f7-preregistro-varianza-k2.md),

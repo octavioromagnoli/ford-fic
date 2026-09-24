@@ -47,6 +47,11 @@ monótono, hazard logístico con cinco covariables): ninguno cumple las seis con
 (`docs/memoria/f7-varianza-k2.md`). Lo que deja: la versión embolsada de K2 detecta 7 de 45 en las
 tres repeticiones, así que **el 17,0% es la lectura optimista y el pitch cita ~15–17%**.
 
+**F8 (24-09, sin presupuesto) tampoco lo cambió.** No se pudo fechar a los fallados sin fecha
+desde la telemetría (`docs/memoria/f8-datar-eventos-fase0.md`): sin Ford no hay más eventos. Y la
+capa de decisión (`docs/memoria/f8-capa-decision-k2.md`) muestra que el 5% de K2 se sostiene fuera de
+muestra (3,5% de falsas alarmas realizadas, 15,6% de detección) y que a 10% detecta ~26%.
+
 **Lo siguiente es F4 (dashboard contra el panel real, con K2)**; las ideas que quedaron sin probar
 siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha de F6.
 
@@ -298,6 +303,10 @@ scripts/build_km_window_panel.py  panel del finalista + tramo en riesgo de la ve
 scripts/smooth_scores.py media acumulada causal del score por vehículo sobre una corrida existente (F6 K1/K3), con (a0)/(b)
 scripts/audit_detection_null.py  la detección contra un nulo que conserva el largo de cada historial (regla 6) +
                          bootstrap pareado por vehículo contra la referencia
+scripts/audit_event_dating.py  ¿una marca de intervención (aceite, días sin uso, DPF con motor apagado) fecha el
+                         evento? Solo dev, criterio en configs/data/event_dating.yaml (F8, no pasó)
+scripts/decision_layer.py  capa de decisión sobre una corrida: curva a varios presupuestos de falsas alarmas con
+                         su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson)
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/build_history_panel.py  panel_history.parquet = panel_survival + feat_*_hist_delta (mismas filas; verifica
