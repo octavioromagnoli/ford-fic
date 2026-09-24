@@ -329,7 +329,9 @@ scripts/rescore_run.py   re-mide una corrida vieja desde su predictions.parquet 
 scripts/dashboard.py     dashboard genérico de una corrida (streamlit; el del panel dummy)
 scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run scripts/dashboard_k2/app.py`. Resumen (dial de
                          falsas alarmas contra el azar, punto fuera de muestra), Vehículo (score, umbral, alerta, perfil
-                         de uso contra los sanos) y Modelo (contra la referencia y los pisos, límites); configs/dashboard_k2.yaml
+                         de uso contra los sanos), Costos (punto de operación y ahorro según costos y prevalencia
+                         real, con escenarios precargados) y Modelo (contra la referencia y los pisos, límites);
+                         configs/dashboard_k2.yaml
 scripts/check_setup.py   smoke test del harness (166 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,

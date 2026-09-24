@@ -161,3 +161,57 @@ def curve_summary(decision: dict[str, Any], label: str) -> pd.DataFrame:
 
 def holdout_summary(decision: dict[str, Any], label: str) -> pd.DataFrame:
     return pd.DataFrame(decision["labels"][label]["holdout_summary"])
+
+
+# --- costo esperado (docs/memoria/f8-costos-k2.md) ------------------------------------------
+
+def curve_points(curve: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """(FPR, TPR) de una curva, con las dos políticas triviales agregadas como extremos."""
+    fpr = np.append(curve["false_alarms_per_1000"].to_numpy(dtype=float) / 1000.0, [0.0, 1.0])
+    tpr = np.append(curve["detection_rate"].to_numpy(dtype=float), [0.0, 1.0])
+    return fpr, tpr
+
+
+def expected_cost(fpr: np.ndarray, tpr: np.ndarray, *, pi: float, insp: float, prev: float, fail: float,
+                  e: float) -> np.ndarray:
+    """Costo esperado por vehículo de la flota en cada punto (FPR, TPR).
+
+    Falsa alarma = `insp`; detectado = `insp + prev + (1 − e)·fail`; no detectado = `fail`.
+    Alertar a un auto que va a fallar ahorra `B = e·fail − prev − insp` contra no alertarlo.
+    """
+    benefit = e * fail - prev - insp
+    return pi * fail - pi * np.asarray(tpr) * benefit + (1.0 - pi) * np.asarray(fpr) * insp
+
+
+def null_and_k2_budget_points(decision: dict[str, Any], label: str) -> tuple[tuple, tuple]:
+    """K2 y el nulo de tamaño de bolsa en los presupuestos de la capa de decisión (+ los triviales)."""
+    pts = pd.DataFrame(decision["labels"][label]["curve_points"]).groupby("budget_per_1000").mean(numeric_only=True)
+    budgets = pts.index.to_numpy(dtype=float) / 1000.0
+    k2 = (np.r_[0.0, pts["fa_realized_per_1000"].to_numpy() / 1000.0, 1.0], np.r_[0.0, pts["detection"].to_numpy(), 1.0])
+    null = (np.r_[0.0, budgets, 1.0], np.r_[0.0, pts["null_mean"].to_numpy(), 1.0])
+    return k2, null
+
+
+def cost_optimum(curves: list[tuple[np.ndarray, np.ndarray]], decision: dict[str, Any], label: str,
+                 **costs: float) -> dict[str, Any]:
+    """El punto de mínimo costo en cada repetición, las políticas triviales y el ahorro sobre el azar."""
+    per_repeat = []
+    for fpr, tpr in curves:
+        cost = expected_cost(fpr, tpr, **costs)
+        i = int(np.argmin(cost))
+        per_repeat.append((fpr[i], tpr[i], cost[i]))
+    a = np.array(per_repeat)
+    none = float(expected_cost(np.array([0.0]), np.array([0.0]), **costs)[0])
+    everyone = float(expected_cost(np.array([1.0]), np.array([1.0]), **costs)[0])
+    best_trivial = min(none, everyone)
+    k2_pts, null_pts = null_and_k2_budget_points(decision, label)
+    return {
+        "fa_opt": float(a[:, 0].mean()), "fa_opt_max": float(a[:, 0].max()), "det_opt": float(a[:, 1].mean()),
+        "cost_model": float(a[:, 2].mean()), "cost_none": none, "cost_everyone": everyone,
+        "trivial": "no alertar" if none <= everyone else "alertar a todos",
+        "savings_vs_trivial": 1.0 - float(a[:, 2].mean()) / best_trivial if best_trivial > 0 else 0.0,
+        "savings_per_1000": 1000.0 * (best_trivial - float(a[:, 2].mean())),
+        "savings_over_null_per_1000": 1000.0 * float(expected_cost(*null_pts, **costs).min()
+                                                     - expected_cost(*k2_pts, **costs).min()),
+        "ratio_benefit_insp": (costs["e"] * costs["fail"] - costs["prev"] - costs["insp"]) / costs["insp"],
+    }

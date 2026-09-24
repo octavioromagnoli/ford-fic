@@ -31,8 +31,12 @@ profile_features:
 # Ancho de los tramos de odómetro para la mediana de la flota sana.
 profile_bin_km: 1000
 
+# Escenarios de costo precargados en la página de costos (con sus fuentes en el YAML).
+cost_scenarios: configs/cost_scenarios_k2.yaml
+
 # Documentación que el dashboard enlaza.
 docs:
   finalist: docs/memoria/f6-deteccion-vehiculo.md
   decision: docs/memoria/f8-capa-decision-k2.md
   variance: docs/memoria/f7-varianza-k2.md
+  costs: docs/memoria/f8-costos-k2.md

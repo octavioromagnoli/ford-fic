@@ -26,6 +26,7 @@ page = st.navigation(
     [
         st.Page(HERE / "app_pages" / "resumen.py", title="Resumen", icon=":material/dashboard:", default=True),
         st.Page(HERE / "app_pages" / "vehiculo.py", title="Vehículo", icon=":material/directions_car:"),
+        st.Page(HERE / "app_pages" / "costos.py", title="Costos", icon=":material/payments:"),
         st.Page(HERE / "app_pages" / "modelo.py", title="Modelo", icon=":material/fact_check:"),
     ],
     position="top",

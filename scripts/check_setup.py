@@ -1807,6 +1807,18 @@ def dashboard_checks() -> None:
         f"{int(detected.sum())} vs {int(point['n_detected'])} detectados",
     )
 
+    from src.eval.dashboard_data import expected_cost
+
+    kw = dict(pi=0.05, insp=150.0, prev=300.0, fail=2000.0, e=0.8)
+    none, everyone = expected_cost(np.array([0.0, 1.0]), np.array([0.0, 1.0]), **kw)
+    # a mano: no alertar = π·falla; alertar a todos = π·(diag + prev + (1 − e)·falla) + (1 − π)·diag
+    by_hand = (0.05 * 2000.0, 0.05 * (150.0 + 300.0 + 0.2 * 2000.0) + 0.95 * 150.0)
+    check(
+        "costos: el costo esperado de las dos políticas triviales coincide con la cuenta a mano",
+        abs(none - by_hand[0]) < 1e-9 and abs(everyone - by_hand[1]) < 1e-9,
+        f"{none:.2f}/{everyone:.2f} vs {by_hand[0]:.2f}/{by_hand[1]:.2f}",
+    )
+
 
 def main() -> int:
     set_seed(7)

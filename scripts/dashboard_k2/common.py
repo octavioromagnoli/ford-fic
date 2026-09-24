@@ -8,7 +8,8 @@ import os
 import streamlit as st
 
 from src.config import load_config
-from src.eval.dashboard_data import K2Data, load_k2, operating_threshold, rows_for, vehicle_alerts
+from src.eval.dashboard_data import (K2Data, curve_points, load_k2, operating_threshold, repeat_curve, rows_for,
+                                     vehicle_alerts)
 
 DEFAULT_CONFIG = "configs/dashboard_k2.yaml"
 
@@ -35,6 +36,18 @@ def cfg() -> dict:
 @st.cache_data(show_spinner="Cargando las predicciones de K2…", max_entries=2)
 def data() -> K2Data:
     return load_k2(config_path())
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def cost_scenarios() -> dict:
+    return load_config(cfg()["cost_scenarios"])
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def cost_curves(label: str) -> list:
+    d = data()
+    rows = rows_for(d, label)
+    return [curve_points(repeat_curve(rows, r, d.eval_cfg)) for r in range(d.n_repeats)]
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
