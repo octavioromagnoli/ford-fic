@@ -1,0 +1,82 @@
+# F7 · P3: el apilado de K2 con un hazard logístico de cinco covariables + mercado.
+#
+# Preregistro: docs/memoria/f7-preregistro-varianza-k2.md (P3). Mismas filas en riesgo, bins,
+# entrada tardía y score que K2; cambia el learner y las columnas. La referencia es K2.
+#
+#   FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled python scripts/train.py --config configs/exp_f7_p3_pem.yaml
+name: f7-p3-pem
+seed: 42
+
+data:
+  # El panel del finalista + las aux_ de la ventana en km (scripts/build_km_window_panel.py).
+  panel: ${DATA_DIR}/processed/panel_survival_kmw.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+target:
+  name: window_km_survival   # lee aux_risk_entry_km / aux_risk_exit_km / aux_risk_event_km
+  params: {}
+
+model:
+  name: survival_stacking
+  params:
+    horizon_km: 3000
+    bin_km: 500
+    max_horizon_km: 55000
+    backend: logistic        # hazard logístico con L2 en vez de LightGBM
+    bin_spline_knots: 5      # spline natural del bin: 4 grados de libertad
+    model_params:
+      C: 1.0                 # sin tunear; class_weight None (el hazard sale calibrado)
+    # Las cinco covariables del preregistro + el mercado. Sin feat_cut_odo: la posición la lleva el bin.
+    columns:
+      - feat_idle_per_1000km
+      - feat_trips_below_regime_temp_frac
+      - feat_speed_kmh_mean
+      - feat_coolant_temp_end_mean
+      - feat_km_per_day
+      - static_SalesCountry_cd
+    random_state: 42
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+
+# scripts/eval_window_label.py: V decide (§3 del preregistro), contra la referencia sin reentrenar.
+window_eval:
+  reference: f6-ss-hw-r3
+  evaluable_column: aux_eval_in_window
+  decides: corrected
+  floors: [cut_odo, aux_cut_dss]
+  a0_tolerance: 0.02
+
+# scripts/audit_detection_null.py (§4): nulo de tamaño de bolsa y bootstrap pareado (informativo).
+detection_null:
+  n_permutations: 200
+  seed: 0
+  n_boot: 1000
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f7-varianza
+  job_type: train
+  tags: [f7, survival, stacking, ventana, horizonte-completo, r3, logistic, parsimonioso]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

@@ -1,0 +1,90 @@
+# F7 · P2: K2 con restricciones monótonas en el LightGBM del hazard.
+#
+# Preregistro: docs/memoria/f7-preregistro-varianza-k2.md (P2). Es `configs/exp_ss_hw_r3.yaml` (K2)
+# con `monotone:` y nada más. La referencia es K2.
+#
+#   FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled python scripts/train.py --config configs/exp_f7_p2_monotone.yaml
+name: f7-p2-monotone
+seed: 42
+
+data:
+  # El panel del finalista + las aux_ de la ventana en km (scripts/build_km_window_panel.py).
+  panel: ${DATA_DIR}/processed/panel_survival_kmw.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+
+target:
+  name: window_km_survival   # lee aux_risk_entry_km / aux_risk_exit_km / aux_risk_event_km
+  params: {}
+
+model:
+  name: survival_stacking
+  params:
+    horizon_km: 3000         # el score sigue siendo el riesgo a H del panel
+    bin_km: 500
+    max_horizon_km: 55000    # <- horizonte completo (preregistro, §0)
+    random_state: 42
+    # El mapa del 18-09 (docs/f3-modelos-candidatos.md §1.3, b88e1ce), sin agregar ni sacar nada.
+    # +1: el riesgo no baja · −1: el riesgo no sube · el resto (y el bin) libre.
+    # `msg_cleaning_auto_trend_per_1000km` queda libre: es una diferencia, no una tasa (preregistro §2).
+    monotone:
+      feat_idle_frac: 1
+      feat_idle_per_1000km: 1
+      feat_trips_below_regime_temp_frac: 1
+      feat_short_trip_frac_5km: 1
+      feat_trips_below_30kmh_frac: 1
+      feat_msg_full_per_1000km: 1
+      feat_msg_overloaded_per_1000km: 1
+      feat_msg_over_limit_per_1000km: 1
+      feat_msg_cleaning_auto_per_1000km: 1
+      feat_speed_kmh_mean: -1
+      feat_coolant_temp_end_mean: -1
+      feat_engine_temp_avg_median: -1
+      feat_engine_temp_max_median: -1
+      feat_engine_temp_amplitude_mean: -1
+      feat_trip_distance_median_km: -1
+      feat_trip_distance_p25_km: -1
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+
+# scripts/eval_window_label.py: V decide (§3 del preregistro), contra la referencia sin reentrenar.
+window_eval:
+  reference: f6-ss-hw-r3
+  evaluable_column: aux_eval_in_window
+  decides: corrected
+  floors: [cut_odo, aux_cut_dss]
+  a0_tolerance: 0.02
+
+# scripts/audit_detection_null.py (§4): nulo de tamaño de bolsa y bootstrap pareado (informativo).
+detection_null:
+  n_permutations: 200
+  seed: 0
+  n_boot: 1000
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f7-varianza
+  job_type: train
+  tags: [f7, survival, stacking, ventana, horizonte-completo, r3, monotone]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

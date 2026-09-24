@@ -52,6 +52,25 @@ hace que el número siga siendo honesto.
 
 `backend: lightgbm` es el mismo apilado sin efecto aleatorio: el control que aísla
 cuánto aporta el stacking y cuánto el efecto por vehículo.
+
+## Menos varianza (F7): signos, pocas columnas y un hazard logístico
+
+Tres parámetros que por default no cambian nada, y que el preregistro F7
+(`docs/memoria/f7-preregistro-varianza-k2.md`) usa para bajar la varianza de K2:
+
+* `monotone`: `{feature: +1 | −1}`. Se traduce a `monotone_constraints` del LightGBM
+  **por nombre**, con 0 para las demás y para el bin del hazard. El preprocesado estándar
+  (mediana + escalado) es creciente, así que el signo sobre la columna escalada es el
+  mismo que sobre la cruda.
+* `columns`: el subconjunto de columnas que ve el hazard. Una categórica se nombra como
+  en el panel (`static_SalesCountry_cd`) y entra con todas sus dummies.
+* `backend: logistic`: el hazard es una logística con L2 sobre las columnas y un spline
+  cúbico natural del bin (el hazard base), con `bin_spline_knots` nodos en los cuantiles
+  de los bins apilados del train. Es un Cox en tiempo discreto (Bender et al. 2020) con
+  pocos parámetros.
+
+Los dos primeros deciden por nombre de feature, así que el modelo declara
+`wants_feature_names` y `src/training/cv.py` le pasa un DataFrame en vez de la matriz.
 """
 
 from __future__ import annotations
@@ -64,7 +83,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 
 logger = logging.getLogger(__name__)
 
-BACKENDS = ("lightgbm", "gpboost")
+BACKENDS = ("lightgbm", "gpboost", "logistic")
 #: Nombre de la covariable que lleva el hazard base (borde izquierdo del bin, en km).
 BIN_FEATURE = "surv_bin_start_km"
 
@@ -97,6 +116,14 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         (`docs/f3-modelos-candidatos.md` §1.3) adaptados al tamaño del dataset apilado.
     gp_params
         Extras del `GPModel` de GPBoost (`likelihood`, etc.). Solo con `backend: gpboost`.
+    monotone
+        `{feature: +1 | −1}`: restricciones de signo del LightGBM, por nombre. Solo con
+        `backend: lightgbm`. Una feature que no está en el panel es un error.
+    columns
+        Subconjunto de columnas del hazard, por nombre. `None` = todas.
+    bin_spline_knots
+        Nodos del spline natural del bin con `backend: logistic` (grados de libertad =
+        nodos − 1).
     """
 
     def __init__(
@@ -108,6 +135,9 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         backend: str = "lightgbm",
         model_params: dict[str, Any] | None = None,
         gp_params: dict[str, Any] | None = None,
+        monotone: dict[str, int] | None = None,
+        columns: list[str] | None = None,
+        bin_spline_knots: int = 5,
         random_state: int = 42,
     ) -> None:
         self.horizon_km = horizon_km
@@ -116,7 +146,20 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         self.backend = backend
         self.model_params = model_params
         self.gp_params = gp_params
+        self.monotone = monotone
+        self.columns = columns
+        self.bin_spline_knots = bin_spline_knots
         self.random_state = random_state
+
+    @property
+    def wants_feature_names(self) -> bool:
+        """Si decide algo por nombre de feature: `cv.py` le pasa entonces un DataFrame."""
+        return bool(self.monotone) or self.columns is not None
+
+    def _select(self, X) -> np.ndarray:
+        """La matriz del hazard: las columnas elegidas en `fit`, o todas."""
+        X = np.asarray(X, dtype=float)
+        return X if self._column_index_ is None else X[:, self._column_index_]
 
     # ------------------------------------------------------------------ #
     # Apilado
@@ -178,7 +221,22 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
     def fit(self, X, y, **fit_params):  # noqa: D102
         if self.backend not in BACKENDS:
             raise ValueError(f"backend `{self.backend}` desconocido. Opciones: {BACKENDS}")
-        X = np.asarray(X, dtype=float)
+        if self.monotone and self.backend != "lightgbm":
+            raise ValueError("`monotone` solo se aplica con `backend: lightgbm`")
+        names = [str(c) for c in X.columns] if hasattr(X, "columns") else None
+        if self.wants_feature_names and names is None:
+            raise TypeError(
+                "`monotone`/`columns` deciden por nombre de feature y X llegó sin nombres: "
+                "el preprocesado tiene que armarse con `build_preprocessor(..., named_output=True)`"
+            )
+        self.input_names_ = names
+        self._column_index_ = None if self.columns is None else _resolve_columns(self.columns, names)
+        self.used_names_ = (
+            names if self._column_index_ is None or names is None
+            else [names[i] for i in self._column_index_]
+        )
+        self.n_features_in_ = int(np.asarray(X).shape[1])
+        X = self._select(X)
         duration_km, event, at_risk, groups, entry_km = _unpack_target(y)
         if len(duration_km) != len(X):
             raise ValueError(f"X tiene {len(X)} filas y el target {len(duration_km)}")
@@ -193,7 +251,6 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         self._score_bins_ = int(np.ceil(float(self.horizon_km) / float(self.bin_km) - 1e-9))
 
         stacked, hazard, stacked_groups, _ = self._stack(X, duration_km, event, at_risk, groups, entry_km)
-        self.n_features_in_ = X.shape[1]
         self.classes_ = np.array([0, 1])
         self.stacking_ = {
             "rows_in": int(len(X)),
@@ -214,6 +271,8 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
 
         if self.backend == "lightgbm":
             self._fit_lightgbm(stacked, hazard)
+        elif self.backend == "logistic":
+            self._fit_logistic(stacked, hazard)
         else:
             self._fit_gpboost(stacked, hazard, stacked_groups)
         return self
@@ -222,8 +281,37 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         from lightgbm import LGBMClassifier  # import adentro: dependencia del modelo
 
         params = _booster_defaults(self.model_params, self.random_state)
+        if self.monotone:
+            # Una por columna del hazard, en orden, y 0 para el bin (el hazard base es libre).
+            self.monotone_constraints_ = _monotone_vector(self.monotone, self.used_names_) + [0]
+            params["monotone_constraints"] = self.monotone_constraints_
         self.booster_ = LGBMClassifier(**params)
         self.booster_.fit(stacked, hazard)
+
+    def _fit_logistic(self, stacked: np.ndarray, hazard: np.ndarray) -> None:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.preprocessing import StandardScaler
+
+        bins_km = stacked[:, -1]
+        quantiles = np.linspace(0.05, 0.95, int(self.bin_spline_knots))
+        self.spline_knots_ = np.unique(np.quantile(bins_km, quantiles))
+        if len(self.spline_knots_) < 3:
+            raise ValueError(
+                f"El spline del bin necesita ≥ 3 nodos distintos y los bins apilados dan "
+                f"{len(self.spline_knots_)}: hay muy pocos bins en riesgo"
+            )
+        basis = natural_spline_basis(bins_km, self.spline_knots_)
+        # El X del panel ya viene escalado del preprocesado; la base del spline no.
+        self.spline_scaler_ = StandardScaler().fit(basis)
+        params = dict(self.model_params or {})
+        params.setdefault("C", 1.0)
+        params.setdefault("max_iter", 5000)
+        self.booster_ = LogisticRegression(**params)
+        self.booster_.fit(self._logistic_design(stacked), hazard)
+
+    def _logistic_design(self, stacked: np.ndarray) -> np.ndarray:
+        basis = self.spline_scaler_.transform(natural_spline_basis(stacked[:, -1], self.spline_knots_))
+        return np.column_stack([stacked[:, :-1], basis])
 
     def _fit_gpboost(self, stacked: np.ndarray, hazard: np.ndarray, groups: np.ndarray | None) -> None:
         try:
@@ -274,7 +362,7 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         )
 
     def predict_proba(self, X) -> np.ndarray:  # noqa: D102
-        X = np.asarray(X, dtype=float)
+        X = self._select(X)
         edges = self._train_edges_[: self._score_bins_]
         n_rows, n_bins = len(X), len(edges)
         rows = np.repeat(np.arange(n_rows), n_bins)
@@ -290,6 +378,8 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
     def _predict_hazard(self, stacked: np.ndarray) -> np.ndarray:
         if self.backend == "lightgbm":
             return self.booster_.predict_proba(stacked)[:, 1].astype(float)
+        if self.backend == "logistic":
+            return self.booster_.predict_proba(self._logistic_design(stacked))[:, 1].astype(float)
         # GPBoost. El vehículo de validación nunca estuvo en train (split agrupado), así
         # que su efecto aleatorio no se puede estimar: se pide con un grupo que no
         # existe, para el que GPBoost devuelve la media a priori (0) en vez de adivinar.
@@ -325,10 +415,25 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
 
         La última entrada es `surv_bin_start_km`, el hazard base. Que pese mucho es
         esperable y sano: el riesgo cambia con los km desde el corte.
+
+        Con `columns`, las que el hazard no ve valen 0: el vector sigue alineado con las
+        columnas del preprocesado. Con `backend: logistic` es el |coeficiente| (las
+        columnas vienen escaladas), y el del bin es la suma sobre la base del spline.
         """
         if self.backend == "lightgbm":
-            return np.asarray(self.booster_.feature_importances_, dtype=float)
-        return np.asarray(self.booster_.feature_importance(), dtype=float)
+            used = np.asarray(self.booster_.feature_importances_, dtype=float)
+        elif self.backend == "logistic":
+            coef = np.abs(self.booster_.coef_.ravel())
+            n_used = coef.size - (len(self.spline_knots_) - 1)
+            used = np.append(coef[:n_used], coef[n_used:].sum())
+        else:
+            used = np.asarray(self.booster_.feature_importance(), dtype=float)
+        if self._column_index_ is None:
+            return used
+        full = np.zeros(self.n_features_in_ + 1)
+        full[self._column_index_] = used[:-1]
+        full[-1] = used[-1]
+        return full
 
 
 def _booster_defaults(model_params: dict[str, Any] | None, random_state: int) -> dict[str, Any]:
@@ -370,6 +475,63 @@ def _unpack_target(y) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | 
     groups = y["group"].astype(str) if "group" in y.dtype.names else None
     entry = y["entry_km"].astype(float) if "entry_km" in y.dtype.names else None
     return duration, y["event"].astype(int), at_risk, groups, entry
+
+
+def _resolve_columns(requested: list[str], names: list[str]) -> np.ndarray:
+    """Índices de `requested` en `names`. Una categórica se pide por su nombre del panel.
+
+    Un nombre que está tal cual en `names` es esa columna y nada más —`feat_idle_frac`
+    **no** arrastra `feat_idle_frac_trend`—. Si no está, se busca como categórica: sus
+    dummies del one-hot (`<nombre>_<nivel>`). Si tampoco hay dummies, es un error: una
+    columna preregistrada que no llega al modelo no puede faltar en silencio.
+    """
+    index: list[int] = []
+    missing: list[str] = []
+    for name in requested:
+        if name in names:
+            index.append(names.index(name))
+            continue
+        dummies = [i for i, n in enumerate(names) if n.startswith(f"{name}_")]
+        if dummies:
+            index.extend(dummies)
+        else:
+            missing.append(name)
+    if missing:
+        raise KeyError(f"`columns` pide columnas que el preprocesado no produce: {missing}")
+    if len(set(index)) != len(index):
+        raise ValueError(f"`columns` repite columnas: {requested}")
+    return np.asarray(index, dtype=int)
+
+
+def _monotone_vector(monotone: dict[str, int], names: list[str]) -> list[int]:
+    """`monotone_constraints` del LightGBM, alineado con `names`: el signo pedido o 0."""
+    unknown = [n for n in monotone if n not in names]
+    if unknown:
+        raise KeyError(f"`monotone` nombra features que el hazard no ve: {unknown}")
+    bad = {n: s for n, s in monotone.items() if int(s) not in (-1, 1)}
+    if bad:
+        raise ValueError(f"`monotone` admite solo +1 o −1: {bad}")
+    return [int(monotone.get(n, 0)) for n in names]
+
+
+def natural_spline_basis(x: np.ndarray, knots: np.ndarray) -> np.ndarray:
+    """Base del spline cúbico natural con estos nodos, sin intercepto: `len(knots) − 1` columnas.
+
+    Es la de Hastie, Tibshirani & Friedman (ESL, ec. 5.4–5.5): `x` más `d_k − d_{K−1}` para
+    k = 1…K−2, con `d_k = [(x − ξ_k)³₊ − (x − ξ_K)³₊] / (ξ_K − ξ_k)`. Lineal antes del primer
+    nodo y después del último, que es lo que evita que el hazard base se dispare en los
+    bins con pocas filas. `x` y los nodos se pasan a miles de km para que los cubos no
+    exploten.
+    """
+    x = np.asarray(x, dtype=float) / 1000.0
+    k = np.asarray(knots, dtype=float) / 1000.0
+    last = k[-1]
+
+    def d(j: int) -> np.ndarray:
+        return (np.maximum(x - k[j], 0.0) ** 3 - np.maximum(x - last, 0.0) ** 3) / (last - k[j])
+
+    columns = [x] + [d(j) - d(len(k) - 2) for j in range(len(k) - 2)]
+    return np.column_stack(columns)
 
 
 def _ranges(counts: np.ndarray) -> np.ndarray:
