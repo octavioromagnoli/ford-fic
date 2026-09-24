@@ -5,6 +5,30 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-24 · F4: dashboard con K2, y el punto de operación se elige con costos, no con una matriz en el entrenamiento
+
+**Alcance:** F4 (dashboard contra el panel real, solo dev) y un reporte de costos. **No cambia el
+finalista** ni consume presupuesto. Evidencia: [f8-costos-k2.md](f8-costos-k2.md).
+
+**Qué se decidió:**
+- **La matriz de costos no entra al entrenamiento** (pesos de clase, pérdida sesgada hacia los falsos
+  negativos). No cambia el orden de los autos: solo mueve el umbral sobre la misma curva, y rompe la
+  calibración del hazard (F7 §7). **El costo elige dónde operar**, sobre las predicciones de K2.
+- **Escenarios con fuente pública** (diagnóstico, limpieza o reemplazo del DPF, grúa, aviso remoto,
+  flota comercial) × efectividad de la prevención × prevalencia real. Resultado:
+  - con fallas baratas, lo óptimo es no alertar;
+  - en la zona validada (≤ 10% de falsas alarmas), K2 ahorra 0–6%, casi todo por encima del azar;
+  - los ahorros grandes piden 15–35% de falsas alarmas, donde nada está validado;
+  - si la alerta es un aviso remoto casi gratis, alertar a todos gana y el modelo sobra.
+- **Para el pitch no se cita un ahorro único:** se muestra la franja donde el modelo paga. A Ford
+  hay que pedirle tres cosas: el costo de una falla contra el de un diagnóstico, el tipo de
+  intervención (visita o aviso remoto) y la prevalencia real.
+- **El dashboard** (`scripts/dashboard_k2/`) toma sus números oficiales de `window_eval.json` y
+  `decision_layer.json`. Lo que recalcula (la alerta por vehículo, el costo esperado) usa las mismas
+  funciones que los scripts, y tiene su chequeo (180 en verde).
+
+---
+
 ## 2026-09-24 · F8: sin Ford no se recuperan eventos, y el punto de operación de K2 se sostiene
 
 **Alcance:** dos trabajos exploratorios que no consumen presupuesto de comparaciones. **No cambian

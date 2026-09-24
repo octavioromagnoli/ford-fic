@@ -1779,6 +1779,47 @@ def bagging_ensemble_checks() -> None:
     )
 
 
+def dashboard_checks() -> None:
+    """F4 · La alerta por vehículo del dashboard es la misma cuenta que la curva de anticipación."""
+    from src.eval.dashboard_data import vehicle_alerts
+
+    rng = np.random.default_rng(11)
+    sizes = rng.integers(1, 12, 60)
+    frame = pd.DataFrame({
+        "vehicle_id": np.repeat([f"V{i:02d}" for i in range(60)], sizes),
+        "cut_odo": np.concatenate([np.arange(s) * 500.0 for s in sizes]),
+        "event_observed": np.repeat((np.arange(60) % 3 == 0).astype(int), sizes),
+        "static_SalesCountry_cd": "CNTRY_4",
+    })
+    frame["time_to_event_km"] = np.where(frame["event_observed"].eq(1), 4000.0 - frame["cut_odo"], np.nan)
+    frame["event_odo_km"] = frame["cut_odo"] + frame["time_to_event_km"]
+    frame["score_r0"] = rng.random(len(frame)) + 0.3 * frame["event_observed"]
+    frame = frame.sort_values(["vehicle_id", "cut_odo"]).reset_index(drop=True)
+    point = operating_point(lead_time_curve(frame.assign(score=frame["score_r0"]), n_thresholds=50, k_consecutive=2),
+                            max_false_alarms_per_1000=100)
+    alerts = vehicle_alerts(frame, 0, float(point["threshold"]), 2)
+    detected = alerts["outcome"].eq("Detectado")
+    check(
+        "dashboard: la alerta por vehículo reproduce detectados, falsas alarmas y anticipación de la curva",
+        int(detected.sum()) == int(point["n_detected"])
+        and int(alerts["outcome"].eq("Falsa alarma").sum()) == int(point["n_false_alarm_vehicles"])
+        and abs(float(alerts.loc[detected, "lead_km"].median()) - float(point["median_lead_km"])) < 1e-9,
+        f"{int(detected.sum())} vs {int(point['n_detected'])} detectados",
+    )
+
+    from src.eval.dashboard_data import expected_cost
+
+    kw = dict(pi=0.05, insp=150.0, prev=300.0, fail=2000.0, e=0.8)
+    none, everyone = expected_cost(np.array([0.0, 1.0]), np.array([0.0, 1.0]), **kw)
+    # a mano: no alertar = π·falla; alertar a todos = π·(diag + prev + (1 − e)·falla) + (1 − π)·diag
+    by_hand = (0.05 * 2000.0, 0.05 * (150.0 + 300.0 + 0.2 * 2000.0) + 0.95 * 150.0)
+    check(
+        "costos: el costo esperado de las dos políticas triviales coincide con la cuenta a mano",
+        abs(none - by_hand[0]) < 1e-9 and abs(everyone - by_hand[1]) < 1e-9,
+        f"{none:.2f}/{everyone:.2f} vs {by_hand[0]:.2f}/{by_hand[1]:.2f}",
+    )
+
+
 def main() -> int:
     set_seed(7)
     panel = build_dummy_panel(SMALL_PANEL)
@@ -2327,6 +2368,7 @@ def main() -> int:
     window_survival_checks()
     km_window_detection_checks()
     f7_variance_checks()
+    dashboard_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()

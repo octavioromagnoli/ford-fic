@@ -34,6 +34,16 @@ streamlit run scripts/dashboard.py -- --run experiments/f0-dummy-baserate
 La corrida dummy usa un predictor por tasa base sobre features aleatorias: tiene
 que dar PR-AUC ≈ tasa base y ROC-AUC ≈ 0,5. Si diera mejor, hay un bug.
 
+El dashboard del finalista (K2) corre contra el panel real, solo con dev:
+
+```bash
+export FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled
+python scripts/train.py --config configs/exp_ss_hw_r3.yaml              # K2
+python scripts/eval_window_label.py --config configs/exp_ss_hw_r3.yaml  # etiqueta V y comparación
+python scripts/decision_layer.py --config configs/exp_decision_k2.yaml  # curva y punto fuera de muestra
+streamlit run scripts/dashboard_k2/app.py
+```
+
 ## Cómo se lanza un experimento
 
 Un experimento es un YAML en `configs/`. Nunca se edita código para cambiar un

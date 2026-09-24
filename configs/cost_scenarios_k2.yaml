@@ -1,0 +1,66 @@
+# Escenarios de costo para elegir el punto de operación de K2. Es reporte, nunca selección de
+# modelo (regla 5): no cambia el orden de los autos, solo dónde se opera la misma curva.
+#
+#   python scripts/cost_scenarios.py --config configs/cost_scenarios_k2.yaml
+#
+# Lectura: docs/memoria/f8-costos-k2.md.
+#
+# Cuenta, por vehículo y desde el punto de vista de Ford (USD):
+#   falsa alarma (FP)  = C_insp                          (diagnóstico que no hacía falta)
+#   detectado (TP)     = C_insp + C_prev + (1 − e)·C_fail (la prevención evita una fracción e)
+#   no detectado (FN)  = C_fail
+#   sano sin alerta    = 0
+# Contra "no alertar a nadie", alertar a un auto que va a fallar ahorra B = e·C_fail − C_prev − C_insp.
+# Costo esperado por vehículo de la flota = π·C_fail − π·TPR·B + (1 − π)·FPR·C_insp.
+# Las dos políticas triviales entran como extremos de la curva (no alertar: TPR = FPR = 0; alertar
+# a todos: TPR = FPR = 1).
+#
+# FUENTES (búsqueda del 24-09-2026; son precios de EE. UU. y de referencia, no de Ford ni de los
+# mercados del estudio: los números son rangos para barrer, no estimaciones del caso):
+# - diagnóstico por luz de DPF, USD 100–200: carista.com (The cost of DPF: cleaning, regeneration
+#   & replacement)
+# - regeneración forzada en concesionario, USD 150–700: carista.com; ancel.com (forced DPF regeneration)
+# - limpieza fuera del vehículo, USD 300–1.000: suncentauto.com; filtertherm.com
+# - reemplazo del DPF en concesionario Ford, USD 2.500–6.000 (~3.500 típico): partcatalog.com;
+#   trucktok.com; empireautoprotect.com (~4.200 promedio en pickups diésel, 2026)
+# - grúa, ~USD 109 promedio (75–125 + ~4,75/milla): policygenius.com; nerdwallet.com
+# - falla con parada y lucro cesante en flota comercial, USD 15.000–20.000: truckclub.com (camiones,
+#   cota alta; no es el caso de un auto particular)
+seed: 0
+
+# La corrida y la etiqueta: las curvas son las de train.py, por repetición.
+dashboard_config: configs/dashboard_k2.yaml
+label: corrected
+
+# Costos por escenario. `fail` es el costo medio de una falla no anticipada: la mezcla de
+# limpieza y reemplazo, más grúa y parada.
+scenarios:
+  bajo:            # falla que casi siempre se resuelve con una limpieza; diagnóstico barato
+    insp: 100
+    prev: 150
+    fail: 800      # limpieza ~500 + grúa ~110 + diagnóstico ~150
+  medio:
+    insp: 150
+    prev: 300
+    fail: 2000     # 30% reemplazo (~3.500) + 70% limpieza (~600) + grúa + diagnóstico
+  alto:
+    insp: 250
+    prev: 500
+    fail: 4500     # reemplazo del DPF + grúa + auto de cortesía / parada
+  aviso_remoto:    # vehículo conectado: la alerta es un mensaje al conductor ("hacé un viaje en ruta"),
+    insp: 10       # sin visita; el costo es el contacto y la molestia de una alerta falsa (supuesto)
+    prev: 0
+    fail: 2000     # la falla del escenario medio
+  flota_comercial: # cota alta: parada y lucro cesante de un vehículo de trabajo
+    insp: 250
+    prev: 500
+    fail: 15000
+
+# Fracción de las fallas que evita la intervención temprana (no medida: ni Ford ni los datos la dan).
+prevention_effectiveness: [0.5, 0.8]
+
+# Prevalencia real del evento en la flota (en dev es ~32% con V, inflada por el muestreo en cohortes).
+prevalence: [0.02, 0.05, 0.10]
+
+# Hasta qué tasa de falsas alarmas el punto está verificado fuera de muestra (capa de decisión).
+validated_max_fa: 0.10

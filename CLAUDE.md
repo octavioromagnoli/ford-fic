@@ -52,7 +52,7 @@ desde la telemetría (`docs/memoria/f8-datar-eventos-fase0.md`): sin Ford no hay
 capa de decisión (`docs/memoria/f8-capa-decision-k2.md`) muestra que el 5% de K2 se sostiene fuera de
 muestra (3,5% de falsas alarmas realizadas, 15,6% de detección) y que a 10% detecta ~26%.
 
-**Lo siguiente es F4 (dashboard contra el panel real, con K2)**; las ideas que quedaron sin probar
+**F4 (dashboard contra el panel real, con K2) está en `scripts/dashboard_k2/`**; las ideas que quedaron sin probar
 siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha de F6.
 
 **El presupuesto de comparaciones está agotado** (§0, punto 2 de ese doc): con ~12
@@ -274,6 +274,8 @@ src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate
                          landmark_metrics(): D1 (C con entrada tardía) y D2 (primera alerta sobre los hitos) del
                          panel de hitos, con bootstrap pareado por vehículo
 src/eval/plots.py        figuras compartidas entre dashboard e informe
+src/eval/dashboard_data.py  datos del dashboard de K2: carga, alerta por vehículo (misma regla que la curva) y
+                         perfil de la flota sana; los números oficiales salen de window_eval.json y decision_layer.json
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
 scripts/build_dataset.py panel real: universo del holdout → crudos → evento en km → cortes/etiqueta/features →
@@ -305,6 +307,8 @@ scripts/audit_detection_null.py  la detección contra un nulo que conserva el la
                          bootstrap pareado por vehículo contra la referencia
 scripts/audit_event_dating.py  ¿una marca de intervención (aceite, días sin uso, DPF con motor apagado) fecha el
                          evento? Solo dev, criterio en configs/data/event_dating.yaml (F8, no pasó)
+scripts/cost_scenarios.py  punto de operación de K2 bajo escenarios de costo con fuente (configs/cost_scenarios_k2.yaml),
+                         con el ahorro sobre el azar; reporte, nunca selección
 scripts/decision_layer.py  capa de decisión sobre una corrida: curva a varios presupuestos de falsas alarmas con
                          su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson)
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
@@ -322,7 +326,12 @@ scripts/ensemble_rank.py ensamble por rango de corridas existentes (mismas filas
                          `evaluate_predictions` y juzgado con la regla del preregistro; `--audit` agrega (a0) y (b)
 scripts/rescore_run.py   re-mide una corrida vieja desde su predictions.parquet con la misma cuenta que train.py
                          (`evaluate_predictions`), sin reentrenar; falla si lo ya medido no se reproduce
-scripts/dashboard.py     dashboard de resultados de modelo (streamlit)
+scripts/dashboard.py     dashboard genérico de una corrida (streamlit; el del panel dummy)
+scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run scripts/dashboard_k2/app.py`. Resumen (dial de
+                         falsas alarmas contra el azar, punto fuera de muestra), Vehículo (score, umbral, alerta, perfil
+                         de uso contra los sanos), Costos (punto de operación y ahorro según costos y prevalencia
+                         real, con escenarios precargados) y Modelo (contra la referencia y los pisos, límites);
+                         configs/dashboard_k2.yaml
 scripts/check_setup.py   smoke test del harness (166 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
