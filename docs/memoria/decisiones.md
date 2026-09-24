@@ -5,6 +5,38 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-24 · F7 no cambia el finalista: ningún candidato que baja la varianza de K2 cumple la regla
+
+**Alcance:** cierra el preregistro F7 ([f7-preregistro-varianza-k2.md](f7-preregistro-varianza-k2.md),
+0b29b2b; implementación 88660e7). **No cambia el finalista.** Evidencia, auditorías y comandos:
+[f7-varianza-k2.md](f7-varianza-k2.md). Solo dev, R = 3, contra K2; test sin tocar.
+
+**Qué se decidió, con las seis condiciones de F6** (decide la etiqueta corregida V):
+1. **P1, K2 embolsado:** 15,6% ± 0,0 (7 / 7 / 7 de 45) contra 17,0% ± 3,8. Falla las condiciones
+   1, 3 y 6 (exceso sobre el nulo +7,7 contra +9,5). No se adopta.
+2. **P2, K2 monótono:** 20,7% ± 9,3 (8 / 15 / 5). La diferencia (+0,037) no supera el desvío
+   combinado (0,101) y una repetición pierde. No se adopta, aunque es el único con más exceso
+   sobre el nulo que K2 (+13,0).
+3. **P3, hazard logístico con cinco covariables:** pierde en todo (6,7%, lift 1,33×) y detecta
+   menos que un score al azar. No se adopta.
+
+**Por qué importa aunque no gane nada:**
+- **El 17,0% de K2 es la lectura optimista.** Su versión embolsada ordena casi igual (ρ 0,90–0,92
+  por vehículo) y detecta 7 de 45 en las tres repeticiones; K2 detectó 7, 10 y 6. Con la etiqueta
+  dura se invierte (P1 17,0% ± 1,5, K2 15,1% ± 3,1). **Para el pitch se cita el rango, ~15–17%,
+  no el número puntual.**
+- **Cinco coeficientes no alcanzan.** La señal de K2 no es la regla física lineal del 18-09: usa
+  no linealidades o features que esa regla no lleva.
+- **Monótono sube la media y el desvío a la vez**, como K1 y K3 en F6.
+
+**Qué se queda:**
+- `monotone`, `columns` y `backend: logistic` en `DiscreteSurvivalStacker`, con los defaults
+  que no cambian nada, y `wants_feature_names` en `cv.py` / `audit_model.py`;
+- los tres configs `exp_f7_*`;
+- 12 chequeos (178 en verde).
+
+---
+
 ## 2026-09-22 · Nuevo finalista: survival stacking con la ventana del registro en km y horizonte completo (K2)
 
 **Alcance:** cierra el preregistro F6 ([f6-preregistro-deteccion-vehiculo.md](f6-preregistro-deteccion-vehiculo.md),
