@@ -1,0 +1,29 @@
+# Capa de decisión sobre K2 (§6 del preregistro F7, F5 §3.6). No reentrena ni cambia el orden
+# de los autos: dice DÓNDE se opera el score y cuánto se sostiene ese punto fuera de muestra.
+#
+#   python scripts/decision_layer.py --config configs/exp_decision_k2.yaml
+#
+# Lectura: docs/memoria/f8-capa-decision-k2.md. No consume presupuesto de comparaciones: todo
+# lo que mide es monótono en el score de K2.
+seed: 0
+
+# La corrida de K2: de su YAML salen el panel, `eval` (k_consecutive, n_thresholds) y
+# `window_eval` (la columna de V). Las predicciones se leen de experiments/<name>/.
+run_config: configs/exp_ss_hw_r3.yaml
+
+# Etiqueta que se reporta primero (V decide en todo el proyecto); D va como informativa.
+labels: [corrected, hard]
+
+# 1 · Curva: presupuestos de falsas alarmas por cada 1.000 sanos (2%, 5%, 10%, 20%), con la
+# misma cuenta que train.py (grilla de n_thresholds cuantiles + operating_point).
+budgets_per_1000: [20, 50, 100, 200]
+# Nulo de tamaño de bolsa en cada presupuesto (regla 6): score permutado entre filas.
+null_permutations: 200
+
+# 2 · ¿Se sostiene el punto fuera de muestra? Ajuste cruzado por fold de cada repetición: el
+# umbral se fija con los sanos de los OTROS folds y se aplica al fold que queda afuera.
+#   - empirical: el umbral de la grilla que respeta alpha en los sanos de ajuste (lo de hoy);
+#   - neyman_pearson: el estadístico de orden de Tong, Feng & Li (2018) que garantiza
+#     P(tasa real de falsas alarmas > alpha) <= delta.
+alphas: [0.05, 0.10]
+np_delta: 0.05
