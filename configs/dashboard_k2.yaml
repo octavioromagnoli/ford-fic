@@ -34,9 +34,17 @@ profile_bin_km: 1000
 # Escenarios de costo precargados en la página de costos (con sus fuentes en el YAML).
 cost_scenarios: configs/cost_scenarios_k2.yaml
 
+# Explicabilidad (sección "Por qué" del vehículo): lee lo que deja
+# `python scripts/explain_k2.py --config configs/explain_k2.yaml` en su output_dir y no recalcula
+# SHAP. De ese YAML salen la variante elegida, los textos y el punto preregistrado (5%, etiqueta).
+explain_config: configs/explain_k2.yaml
+# Cuántas accionables abre el waterfall (el resto va en una barra, igual que contexto y síntomas).
+explain_waterfall_top: 6
+
 # Documentación que el dashboard enlaza.
 docs:
   finalist: docs/memoria/f6-deteccion-vehiculo.md
   decision: docs/memoria/f8-capa-decision-k2.md
   variance: docs/memoria/f7-varianza-k2.md
   costs: docs/memoria/f8-costos-k2.md
+  explain: docs/memoria/f4-explicabilidad-k2.md

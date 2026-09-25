@@ -55,7 +55,15 @@ def load_k2(config_path: str) -> K2Data:
 
     # Las predicciones ya son solo de dev (train.py recorta con `select_dev`); el merge es por
     # la izquierda, así que ninguna fila de test entra acá.
-    panel = pd.read_parquet(resolve_path(run_cfg["data"]["panel"]))
+    panel_path = resolve_path(run_cfg["data"]["panel"])
+    if not panel_path.exists():
+        raise FileNotFoundError(
+            f"No existe el panel de K2 en {panel_path}. ¿Está definida FORD_DATA_DIR en la terminal que lanzó "
+            "Streamlit? En PowerShell: $env:FORD_DATA_DIR = \"$PWD\\data\\rebuild-0921\" · en bash: "
+            "export FORD_DATA_DIR=$PWD/data/rebuild-0921. Después, cortá el servidor (Ctrl+C) y relanzá "
+            "`streamlit run scripts/dashboard_k2/app.py` en esa misma terminal."
+        )
+    panel = pd.read_parquet(panel_path)
     columns = [evaluable, "static_SalesCountry_cd", *cfg["profile_features"]]
     right = panel[KEY + [c for c in columns if c not in preds]]
     out = preds.merge(right, on=KEY, how="left", validate="one_to_one", indicator=True)
@@ -161,6 +169,73 @@ def curve_summary(decision: dict[str, Any], label: str) -> pd.DataFrame:
 
 def holdout_summary(decision: dict[str, Any], label: str) -> pd.DataFrame:
     return pd.DataFrame(decision["labels"][label]["holdout_summary"])
+
+
+# --- por qué (docs/memoria/f4-explicabilidad-k2.md) -----------------------------------------
+
+@dataclass
+class K2Explanations:
+    """Lo que dejó `scripts/explain_k2.py`: el dashboard lo lee y no recalcula SHAP."""
+
+    vehicle: pd.DataFrame          # shap_vehicle.parquet: un vector por (variante, etiqueta, réplica, auto)
+    messages: pd.DataFrame         # messages.parquet: el mensaje al cliente por (auto, etiqueta, repetición)
+    evaluation: dict[str, Any]     # explain_eval.json
+    texts: dict[str, Any]          # configs/explain_texts.yaml
+    classes: dict[str, str]        # unidad -> accionable | contexto | sintoma
+    winner: str | None
+    budget_per_1000: float
+
+
+def load_explanations(config_path: str) -> K2Explanations | None:
+    """Las explicaciones de K2, o None si todavía no se corrió `scripts/explain_k2.py`."""
+    cfg = load_config(config_path)
+    if not cfg.get("explain_config"):
+        return None
+    ecfg = load_config(cfg["explain_config"])
+    out = resolve_path(ecfg["output_dir"])
+    paths = {"vehicle": out / ecfg["outputs"]["shap_vehicle"], "messages": out / "messages.parquet",
+             "evaluation": out / ecfg["outputs"]["eval"]}
+    if not all(p.exists() for p in paths.values()):
+        return None
+    evaluation = json.loads(paths["evaluation"].read_text(encoding="utf-8"))
+    cls = evaluation["classification"]
+    classes = {**{u: "accionable" for u in cls["actionable"]}, **{u: "sintoma" for u in cls["symptom"]},
+               **{u: "contexto" for u in cls["context"]}}
+    return K2Explanations(vehicle=pd.read_parquet(paths["vehicle"]), messages=pd.read_parquet(paths["messages"]),
+                          evaluation=evaluation, texts=load_config(ecfg["message"]["texts"]), classes=classes,
+                          winner=evaluation["choice"]["winner"], budget_per_1000=float(evaluation["budget_per_1000"]))
+
+
+def vehicle_why(expl: K2Explanations, vehicle_id: str, label: str, repeat: int, *, top: int) -> dict[str, Any] | None:
+    """El waterfall y el mensaje de un auto con la variante elegida (misma cuenta que el informe).
+
+    V3 promedia repeticiones, así que su vector no depende de `repeat`; el valor del auto, la mediana
+    sana, el nivel de riesgo y el mensaje sí (salen de la repetición elegida).
+    """
+    from src.eval.explain import waterfall_steps
+
+    if expl.winner is None:
+        return None
+    v = expl.vehicle
+    replicate = 0 if expl.winner in ("V3", "V4") else repeat
+    vec = v.loc[(v["variant"] == expl.winner) & (v["label"] == label) & (v["replicate"] == replicate)
+                & (v["vehicle_id"] == vehicle_id)]
+    ctx = v.loc[(v["variant"] == "V1") & (v["label"] == label) & (v["replicate"] == repeat) & (v["vehicle_id"] == vehicle_id)]
+    msg = expl.messages.loc[(expl.messages["vehicle_id"] == vehicle_id) & (expl.messages["label"] == label)
+                            & (expl.messages["repeat"] == repeat)]
+    if vec.empty or ctx.empty:
+        return None
+    vec, ctx = vec.iloc[0], ctx.iloc[0]
+    units = [c.removeprefix("phi__") for c in v.columns if c.startswith("phi__") and np.isfinite(vec[c])]
+    vector = pd.Series({u: float(vec[f"phi__{u}"]) for u in units})
+    shown = {f["feature"] for f in json.loads(msg["factors"].iloc[0])} if len(msg) else set()
+    values = pd.Series({u: ctx.get(f"val__{u}", np.nan) for u in units}, dtype=float)
+    references = pd.Series({u: ctx.get(f"ref__{u}", np.nan) for u in units}, dtype=float)
+    steps = waterfall_steps(vector, expl.classes, top=top, allowed_in_message=shown, texts=expl.texts,
+                            values=values, references=references)
+    return {"steps": steps, "base": float(vec["base"]), "output": float(vec["output"]),
+            "message": msg["message"].iloc[0] if len(msg) else None, "risk_level": ctx["risk_level"],
+            "variant": expl.winner}
 
 
 # --- costo esperado (docs/memoria/f8-costos-k2.md) ------------------------------------------

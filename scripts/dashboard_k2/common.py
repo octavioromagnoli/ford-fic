@@ -8,8 +8,8 @@ import os
 import streamlit as st
 
 from src.config import load_config
-from src.eval.dashboard_data import (K2Data, curve_points, load_k2, operating_threshold, repeat_curve, rows_for,
-                                     vehicle_alerts)
+from src.eval.dashboard_data import (K2Data, K2Explanations, curve_points, load_explanations, load_k2,
+                                     operating_threshold, repeat_curve, rows_for, vehicle_alerts)
 
 DEFAULT_CONFIG = "configs/dashboard_k2.yaml"
 
@@ -19,6 +19,9 @@ FLEET_COLOR = "#eb6834"
 MUTED = "#8a8984"
 OUTCOME_COLORS = {"Detectado": "#2a78d6", "No detectado": "#8a8984",
                   "Falsa alarma": "#eb6834", "Sano sin alerta": "#c3c2b7"}
+# Waterfall del "Por qué": par divergente validado (sube / baja el riesgo) + gris para lo que no es
+# accionable (contexto y síntomas, siempre con su etiqueta).
+EFFECT_COLORS = {"sube el riesgo": "#e34948", "baja el riesgo": "#2a78d6", "no accionable": "#c3c2b7"}
 
 
 def config_path() -> str:
@@ -36,6 +39,11 @@ def cfg() -> dict:
 @st.cache_data(show_spinner="Cargando las predicciones de K2…", max_entries=2)
 def data() -> K2Data:
     return load_k2(config_path())
+
+
+@st.cache_data(show_spinner="Cargando las explicaciones…", max_entries=2)
+def explanations() -> K2Explanations | None:
+    return load_explanations(config_path())
 
 
 @st.cache_data(show_spinner=False, max_entries=4)

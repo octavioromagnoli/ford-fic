@@ -1,0 +1,169 @@
+# Textos del mensaje al cliente de la explicabilidad de K2 (src/eval/explain.py::render_vehicle_message).
+#
+# Reglas (preregistro: configs/explain_k2.yaml, bloque `message`):
+#   - Solo las accionables tienen frase. Los síntomas tienen UNA línea aparte (`symptom_line`), sin
+#     nombrar columnas; el contexto no aparece nunca.
+#   - La frase compara el valor del auto con la mediana de los sanos comparables (mismo mercado × mes,
+#     train del fold) y dice "se parece", nunca "falla porque".
+#   - La recomendación sale de la física del DPF: sin temperatura sostenida en el escape, el hollín se
+#     acumula y la regeneración pasiva no alcanza.
+#   - `format`: pct | km1 | kmh0 | degc0 | per1000 (ver `format_value`).
+#   - Las accionables con signo 0 solo tienen `label` (para el gráfico): nunca llegan al texto.
+
+risk_levels:
+  alto: "Riesgo ALTO: el modelo marcó tu auto en {k} revisiones seguidas."
+  medio: "Riesgo MEDIO: el modelo marcó tu auto en alguna revisión, pero no en {k} seguidas."
+  bajo: "Riesgo BAJO: el modelo no marcó tu auto."
+
+horizon: "El riesgo se refiere a los próximos {gap_km} a {end_km} km: entre {w_lo} y {w_hi} semanas a tu ritmo de {kmpd} km por día."
+horizon_no_rate: "El riesgo se refiere a los próximos {gap_km} a {end_km} km."
+
+factors_intro: "Tu uso se parece al de los autos que fallaron en:"
+no_factors: "El riesgo no se explica por hábitos de uso: ninguno de los factores que este análisis puede señalar pasa los filtros."
+recommendations_intro: "Qué podés hacer:"
+symptom_line:
+  up: "Lo que ve el filtro: sus propias señales (carga, regeneraciones y avisos) también se parecen a las de autos que fallaron."
+  down: "Lo que ve el filtro: sus propias señales (carga, regeneraciones y avisos) no suman riesgo."
+disclaimer: "Esto indica parecido con autos que fallaron, no una causa."
+
+recommendations:
+  ralenti: "Evitá dejar el motor en marcha con el auto parado: si vas a esperar, apagalo."
+  agrupar: "Agrupá los trámites cortos en un solo recorrido: cada arranque en frío le suma hollín al filtro."
+  viaje_largo: "Cada una o dos semanas, hacé un viaje de al menos 20 minutos a velocidad sostenida: con el motor caliente, el filtro se limpia solo."
+  ruta: "Sumá tramos de ruta o autopista: el filtro necesita velocidad sostenida para regenerarse."
+
+features:
+  # --- A · régimen térmico y trayectos cortos --------------------------------------------------
+  feat_idle_frac:
+    label: Arranques sin moverse
+    format: pct
+    phrase: "Arranques sin moverse: {value} de las veces que encendés el motor, el auto no se mueve; en autos sanos comparables, {reference}."
+    recommendation: ralenti
+  feat_idle_per_1000km:
+    label: Motor encendido sin moverse
+    format: per1000
+    phrase: "Motor encendido sin moverse: {value}, contra {reference} en autos sanos comparables."
+    recommendation: ralenti
+  feat_short_trip_frac_5km:
+    label: Viajes de menos de 5 km
+    format: pct
+    phrase: "Viajes cortos: {value} de tus viajes son de menos de 5 km, contra {reference} en autos sanos comparables."
+    recommendation: agrupar
+  feat_trips_below_regime_temp_frac:
+    label: Viajes sin llegar a temperatura
+    format: pct
+    phrase: "Motor que no llega a temperatura: pasa en {value} de tus viajes, contra {reference} en autos sanos comparables."
+    recommendation: viaje_largo
+  feat_below_regime_moving_frac:
+    label: Viajes en movimiento con el motor frío
+    format: pct
+    phrase: "Viajes en movimiento con el motor frío: {value}, contra {reference} en autos sanos comparables."
+    recommendation: viaje_largo
+  feat_engine_temp_avg_median:
+    label: Temperatura media del motor
+    format: degc0
+    phrase: "Temperatura media del motor en viaje: {value}, contra {reference} en autos sanos comparables."
+    recommendation: viaje_largo
+  feat_engine_temp_max_median:
+    label: Temperatura máxima del motor
+    format: degc0
+    phrase: "Temperatura máxima del motor en viaje: {value}, contra {reference} en autos sanos comparables."
+    recommendation: viaje_largo
+  feat_coolant_temp_end_mean:
+    label: Refrigerante al terminar el viaje
+    format: degc0
+    phrase: "Temperatura del refrigerante al terminar el viaje: {value}, contra {reference} en autos sanos comparables."
+    recommendation: viaje_largo
+  feat_coolant_temp_start_median:
+    label: Temperatura del motor al arrancar
+    format: degc0
+    phrase: "Temperatura del motor al arrancar: {value}, contra {reference} en autos sanos comparables (arranques más fríos)."
+    recommendation: agrupar
+  feat_cold_start_frac:
+    label: Arranques en frío
+    format: pct
+    phrase: "Arranques en frío: {value} de tus viajes arrancan con el motor frío, contra {reference} en autos sanos comparables."
+    recommendation: agrupar
+  feat_trip_distance_median_km:
+    label: Largo típico de los viajes
+    format: km1
+    phrase: "Largo típico de tus viajes: {value}, contra {reference} en autos sanos comparables."
+    recommendation: viaje_largo
+  feat_trip_distance_p25_km:
+    label: Largo de los viajes más cortos
+    format: km1
+    phrase: "Tus viajes más cortos: uno de cada cuatro mide menos de {value}, contra {reference} en autos sanos comparables."
+    recommendation: agrupar
+  # Signo 0 (sin hipótesis física): etiqueta y formato para el gráfico y los casos, sin frase.
+  feat_idle_frac_trend:
+    label: Tendencia de los arranques sin moverse
+    format: pp1
+  feat_below_regime_frac_trend:
+    label: Tendencia de los viajes sin temperatura
+    format: pp1
+  feat_engine_temp_amplitude_mean:
+    label: Amplitud térmica del motor
+    format: degc0
+  feat_chained_trip_frac:
+    label: Viajes encadenados
+    format: pct
+  feat_trip_duration_median_min:
+    label: Duración típica de los viajes
+    format: min0
+
+  # --- C · uso ------------------------------------------------------------------------------------
+  feat_speed_kmh_mean:
+    label: Velocidad media en viaje
+    format: kmh0
+    phrase: "Velocidad media en viaje: {value}, contra {reference} en autos sanos comparables."
+    recommendation: ruta
+  feat_trips_below_30kmh_frac:
+    label: Viajes lentos (menos de 30 km/h)
+    format: pct
+    phrase: "Viajes lentos (menos de 30 km/h de promedio): {value}, contra {reference} en autos sanos comparables."
+    recommendation: ruta
+  feat_moving_trips_per_1000km:
+    label: Viajes por cada 1.000 km
+    format: per1000
+    phrase: "Cantidad de viajes: {value}, contra {reference} en autos sanos comparables (más viajes por km son viajes más cortos)."
+    recommendation: agrupar
+
+# Nombres para las figuras del informe y el dashboard (NO son texto al cliente: contexto y síntomas
+# nunca llegan al mensaje; en el gráfico se agrupan en una barra cada uno).
+figure_labels:
+  surv_bin_start_km: Tramo del hazard (km desde el corte + gap)
+  static_SalesCountry_cd: Mercado
+  feat_cut_odo: Odómetro del corte
+  feat_n_trips_window: Viajes en la ventana
+  feat_window_km_covered: Km cubiertos por la ventana
+  feat_km_per_day: Km por día
+  feat_trips_per_day: Viajes por día
+  feat_hours_between_trips_median: Horas entre viajes
+  feat_regenerations_per_1000km: Regeneraciones cada 1.000 km
+  feat_regenerations_trend_per_1000km: Tendencia de las regeneraciones
+  feat_distance_between_regen_mean_km: Km entre regeneraciones
+  feat_distance_between_regen_trend: Tendencia de los km entre regeneraciones
+  feat_km_since_last_regen: Km desde la última regeneración
+  feat_regen_residual_mean: Carga residual tras regenerar
+  feat_regen_start_level_mean: Carga al empezar a regenerar
+  feat_dpf_end_mean: Carga del DPF al final del viaje
+  feat_dpf_end_max: Carga máxima del DPF
+  feat_dpf_end_slope_per_1000km: Pendiente de la carga del DPF
+  feat_dpf_positive_delta_frac: Viajes en que la carga sube
+  feat_dpf_saturated_frac: Viajes con el DPF saturado
+  feat_filter_abnormal_end_frac: Filtro en estado anormal
+  feat_filter_cleaning_auto_end_frac: Filtro en limpieza automática
+  feat_manual_regen_ever: Regeneración manual
+  feat_msg_full_per_1000km: Avisos "lleno" cada 1.000 km
+  feat_msg_overloaded_per_1000km: Avisos "sobrecargado" cada 1.000 km
+  feat_msg_overloaded_ever: Algún aviso "sobrecargado"
+  feat_msg_over_limit_per_1000km: Avisos "sobre el límite" cada 1.000 km
+  feat_msg_over_limit_ever: Algún aviso "sobre el límite"
+  feat_msg_at_limit_ever: Algún aviso "en el límite"
+  feat_msg_cleaning_auto_per_1000km: Avisos de limpieza automática
+  feat_msg_cleaning_auto_trend_per_1000km: Tendencia de los avisos de limpieza
+  feat_msg_abnormal_frac: Avisos anormales
+  feat_msgs_per_1000km: Avisos del filtro cada 1.000 km
+  feat_oil_life_mean: Vida de aceite
+  feat_oil_life_slope_per_1000km: Consumo de vida de aceite
+  feat_fuel_pct_per_100km_median: Consumo de combustible

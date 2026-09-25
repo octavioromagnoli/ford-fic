@@ -1,12 +1,12 @@
-"""Vehículo: el score de K2 a lo largo del odómetro, el umbral, la alerta y el perfil de uso."""
+"""Vehículo: el score de K2 a lo largo del odómetro, el umbral, la alerta, el porqué y el perfil de uso."""
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
-from scripts.dashboard_k2.common import (FLEET_COLOR, K2_COLOR, MUTED, OUTCOME_COLORS, alerts, budget,
-                                         budget_label, cfg, data, km, label)
-from src.eval.dashboard_data import fleet_profile, rows_for
+from scripts.dashboard_k2.common import (EFFECT_COLORS, FLEET_COLOR, K2_COLOR, MUTED, OUTCOME_COLORS, alerts, budget,
+                                         budget_label, cfg, data, explanations, km, label)
+from src.eval.dashboard_data import LABEL_NAMES, fleet_profile, rows_for, vehicle_why
 
 d, settings = data(), cfg()
 lab, b = label(), budget()
@@ -68,6 +68,63 @@ with st.container(border=True):
     st.altair_chart(alt.layer(*layers), width="stretch")
     st.caption(f"Alerta sostenida = {int(d.eval_cfg.get('k_consecutive', 2))} cortes seguidos sobre el umbral (rombo). "
                "La línea naranja es el evento: el modelo nunca ve los últimos 500 km antes (gap de blanking).")
+
+# --- por qué -------------------------------------------------------------------------------
+VARIANT_NAMES = {"V1": "TreeSHAP del hazard (una repetición)", "V2": "SHAP del score (Permutation)",
+                 "V3": "TreeSHAP del hazard, promedio de 3 repeticiones", "V4": "V3 por familia"}
+expl = explanations()
+with st.container(border=True):
+    st.markdown("**Por qué: qué parte del uso explica el riesgo**")
+    why = None if expl is None else vehicle_why(expl, vid, lab, repeat, top=int(settings.get("explain_waterfall_top", 6)))
+    if expl is None:
+        st.info("Todavía no hay explicaciones. Corré `python scripts/explain_k2.py --config configs/explain_k2.yaml`.")
+    elif why is None:
+        st.info("No hay explicación para este auto con esta etiqueta (o ninguna variante pasó la fidelidad).")
+    else:
+        steps = why["steps"]
+        records = [{"paso": "base (hazard medio del entrenamiento)", "inicio": why["base"], "fin": why["base"],
+                    "efecto": "base", "valor": why["base"]}]
+        running = why["base"]
+        for _, s in steps.iterrows():
+            effect = ("sube el riesgo" if s["value"] > 0 else "baja el riesgo") if s["kind"] == "accionable" else "no accionable"
+            records.append({"paso": ("✓ " if s["in_message"] else "") + s["step"], "inicio": running,
+                            "fin": running + s["value"], "efecto": effect, "valor": s["value"]})
+            running += s["value"]
+        records.append({"paso": "salida del auto", "inicio": why["output"], "fin": why["output"], "efecto": "salida",
+                        "valor": why["output"]})
+        wf = pd.DataFrame(records)
+        wf["tope"] = wf[["inicio", "fin"]].max(axis=1)
+        wf["etiqueta"] = wf["valor"].map(lambda x: f"{x:+.2f}".replace(".", ","))
+        order = wf["paso"].tolist()
+        y = alt.Y("paso:N", sort=order, title=None, axis=alt.Axis(labelLimit=420))
+        x_title = "log-odds del hazard (promedio de los 6 tramos de H)"
+        steps_df = wf[~wf["efecto"].isin(["base", "salida"])]
+        ends_df = wf[wf["efecto"].isin(["base", "salida"])]
+        chart = alt.layer(
+            alt.Chart(steps_df).mark_bar(size=16, cornerRadius=2).encode(
+                y=y, x=alt.X("inicio:Q", title=x_title, scale=alt.Scale(zero=False)), x2="fin:Q",
+                color=alt.Color("efecto:N", scale=alt.Scale(domain=list(EFFECT_COLORS), range=list(EFFECT_COLORS.values())),
+                                legend=alt.Legend(title=None, orient="top")),
+                tooltip=[alt.Tooltip("paso:N", title=""), alt.Tooltip("valor:Q", title="contribución", format="+.3f")]),
+            alt.Chart(steps_df).mark_text(align="left", dx=4, color=MUTED).encode(y=y, x="tope:Q", text="etiqueta:N"),
+            alt.Chart(ends_df).mark_point(filled=True, size=90, color=MUTED).encode(
+                y=y, x="inicio:Q", tooltip=[alt.Tooltip("paso:N", title=""), alt.Tooltip("valor:Q", title="log-odds", format=".3f")]),
+            alt.Chart(ends_df).mark_text(align="left", dx=8, color=MUTED).encode(y=y, x="inicio:Q", text="etiqueta:N"),
+        ).properties(height=alt.Step(28))  # una fila por paso: sin esto Vega comprime y oculta etiquetas
+        st.altair_chart(chart, width="stretch")
+        st.markdown("**Mensaje al cliente**")
+        if why["message"]:
+            st.code(why["message"], language=None, wrap_lines=True)
+        prereg = expl.budget_per_1000
+        st.caption(
+            f"Variante elegida por la regla preregistrada: {why['variant']} ({VARIANT_NAMES.get(why['variant'], '')}), "
+            f"al {budget_label(prereg)} de falsas alarmas con la etiqueta {LABEL_NAMES.get(lab, lab)}. "
+            "Rojo: la accionable empuja el riesgo hacia arriba; azul, hacia abajo; gris: contexto y síntomas, que "
+            "nunca llegan al mensaje. ✓: el factor pasa todos los filtros (física, estabilidad, valor del lado riesgoso "
+            "de la mediana sana) y aparece en el mensaje. SHAP explica al modelo, no al auto: es parecido con autos que "
+            "fallaron, no una causa."
+            + ("" if float(b) == prereg else f" Con {budget_label(b)} cambian las alertas de arriba; la explicación "
+               f"y el mensaje siguen siendo los del {budget_label(prereg)}."))
 
 # --- perfil de uso -------------------------------------------------------------------------
 features = settings["profile_features"]
