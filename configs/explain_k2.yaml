@@ -1,0 +1,295 @@
+# F4 · Explicabilidad de K2 con SHAP — PREREGISTRO
+#
+# Se escribió y se commiteó ANTES de reentrenar un solo fold y de mirar un solo SHAP. Lo que el
+# script mida después se lee contra esto; lo que cambie respecto de acá va como desviación en la
+# ficha (docs/memoria/f4-explicabilidad-k2.md).
+#
+#   FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled \
+#     python scripts/explain_k2.py --config configs/explain_k2.yaml
+#
+# **No es un candidato.** Explica al finalista (K2, configs/exp_ss_hw_r3.yaml), no gasta el
+# presupuesto de comparaciones (CLAUDE.md) y no cambia ninguna métrica oficial: el score, el umbral
+# y las alertas son los de K2 tal cual. Solo dev; el test no se toca.
+#
+# Tres límites que valen para el trabajo y para el texto al cliente:
+#   1. SHAP explica al MODELO, no al auto: es asociación. (a′) de K2 es +0,019 —sabe sobre todo
+#      *qué auto*, poco del *cuándo*— y "mucho idle ⇒ falla antes en km" resultó ser km/día
+#      disfrazado (f3-reloj-y-ventana-del-evento.md §2). El texto dice "tu uso se parece al de los
+#      autos que fallaron", nunca "falla porque hacés X", y solo muestra una feature cuyo efecto
+#      global coincide con la física del DPF.
+#   2. El horizonte es de 3.000 km con 500 km de gap, no "4 meses": se expresa en km y en semanas al
+#      ritmo del auto (feat_km_per_day). No se calcula ningún riesgo en meses: no está validado.
+#   3. Síntomas y contexto no son "lo que hacés mal": solo las accionables llegan al texto.
+
+name: explain-k2
+seed: 20260924   # fondo y permutaciones de V2, muestra de V2, nulo del borrado
+
+run_config: configs/exp_ss_hw_r3.yaml
+run_dir: experiments/f6-ss-hw-r3          # su predictions.parquet es lo que hay que reproducir
+output_dir: experiments/explain-k2
+
+# --------------------------------------------------------------------------------------------
+# §3 · Reconstrucción fuera de fold
+# --------------------------------------------------------------------------------------------
+# train.py no persiste los modelos: se reentrena cada fold de cada repetición de splits_r3.json con
+# la misma config, la misma semilla, el mismo Pipeline y los helpers de src/training/cv.py y
+# src/eval/splits.py (el split y la selección de columnas no se reimplementan). Cada auto de dev se
+# explica con el modelo del fold que NO lo vio.
+reproduction:
+  atol: 1.0e-9          # |predict_proba[:, 1] − score_r{i} de predictions.parquet|, fila por fila
+  # Si LightGBM no fuera determinista bit a bit, se acepta ρ de Spearman = 1 en cada fold y se dice
+  # cuál fue. Si tampoco se cumple, el script PARA: el SHAP estaría explicando otro modelo.
+  fallback: spearman_1
+
+# --------------------------------------------------------------------------------------------
+# Agregación por vehículo (igual para las cuatro variantes): la alerta de K2 tal cual
+# --------------------------------------------------------------------------------------------
+alert:
+  labels: [corrected, hard]   # V decide; D se calcula igual (informativa, y para el dashboard)
+  decides: corrected
+  budget_per_1000: 50         # 5% de falsas alarmas: operating_point de la curva de cada repetición
+  # k_consecutive (2) y n_thresholds (50) salen de `eval` del run_config: la misma cuenta que
+  # train.py, eval_window_label.py y el dashboard (src/eval/dashboard_data.py::operating_threshold y
+  # vehicle_alerts). El script verifica que los detectados por repetición sean los de
+  # window_eval.json (V: 7 / 10 / 6 de 45; D: 8 / 10 / 6 de 53) y para si no.
+  #
+  # Cortes que se explican: los k de la primera racha sostenida (los que dispararon la alerta); si
+  # el auto no alerta, su corte de score máximo. El vector del auto es el promedio de esos cortes.
+  explain_cuts: first_sustained_run_else_max_score
+
+# --------------------------------------------------------------------------------------------
+# Clasificación de las 53 features de v1 + feat_cut_odo + static + el bin del hazard
+# --------------------------------------------------------------------------------------------
+# class: accionable | sintoma | contexto. sign: el signo físico esperado de una accionable sobre el
+# riesgo (+1 más riesgo al subir, −1 menos, 0 sin hipótesis). Una accionable con sign 0 nunca llega
+# al texto: no hay física con la cual coincidir. Las familias (para V4) salen de
+# configs/data/features_v1.yaml; lo que no está ahí es contexto.
+sources:
+  fisica_dpf: >-
+    Física del DPF (enunciado del challenge, plan §4, familia A): trayectos cortos, motor bajo
+    régimen térmico, idle y arranques en frío ⇒ el escape no llega a la temperatura de la
+    regeneración pasiva, el hollín se acumula y la regeneración no alcanza.
+  mapa_1809: >-
+    Mapa de signos del 18-09 (docs/f3-modelos-candidatos.md §1.3, b88e1ce), escrito antes del primer
+    modelo del repo; es el de las restricciones monótonas de P2 (configs/exp_f7_p2_monotone.yaml).
+  f2_3_2: >-
+    Perfil alineado al evento, F2 §3.2 (docs/memoria/f2-eda-revision-y-features.md): P(fallado >
+    sano) > 0,5 ⇒ +1, < 0,5 ⇒ −1. Es descriptivo y sale de dev: acompaña, no es una fuente a priori.
+
+features:
+  # --- A · régimen térmico y trayectos cortos (A_thermal) ---------------------------------------
+  feat_idle_frac:                    {class: accionable, sign: 1,  source: [fisica_dpf, mapa_1809, f2_3_2]}
+  feat_idle_per_1000km:              {class: accionable, sign: 1,  source: [fisica_dpf, mapa_1809]}
+  feat_idle_frac_trend:              {class: accionable, sign: 0,  note: "tendencia entre mitades de la ventana; no hay trayectoria previa al evento (f3-reloj §5)"}
+  feat_short_trip_frac_5km:          {class: accionable, sign: 1,  source: [fisica_dpf, mapa_1809, f2_3_2]}
+  feat_trips_below_regime_temp_frac: {class: accionable, sign: 1,  source: [fisica_dpf, mapa_1809, f2_3_2]}
+  feat_below_regime_moving_frac:     {class: accionable, sign: 1,  source: [fisica_dpf, f2_3_2]}
+  feat_below_regime_frac_trend:      {class: accionable, sign: 0,  note: "tendencia (ídem idle_frac_trend)"}
+  feat_engine_temp_avg_median:       {class: accionable, sign: -1, source: [fisica_dpf, mapa_1809]}
+  feat_engine_temp_max_median:       {class: accionable, sign: -1, source: [fisica_dpf, mapa_1809]}
+  feat_engine_temp_amplitude_mean:   {class: accionable, sign: 0,  note: "el mapa del 18-09 le da −1 por el patrón engine_temp_*; físicamente es ambiguo (amplitud alta = arrancó frío Y llegó a régimen): sin hipótesis"}
+  feat_coolant_temp_end_mean:        {class: accionable, sign: -1, source: [fisica_dpf, mapa_1809, f2_3_2]}
+  feat_coolant_temp_start_median:    {class: accionable, sign: -1, source: [fisica_dpf], note: "arranque en frío"}
+  feat_cold_start_frac:              {class: accionable, sign: 1,  source: [fisica_dpf], note: "F2 §3.2 da ≈ 0,5: en el EDA no separaba"}
+  feat_chained_trip_frac:            {class: accionable, sign: 0,  note: "encadenar es arrancar caliente (−) pero también trámites cortos (+)"}
+  feat_trip_distance_median_km:      {class: accionable, sign: -1, source: [fisica_dpf, mapa_1809]}
+  feat_trip_distance_p25_km:         {class: accionable, sign: -1, source: [fisica_dpf, mapa_1809]}
+  feat_trip_duration_median_min:     {class: accionable, sign: 0,  note: "duración larga es ruta (−) o tráfico lento (+); F2 §4.4 da P = 0,60"}
+
+  # --- B · regeneración (B_regeneration): el estado del propio filtro, casi la definición del evento (regla 6)
+  feat_regenerations_per_1000km:        {class: sintoma}
+  feat_regenerations_trend_per_1000km:  {class: sintoma}
+  feat_distance_between_regen_mean_km:  {class: sintoma}
+  feat_distance_between_regen_trend:    {class: sintoma}
+  feat_km_since_last_regen:             {class: sintoma}
+  feat_regen_residual_mean:             {class: sintoma}
+  feat_regen_start_level_mean:          {class: sintoma}
+  feat_dpf_end_mean:                    {class: sintoma}
+  feat_dpf_end_max:                     {class: sintoma}
+  feat_dpf_end_slope_per_1000km:        {class: sintoma}
+  feat_dpf_positive_delta_frac:         {class: sintoma}
+  feat_dpf_saturated_frac:              {class: sintoma}
+  feat_filter_abnormal_end_frac:        {class: sintoma}
+  feat_filter_cleaning_auto_end_frac:   {class: sintoma}
+  feat_manual_regen_ever:               {class: sintoma}
+
+  # --- C · uso (C_usage) ------------------------------------------------------------------------
+  feat_speed_kmh_mean:               {class: accionable, sign: -1, source: [fisica_dpf, mapa_1809, f2_3_2]}
+  feat_trips_below_30kmh_frac:       {class: accionable, sign: 1,  source: [fisica_dpf, mapa_1809]}
+  feat_moving_trips_per_1000km:      {class: accionable, sign: 1,  source: [fisica_dpf], note: "viajes por km = 1 / distancia media: trayectos cortos"}
+  # Ritmo por día calendario: traduce el reloj de edad del evento al de km (f3-reloj §2: km/día
+  # ρ = +0,48 con los km al evento, −0,07 con los días). No es un hábito que el DPF pida cambiar.
+  feat_km_per_day:                   {class: contexto, note: "ritmo de uso; también convierte el horizonte a semanas"}
+  feat_trips_per_day:                {class: contexto, note: "ritmo de uso"}
+  feat_hours_between_trips_median:   {class: contexto, note: "ritmo de uso"}
+
+  # --- D · severidad (D_severity): mensajes del filtro (signals.Message = AirFilter*), el monitor
+  # de aceite de la ECU (integra severidad y regeneraciones; depende del último service) y el consumo
+  # (la eficiencia de combustión misma). El mapa del 18-09 trataba msg_* como severidad (+1); acá
+  # son síntoma: son el filtro diciendo que está lleno.
+  feat_msg_full_per_1000km:               {class: sintoma}
+  feat_msg_overloaded_per_1000km:         {class: sintoma}
+  feat_msg_overloaded_ever:               {class: sintoma}
+  feat_msg_over_limit_per_1000km:         {class: sintoma}
+  feat_msg_over_limit_ever:               {class: sintoma}
+  feat_msg_at_limit_ever:                 {class: sintoma}
+  feat_msg_cleaning_auto_per_1000km:      {class: sintoma}
+  feat_msg_cleaning_auto_trend_per_1000km: {class: sintoma}
+  feat_msg_abnormal_frac:                 {class: sintoma}
+  feat_msgs_per_1000km:                   {class: sintoma}
+  feat_oil_life_mean:                     {class: sintoma}
+  feat_oil_life_slope_per_1000km:         {class: sintoma}
+  feat_fuel_pct_per_100km_median:         {class: sintoma}
+
+  # --- contexto: dónde y cuándo está el corte, no cómo se usa el auto ----------------------------
+  feat_cut_odo:            {class: contexto, note: "odómetro del corte (hazard base del panel)"}
+  feat_n_trips_window:     {class: contexto, note: "control de ventana"}
+  feat_window_km_covered:  {class: contexto, note: "control de ventana"}
+  static_SalesCountry_cd:  {class: contexto, note: "mercado; sus dummies del one-hot se suman en una sola"}
+  surv_bin_start_km:       {class: contexto, note: "bin del hazard (lo agrega el stacker): la forma del riesgo con los km"}
+
+# --------------------------------------------------------------------------------------------
+# §4 · Variantes (src/eval/explain.py, funciones puras)
+# --------------------------------------------------------------------------------------------
+variants:
+  V1:
+    # TreeSHAP del hazard: cada fila se apila en los 6 tramos del score (igual que
+    # DiscreteSurvivalStacker.predict_proba), booster_.predict(pred_contrib=True) da el log-odds por
+    # tramo y se promedian los 6 vectores. Aditivo exacto sobre el log-odds medio del hazard.
+    kind: tree_shap_hazard
+  V2:
+    # SHAP del score final (1 − S(3.000 | x)) con shap.PermutationExplainer sobre predict_proba[:, 1]
+    # del stacker, en el espacio que sale del preprocesado del fold (imputado y escalado). Caro: va
+    # sobre una muestra.
+    kind: permutation_score
+    max_evals: auto          # default de shap 0.52: 10 permutaciones de ida y vuelta
+    background:
+      # Un corte al azar por vehículo sano (event_observed = 0) del train del fold, del mismo mercado
+      # que el corte explicado; si ese mercado tiene menos de min_vehicles, se completa con sanos del
+      # otro mercado.
+      source: healthy_train_same_market
+      min_vehicles: 20
+    sample:
+      # Todos los cortes explicados, en las 3 repeticiones, de todo auto que alerta en alguna
+      # repetición (con V o con D) ...
+      alerted: all
+      # ... más autos evaluables con V que no alertan nunca con V (estratificados por falla), con su
+      # corte de score máximo en cada repetición. Sirven para que ρ no se mida solo en el extremo.
+      others: {n_failed: 20, n_healthy: 20}
+  V3:
+    # V1 promediado entre las 3 repeticiones, a nivel auto: promedio de los 3 vectores de V1, cada
+    # uno con los cortes explicados de su repetición. Se guarda también la dispersión entre ellas.
+    kind: mean_over_repeats
+    of: V1
+  V4:
+    # V3 sumado por familia: A (A_thermal), B, C, D para las accionables, más "contexto" y "sintoma".
+    kind: family_sum
+    of: V3
+
+# --------------------------------------------------------------------------------------------
+# §5 · Criterios (dev, fuera de fold, con V y al 5%)
+# --------------------------------------------------------------------------------------------
+criteria:
+  fidelity:
+    # Aditividad: |Σφ + base − salida explicada| (log-odds medio del hazard en V1/V3; score en V2).
+    additivity_tol: 1.0e-6
+    # ρ de Spearman entre autos: Σφ + base del vector del auto contra el score oficial promedio de
+    # sus cortes explicados (score_r{i}; en V3, el promedio entre repeticiones). Se reporta también
+    # sin la base.
+    spearman_min: 0.90
+    erasure:
+      # Contrafactual DEL MODELO, no del auto: en cada auto alertado se reemplazan, en sus cortes
+      # explicados, las top_k accionables de mayor contribución positiva por la mediana de los sanos
+      # de su mercado × mes en el train del fold (FleetReferenceNormalizer, mismo bloque que el
+      # control de calendario) y se re-predice con el modelo del fold. El estadístico es la caída
+      # media del score; el nulo reemplaza la misma cantidad de accionables al azar (n_null sorteos)
+      # y p = (1 + #{nulo ≥ observado}) / (1 + n_null).
+      top_k: 3
+      n_null: 200
+      alpha: 0.05
+      vehicles: alerted     # (auto, repetición) que alertan en V1/V2; autos que alertan en alguna en V3
+  stability:
+    top_k: 3                # top 3 accionables por contribución positiva
+    replicates: 3
+    # V1 y V2 explican una repetición: sus 3 réplicas son las 3 repeticiones de splits_r3.json. V3
+    # promedia 3 repeticiones, así que sus réplicas son 3 tripletes disjuntos: el oficial y dos más
+    # sorteados con src/eval/splits.py::make_splits (la misma estratificación, n_splits y guarda de
+    # positivos que splits_r3, otra semilla). Sin eso, "la estabilidad de V3 entre las 3
+    # repeticiones" no se puede medir: V3 es un solo vector por auto. Los modelos extra se entrenan
+    # igual que los oficiales y cada triplete usa su propia alerta al 5%.
+    extra_repeats: {n_repeats: 6, seed: 20260925}
+    vehicles: alerted_any   # autos que alertan con V al 5% en al menos una repetición oficial
+    # Jaccard(∅, ∅) = 1: un auto sin ninguna accionable positiva en ninguna réplica es estable.
+    # Acuerdo de signo: sobre la unión de los top 3 de las réplicas, fracción de features con el
+    # mismo signo de contribución en las 3.
+    tie_tolerance: 0.05
+  plausibility:
+    # Signo global de cada accionable: ρ de Spearman entre su valor crudo y su contribución, sobre
+    # las filas de dev fuera de fold (sin NaN). Estable = el ρ de cada repetición (V1) tiene el mismo
+    # signo. Entra al texto solo si: signo esperado ≠ 0, signo observado = esperado, |ρ| ≥ min_abs_rho
+    # y estable. Si no, queda fuera y se lista con el motivo.
+    min_abs_rho: 0.10
+  calendar_control:
+    # Informativo: la misma plausibilidad con el valor desviado contra la flota sana del mismo
+    # mercado × mes del corte (FleetReferenceNormalizer ajustado solo con el train del fold). Dice si
+    # "motor frío" es el auto o es invierno.
+    month_column: cut_date
+    min_ref_vehicles: 10
+    levels: [[market, month], [month], []]
+  cost: informative         # segundos: reentrenar, explicar y costo de producción por auto
+
+choice:
+  eligible: [V1, V2, V3]
+  # V4 se calcula y se reporta, pero no es elegible: con esta clasificación solo dos familias
+  # tienen accionables (A y C; toda B y toda D son síntoma), así que su top 3 es trivial (Jaccard = 1
+  # por construcción) y el mensaje no podría dar tres factores. Su estabilidad se informa con el
+  # top 1 de familia.
+  rule: >-
+    Pasan la fidelidad las que cumplen las tres: aditividad < additivity_tol, ρ ≥ spearman_min y
+    borrado con p < alpha. Entre ellas gana la de mayor Jaccard medio del top 3; si dos quedan a
+    menos de tie_tolerance, la más barata (costo de producción por auto explicado). Si ninguna pasa,
+    no se elige ninguna y no se publica mensaje al cliente.
+  # Si la mediana del ρ entre los vectores de V1 y V2 en los autos alertados es < 0,7, se reporta
+  # como hallazgo (ordenan distinto las contribuciones).
+  v1_v2_discrepancy_rho: 0.7
+
+# --------------------------------------------------------------------------------------------
+# §6 · Texto para el cliente (configs/explain_texts.yaml)
+# --------------------------------------------------------------------------------------------
+message:
+  texts: configs/explain_texts.yaml
+  max_factors: 3
+  # Un factor entra si cumple todo: accionable; signo esperado ≠ 0; plausible y estable en el
+  # global; contribución > 0 en el vector del auto y del mismo signo en las 3 réplicas; valor
+  # observado (no NaN) y del lado riesgoso de la mediana sana comparable ((valor − mediana) · signo
+  # > 0), con la mediana del mismo bloque que el borrado. Si un auto alertado no tiene ninguno, el
+  # mensaje lo dice; no se rellena.
+  risk_levels:
+    alto: "alertó: k cortes seguidos sobre el umbral"
+    medio: "algún corte sobre el umbral, sin racha"
+    bajo: "ningún corte sobre el umbral"
+  # La línea de síntomas (una sola, separada) dice que suman riesgo si la suma de sus
+  # contribuciones en el vector del auto es > symptom_line_min.
+  symptom_line_min: 0.0
+
+# --------------------------------------------------------------------------------------------
+# §7 · Casos, elegidos por regla (repetición 0, etiqueta V, 5%)
+# --------------------------------------------------------------------------------------------
+cases:
+  label: corrected
+  repeat: 0
+  rules:
+    - {outcome: Detectado, n: 3, order: max_score_desc}
+    - {outcome: No detectado, n: 1, order: max_score_desc}
+    - {outcome: Falsa alarma, n: 1, order: max_score_desc}
+    # "Sano de riesgo bajo": el de score máximo MÁS BAJO entre los sanos sin alerta. Única excepción
+    # a "el score más alto de cada categoría": el más alto de esa categoría sería el sano más cerca
+    # de alertar, que no es de riesgo bajo.
+    - {outcome: Sano sin alerta, n: 1, order: max_score_asc}
+
+outputs:
+  shap_rows: shap_rows.parquet
+  shap_vehicle: shap_vehicle.parquet
+  eval: explain_eval.json
+  cases: cases.md
+  figures_dir: figures
