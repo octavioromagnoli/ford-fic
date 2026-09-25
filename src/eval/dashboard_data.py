@@ -55,7 +55,15 @@ def load_k2(config_path: str) -> K2Data:
 
     # Las predicciones ya son solo de dev (train.py recorta con `select_dev`); el merge es por
     # la izquierda, así que ninguna fila de test entra acá.
-    panel = pd.read_parquet(resolve_path(run_cfg["data"]["panel"]))
+    panel_path = resolve_path(run_cfg["data"]["panel"])
+    if not panel_path.exists():
+        raise FileNotFoundError(
+            f"No existe el panel de K2 en {panel_path}. ¿Está definida FORD_DATA_DIR en la terminal que lanzó "
+            "Streamlit? En PowerShell: $env:FORD_DATA_DIR = \"$PWD\\data\\rebuild-0921\" · en bash: "
+            "export FORD_DATA_DIR=$PWD/data/rebuild-0921. Después, cortá el servidor (Ctrl+C) y relanzá "
+            "`streamlit run scripts/dashboard_k2/app.py` en esa misma terminal."
+        )
+    panel = pd.read_parquet(panel_path)
     columns = [evaluable, "static_SalesCountry_cd", *cfg["profile_features"]]
     right = panel[KEY + [c for c in columns if c not in preds]]
     out = preds.merge(right, on=KEY, how="left", validate="one_to_one", indicator=True)
