@@ -39,6 +39,10 @@ fallan, invalidan todo lo que venga después:
     inversa exacta de la del evento, el tramo en riesgo entra tarde y sale en el fin de la
     ventana, el PEM apila la exposición exacta y recupera la tasa, y la etiqueta corregida
     evalúa solo las filas con el horizonte adentro.
+15. La explicabilidad de K2 (F4): la reconstrucción de los folds es `run_cv` bit a bit, V1 es
+    aditivo sobre el log-odds medio del hazard, la agregación por vehículo usa el umbral y la
+    `k` de la curva, la referencia de flota sale solo de los sanos del train, el mensaje nunca
+    nombra contexto ni síntomas y ningún output lleva un vehículo de test.
 """
 
 from __future__ import annotations
@@ -1820,6 +1824,172 @@ def dashboard_checks() -> None:
     )
 
 
+def _alert_frame(seed: int = 11, n: int = 60) -> pd.DataFrame:
+    """Cortes sintéticos con el esquema de las predicciones (como `dashboard_checks`)."""
+    rng = np.random.default_rng(seed)
+    sizes = rng.integers(1, 12, n)
+    frame = pd.DataFrame({
+        "vehicle_id": np.repeat([f"V{i:02d}" for i in range(n)], sizes),
+        "cut_odo": np.concatenate([np.arange(s) * 500.0 for s in sizes]),
+        "event_observed": np.repeat((np.arange(n) % 3 == 0).astype(int), sizes),
+        "static_SalesCountry_cd": "CNTRY_4",
+    })
+    frame["time_to_event_km"] = np.where(frame["event_observed"].eq(1), 6000.0 - frame["cut_odo"], np.nan)
+    frame["event_odo_km"] = frame["cut_odo"] + frame["time_to_event_km"]
+    frame["score_r0"] = rng.random(len(frame)) + 0.3 * frame["event_observed"]
+    return frame.sort_values(["vehicle_id", "cut_odo"]).reset_index(drop=True)
+
+
+def explain_checks() -> None:
+    """17 · F4, explicabilidad de K2: lo que tiene que valer para que el porqué explique a K2 y solo con dev."""
+    import copy
+
+    from src.eval import explain as ex
+    from src.eval.dashboard_data import operating_threshold, vehicle_alerts
+
+    # -- la reconstrucción es run_cv, y V1 es aditivo ---------------------------------------------------
+    dummy = _km_window_dummy()
+    # Holdout sintético: uno de cada cinco vehículos es de test y no entra a nada de lo que sigue.
+    vehicles = sorted(dummy["vehicle_id"].astype(str).unique())
+    holdout = {"test_vehicles": vehicles[::5], "dev_vehicles": [v for i, v in enumerate(vehicles) if i % 5]}
+    dev_mask, _ = test_split_masks(dummy, holdout)
+    dev = dummy.loc[dev_mask].reset_index(drop=True)
+    splits = make_splits(dev, n_splits=3, seed=5)
+    km = {"horizon_km": 3000, "bin_km": 500, "max_horizon_km": 6000, "random_state": 42,
+          "model_params": {"n_estimators": 60, "min_child_samples": 20}}
+    target = {"name": "window_km_survival", "params": {}}
+    predictions, _ = run_cv(dev, splits, model_name="survival_stacking", model_params=km, target=target)
+    columns, models = ex.refit_folds(dev, splits, model_name="survival_stacking", model_params=km, target=target)
+    repro = ex.reproduction_report(models, dev, predictions, atol=0.0)
+    check(
+        "explicabilidad: `refit_folds` reproduce `run_cv` bit a bit (mismos folds, columnas, target y Pipeline)",
+        repro["exact"] and len(models) == 3, f"máx |Δ| = {repro['max_abs_diff']:.1e}",
+    )
+    m = models[0]
+    X = dev.loc[m.valid_mask, columns]
+    v1 = ex.tree_shap_hazard(m.pipeline, X, columns)
+    check(
+        "explicabilidad V1: Σφ + base = log-odds medio del hazard sobre los tramos de H (< 1e-6) y el riesgo "
+        "que se recompone desde el booster es predict_proba",
+        float(v1.additivity_error.max()) < 1e-6 and np.allclose(v1.risk, m.predict(X), atol=1e-12)
+        and v1.units[-1] == "surv_bin_start_km",
+        f"error máx {v1.additivity_error.max():.1e}",
+    )
+    check(
+        "explicabilidad V1: las dummies del one-hot se suman en una sola unidad (la columna del panel)",
+        v1.units.count("static_SalesCountry_cd") == 1 and not any(u.startswith("static_SalesCountry_cd_") for u in v1.units)
+        and set(v1.units) - {"surv_bin_start_km"} == set(columns),
+    )
+
+    # -- la agregación por vehículo es la alerta de la curva ----------------------------------------------
+    frame = _alert_frame()
+    for k in (2, 3):
+        point = operating_threshold(frame, 0, 100, {"k_consecutive": k, "n_thresholds": 50})
+        threshold = float(point["threshold"])
+        cuts = ex.explained_cuts(frame, 0, threshold, k)
+        alerts = vehicle_alerts(frame, 0, threshold, k).set_index("vehicle_id")
+        ok = int(cuts.groupby("vehicle_id")["alerted"].first().sum()) == int(point["n_detected"] + point["n_false_alarm_vehicles"])
+        for vid, g in cuts.groupby("vehicle_id"):
+            seq = frame.loc[frame["vehicle_id"].eq(vid)].sort_values("cut_odo")
+            if bool(alerts.loc[vid, "alerted"]):
+                start = int(np.flatnonzero(seq["cut_odo"].to_numpy() == g["cut_odo"].iloc[0])[0])
+                run = seq.iloc[start:start + k]
+                ok &= (len(g) == k and g["cut_odo"].iloc[0] == alerts.loc[vid, "alert_cut_odo"]
+                       and np.array_equal(run["cut_odo"].to_numpy(), g["cut_odo"].to_numpy())
+                       and bool((run["score_r0"] >= threshold).all()))
+            else:
+                ok &= len(g) == 1 and g["cut_odo"].iloc[0] == seq.loc[seq["score_r0"].idxmax(), "cut_odo"]
+        check(
+            f"explicabilidad: con k={k} los cortes explicados son la racha que disparó la alerta (mismo umbral y k "
+            "que la curva) y, sin alerta, el de score máximo",
+            bool(ok), f"{int(point['n_detected'] + point['n_false_alarm_vehicles'])} autos alertan",
+        )
+
+    # -- la referencia de flota sale solo de los sanos del train ---------------------------------------
+    features = ["feat_idle_frac", "feat_speed_kmh_mean"]
+    train, valid = dev.loc[m.train_mask], dev.loc[m.valid_mask]
+    ref = ex.fleet_reference(train, valid, features)
+    moved_valid = ex.fleet_reference(train, valid.assign(**{f: valid[f] + 100.0 for f in features}), features)
+    failed_train = train.assign(**{f: np.where(train["event_observed"].eq(1), train[f] + 100.0, train[f]) for f in features})
+    healthy_train = train.assign(**{f: np.where(train["event_observed"].eq(0), train[f] + 100.0, train[f]) for f in features})
+    check(
+        "explicabilidad: la mediana sana comparable no mira validación ni fallados del train, y sí a los sanos del train",
+        np.allclose(ref, moved_valid, equal_nan=True)
+        and np.allclose(ref, ex.fleet_reference(failed_train, valid, features), equal_nan=True)
+        and not np.allclose(ref, ex.fleet_reference(healthy_train, valid, features), equal_nan=True),
+    )
+
+    # -- estabilidad: top k positivo y Jaccard --------------------------------------------------------------
+    vector = pd.Series({"a": 0.5, "b": -0.9, "c": 0.2, "ctx": 3.0})
+    check(
+        "explicabilidad: el top k solo toma candidatas con contribución positiva; Jaccard(∅, ∅) = 1",
+        ex.top_k(vector, ["a", "b", "c"], 3) == frozenset({"a", "c"}) and ex.jaccard(frozenset(), frozenset()) == 1.0
+        and ex.jaccard(frozenset({"a"}), frozenset({"a", "c"})) == 0.5,
+    )
+
+    # -- el mensaje nunca nombra contexto ni síntomas -------------------------------------------------------
+    specs = ex.feature_specs({"features": {
+        "feat_idle_frac": {"class": "accionable", "sign": 1},
+        "feat_speed_kmh_mean": {"class": "accionable", "sign": -1},
+        "feat_trip_duration_median_min": {"class": "accionable", "sign": 0},
+        "feat_dpf_end_mean": {"class": "sintoma"},
+        "feat_cut_odo": {"class": "contexto"},
+    }}, {})
+    texts = copy.deepcopy(load_config("configs/explain_texts.yaml"))
+    for name, tag in (("feat_dpf_end_mean", "FUGA_SINTOMA"), ("feat_cut_odo", "FUGA_CONTEXTO"),
+                      ("feat_trip_duration_median_min", "FUGA_SIN_HIPOTESIS")):
+        texts["features"][name] = {"label": tag, "format": "pct", "phrase": tag + " {value}", "recommendation": "ralenti"}
+    contribution = pd.Series({"feat_dpf_end_mean": 5.0, "feat_cut_odo": 4.0, "feat_trip_duration_median_min": 3.0,
+                              "feat_idle_frac": 0.5, "feat_speed_kmh_mean": 0.2})
+    values = pd.Series({"feat_dpf_end_mean": 0.9, "feat_cut_odo": 9000.0, "feat_trip_duration_median_min": 40.0,
+                        "feat_idle_frac": 0.6, "feat_speed_kmh_mean": 15.0})
+    references = pd.Series({"feat_dpf_end_mean": 0.3, "feat_cut_odo": 5000.0, "feat_trip_duration_median_min": 20.0,
+                            "feat_idle_frac": 0.2, "feat_speed_kmh_mean": 20.0})
+    everything = set(contribution.index)
+    factors = ex.message_factors(contribution, values=values, references=references, specs=specs, allowed=everything)
+    forced = factors + [ex.MessageFactor(n, 5.0, 1.0, 0.0) for n in ("feat_dpf_end_mean", "feat_cut_odo",
+                                                                      "feat_trip_duration_median_min")]
+    text = ex.render_vehicle_message(risk_level="alto", factors=forced, specs=specs, texts=texts, k=2, gap_km=500.0,
+                                     horizon_km=3000.0, km_per_day=50.0, symptom_contribution=5.0)
+    # El mismo auto con el idle por DEBAJO de la mediana sana: la frase "más idle que los sanos" sería falsa.
+    incoherent = ex.message_factors(contribution, values=values.where(values.index != "feat_idle_frac", 0.1),
+                                    references=references, specs=specs, allowed=everything)
+    check(
+        "explicabilidad: `render_vehicle_message` nunca nombra contexto, síntomas ni accionables sin hipótesis, "
+        "aunque se los pasen; `message_factors` solo elige accionables coherentes con la física",
+        [f.feature for f in factors] == ["feat_idle_frac", "feat_speed_kmh_mean"] and "FUGA" not in text
+        and "Arranques sin moverse" in text and texts["symptom_line"]["up"] in text
+        and [f.feature for f in incoherent] == ["feat_speed_kmh_mean"],
+    )
+    empty = ex.render_vehicle_message(risk_level="alto", factors=[], specs=specs, texts=texts, k=2, gap_km=500.0,
+                                      horizon_km=3000.0, km_per_day=50.0, symptom_contribution=-1.0)
+    low = ex.render_vehicle_message(risk_level="bajo", factors=factors, specs=specs, texts=texts, k=2, gap_km=500.0,
+                                    horizon_km=3000.0, km_per_day=50.0, symptom_contribution=1.0)
+    check(
+        "explicabilidad: sin factores el mensaje dice que el riesgo no se explica por hábitos (no rellena); con riesgo "
+        "bajo no lista factores; el horizonte va en km y en semanas al ritmo del auto",
+        texts["no_factors"] in empty and texts["factors_intro"] not in low and "Arranques sin moverse" not in low
+        and "500 a 3.500 km" in empty and "entre 1 y 10 semanas" in empty,
+    )
+
+    # -- ningún output lleva un vehículo de test ------------------------------------------------------------
+    rows = pd.concat([ex.tree_shap_hazard(fm.pipeline, dev.loc[fm.valid_mask, columns], columns).frame()
+                      .assign(vehicle_id=dev.loc[fm.valid_mask, "vehicle_id"].to_numpy()) for fm in models])
+    scored = dev[["vehicle_id", "cut_odo", "event_observed", "time_to_event_km", "static_SalesCountry_cd"]].assign(
+        event_odo_km=lambda f: f["cut_odo"] + f["time_to_event_km"], score_r0=predictions["score"].to_numpy())
+    cut_table = ex.explained_cuts(scored, 0, float(scored["score_r0"].quantile(0.9)), 2)
+    guard = ex.dev_only_guard([rows["vehicle_id"], cut_table["vehicle_id"]], holdout)
+    check(
+        "explicabilidad: ningún output (filas explicadas, cortes por auto) nombra un vehículo de test, y la guarda "
+        "falla si uno se cuela",
+        guard["test_vehicles_found"] == [] and guard["vehicles_in_outputs"] == dev["vehicle_id"].nunique()
+        and _raises(lambda: ex.dev_only_guard([rows["vehicle_id"], pd.Series([holdout["test_vehicles"][0]])], holdout),
+                    RuntimeError)
+        and _raises(lambda: ex.dev_only_guard([pd.Series(["VEH_FORASTERO"])], holdout), RuntimeError),
+        f"{guard['vehicles_in_outputs']} autos de dev, {len(holdout['test_vehicles'])} de test fuera",
+    )
+
+
 def main() -> int:
     set_seed(7)
     panel = build_dummy_panel(SMALL_PANEL)
@@ -2369,6 +2539,7 @@ def main() -> int:
     km_window_detection_checks()
     f7_variance_checks()
     dashboard_checks()
+    explain_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()
