@@ -5,6 +5,47 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-24 · F4: el porqué de una alerta de K2 se explica con V3 y solo con hábitos que coinciden con la física del DPF
+
+**Alcance:** explicabilidad de K2, solo dev. **No es un candidato ni gasta presupuesto de
+comparaciones**: explica al finalista y no cambia ninguna métrica oficial. Preregistro
+`configs/explain_k2.yaml` (3882919), antes de reentrenar y de mirar un SHAP. Evidencia:
+[f4-explicabilidad-k2.md](f4-explicabilidad-k2.md).
+
+**Qué se decidió:**
+- **La explicación al cliente es V3**: TreeSHAP del hazard de K2, promediado entre las 3
+  repeticiones. Las tres variantes elegibles (V1, V2, V3) pasan la fidelidad, y V3 es la más estable
+  (Jaccard del top 3 de 0,73, contra 0,57 y 0,48).
+  - **Aditividad:** 1e-14.
+  - **ρ contra el score:** 0,999.
+  - **Borrado:** sacar las 3 accionables de mayor contribución baja el score 0,20, contra 0,04 al
+    azar (p = 0,005).
+- **Al texto al cliente llegan solo las accionables cuyo efecto global coincide con la física**, que
+  son estables entre repeticiones, que suben el riesgo de ese auto en las 3 réplicas y cuyo valor está
+  del lado riesgoso de la mediana sana comparable. Hoy son 10 de las 20 accionables.
+  - **Afuera quedan cuatro contrarias a la física**: viajes más largos y temperatura máxima más alta
+    ⇒ más riesgo.
+  - **También quedan afuera** los arranques en frío (débil) y las cinco sin hipótesis, incluida la
+    duración del viaje, que es la cuarta más importante.
+  - **Si un auto alertado no tiene ningún factor, el mensaje lo dice** (2 de 32 alertas). No se
+    rellena.
+- **Síntomas y contexto nunca se nombran.** Los síntomas son el estado del filtro, los mensajes, el
+  aceite y el consumo; el contexto, odómetro, mercado, ritmo por día y bin. Los síntomas tienen una
+  línea aparte ("lo que ve el filtro"), que en las 32 alertas dice que suman riesgo.
+- **El horizonte se dice en km (500 a 3.500 desde el corte) y en semanas al ritmo del auto.** No se
+  calcula un riesgo a 4 meses: haría falta un horizonte en días evaluado dentro de la ventana del
+  registro, y la prevalencia real.
+
+**Por qué:**
+- **SHAP explica al modelo, no al auto**, y (a′) = +0,019: K2 sabe *qué auto* se parece a los que
+  fallaron, no *qué cambió*. Un texto sin estos filtros le habría dicho "manejás lento" al detectado
+  con el score más alto (VEH_0451), que va más rápido que sus pares y cuyo riesgo viene de los
+  síntomas.
+- **El control de calendario** (desvío contra los sanos del mismo mercado × mes) no da vuelta ningún
+  signo. "Motor frío" es el auto, no el invierno, así que la recomendación de uso se sostiene.
+
+---
+
 ## 2026-09-24 · F4: dashboard con K2, y el punto de operación se elige con costos, no con una matriz en el entrenamiento
 
 **Alcance:** F4 (dashboard contra el panel real, solo dev) y un reporte de costos. **No cambia el

@@ -53,7 +53,10 @@ capa de decisión (`docs/memoria/f8-capa-decision-k2.md`) muestra que el 5% de K
 muestra (3,5% de falsas alarmas realizadas, 15,6% de detección) y que a 10% detecta ~26%.
 
 **F4 (dashboard contra el panel real, con K2) está en `scripts/dashboard_k2/`**; las ideas que quedaron sin probar
-siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha de F6.
+siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha de F6. **El porqué de una alerta
+(24-09, no es candidato)** sale de SHAP sobre K2 reconstruido bit a bit: V3 (TreeSHAP del hazard, promedio de 3
+repeticiones), y al cliente solo llegan hábitos cuyo efecto coincide con la física del DPF; síntomas y contexto
+nunca se nombran (`docs/memoria/f4-explicabilidad-k2.md`).
 
 **El presupuesto de comparaciones está agotado** (§0, punto 2 de ese doc): con ~12
 eventos por fold, agregar candidatos sobre la marcha garantiza que "el mejor" sea ruido.
@@ -275,7 +278,13 @@ src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate
                          panel de hitos, con bootstrap pareado por vehículo
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 src/eval/dashboard_data.py  datos del dashboard de K2: carga, alerta por vehículo (misma regla que la curva) y
-                         perfil de la flota sana; los números oficiales salen de window_eval.json y decision_layer.json
+                         perfil de la flota sana; los números oficiales salen de window_eval.json y decision_layer.json;
+                         load_explanations()/vehicle_why() leen la explicabilidad (sin recalcular SHAP)
+src/eval/explain.py      explicabilidad de K2, funciones puras: refit_folds() (el loop de run_cv, devuelve los modelos),
+                         V1 tree_shap_hazard (TreeSHAP del hazard sobre los 6 tramos de H, aditivo), V2
+                         permutation_shap_score, V4 family_sums; explained_cuts() (la alerta de la curva), la mediana
+                         sana comparable (FleetReferenceNormalizer, train del fold), borrado, estabilidad, plausibilidad
+                         física, message_factors()/render_vehicle_message() y dev_only_guard()
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
 scripts/build_dataset.py panel real: universo del holdout → crudos → evento en km → cortes/etiqueta/features →
@@ -311,6 +320,9 @@ scripts/cost_scenarios.py  punto de operación de K2 bajo escenarios de costo co
                          con el ahorro sobre el azar; reporte, nunca selección
 scripts/decision_layer.py  capa de decisión sobre una corrida: curva a varios presupuestos de falsas alarmas con
                          su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson)
+scripts/explain_k2.py    explicabilidad de K2 de punta a punta (preregistro configs/explain_k2.yaml): reentrena y
+                         verifica los folds, V1-V4, criterios, elección, mensajes al cliente (configs/explain_texts.yaml)
+                         y casos → experiments/explain-k2/; scripts/explain_k2_report.py hace las figuras y cases.md
 scripts/eval_timesfm.py  TimesFM zero-shot en los cortes del panel v1 (mide solo dev) + forecasts.parquet
 scripts/build_timesfm_panel.py  panel_timesfm.parquet = panel v1 + feat_tfm_* (mismas filas)
 scripts/build_history_panel.py  panel_history.parquet = panel_survival + feat_*_hist_delta (mismas filas; verifica
@@ -328,11 +340,11 @@ scripts/rescore_run.py   re-mide una corrida vieja desde su predictions.parquet 
                          (`evaluate_predictions`), sin reentrenar; falla si lo ya medido no se reproduce
 scripts/dashboard.py     dashboard genérico de una corrida (streamlit; el del panel dummy)
 scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run scripts/dashboard_k2/app.py`. Resumen (dial de
-                         falsas alarmas contra el azar, punto fuera de muestra), Vehículo (score, umbral, alerta, perfil
-                         de uso contra los sanos), Costos (punto de operación y ahorro según costos y prevalencia
-                         real, con escenarios precargados) y Modelo (contra la referencia y los pisos, límites);
-                         configs/dashboard_k2.yaml
-scripts/check_setup.py   smoke test del harness (166 chequeos)
+                         falsas alarmas contra el azar, punto fuera de muestra), Vehículo (score, umbral, alerta, por qué
+                         con el waterfall y el mensaje al cliente, perfil de uso contra los sanos), Costos (punto de
+                         operación y ahorro según costos y prevalencia real, con escenarios precargados) y Modelo
+                         (contra la referencia y los pisos, límites); configs/dashboard_k2.yaml
+scripts/check_setup.py   smoke test del harness (190 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4
