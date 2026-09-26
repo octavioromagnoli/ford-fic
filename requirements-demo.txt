@@ -1,0 +1,10 @@
+# Solo lo que corre la demo desplegada (scripts/demo_app/): lee el bundle, no entrena ni explica.
+# Sin LightGBM, SHAP, sklearn ni scipy. Mismas versiones que requirements.txt donde se repiten.
+numpy==2.5.3
+pandas==3.0.5
+pyarrow==25.0.1
+PyYAML==6.0.3
+streamlit==1.63.0
+altair==6.2.2
+openai==3.19.2
+wandb==0.30.0

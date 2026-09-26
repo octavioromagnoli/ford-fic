@@ -1,0 +1,7 @@
+:root{color-scheme:dark;
+--night:#050b1a;--surface:#0a1226;--card:#0e1b30;--brand:#003478;--electric:#4da3ff;--text:#edf4ff;--muted:#b0c1d8;--line:#263a58;--line-soft:#1c2c45;--amber:#ffc16b;--red:#ff8585;
+--panel:#0c1a2f;--panel-agent:#0f2445;--panel-head:#0f1f38;--inset:#081122;
+--control:#11233d;--control-line:#345071;--primary:#1351b4;--primary-line:#3479df;
+--active:#13315b;--active-line:#2e66a7;--accent-text:#86bfff;--focus:#79b6ff;
+--fs-label:11px;--fs-meta:13px;--fs-body:15px;--fs-title:18px;--fs-section:22px;--fs-page:32px;--fs-metric:32px;
+--s1:8px;--s2:16px;--s3:24px;--s4:32px;--radius:14px;--radius-sm:10px}

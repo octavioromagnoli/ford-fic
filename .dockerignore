@@ -1,0 +1,15 @@
+# La imagen de la demo solo lleva src/, scripts/demo_app/ y dos configs (ver Dockerfile).
+data/
+experiments/
+wandb/
+notebooks/
+results/
+docs/
+.venv/
+venv/
+.git/
+.claude/
+.agents/
+.env
+**/__pycache__/
+*.parquet

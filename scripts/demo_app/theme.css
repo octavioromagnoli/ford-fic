@@ -1,0 +1,346 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+/* Values live in tokens.css (shared with the counters iframe). One panel surface, one inset surface, two radii,
+   one type scale: every card, metric, table, chart and expander reads as the same material. */
+
+/* ---- Base ------------------------------------------------------------------------------------------------ */
+.stApp{background:radial-gradient(ellipse at 75% 0%,#10274a 0,transparent 48%),var(--night);color:var(--text)}
+html,body,[data-testid="stAppViewContainer"],button,input,textarea,[data-baseweb="select"],h1,h2,h3,h4,p,label,
+[data-testid="stMarkdownContainer"],[data-testid="stCaptionContainer"],[data-testid="stMetric"],[data-testid="stMetricValue"]{font-family:Manrope,Arial,sans-serif!important}
+#MainMenu,footer,[data-testid="stHeader"]{display:none!important}
+[data-testid="stMainBlockContainer"]{padding:2.3rem 3rem 4rem;max-width:1600px}
+/* Opacity only: a transform here would become the containing block of the fixed dock while it runs. */
+[data-testid="stMainBlockContainer"]>.stVerticalBlock{animation:fadein .22s ease-out}
+[data-testid="stElementContainer"]:has(style){display:none}
+/* Heading permalinks mean nothing in this app, and on touch they stick after a tap. */
+[data-testid="stHeaderActionElements"]{display:none!important}
+::selection{background:#1f4f8a;color:#fff}
+input,textarea{caret-color:var(--electric)}
+*{scrollbar-width:thin;scrollbar-color:#2a3f5f transparent}
+hr{border-color:var(--line)!important}
+
+/* ---- Type ------------------------------------------------------------------------------------------------ */
+h1,h2,h3,h4,p,label{color:var(--text)}
+h3{font-size:var(--fs-section)!important;font-weight:800!important;letter-spacing:-.02em;padding:1.25rem 0 .25rem!important}
+h4{font-size:var(--fs-title)!important;font-weight:700!important;letter-spacing:-.01em;padding:0!important;margin:0!important}
+[data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p{color:var(--muted);font-size:var(--fs-meta);line-height:1.55}
+.group-label{font-size:var(--fs-label);letter-spacing:.1em;font-weight:800;color:#9cbbdf;text-transform:uppercase}
+.page-heading{margin:0 0 12px}
+.page-heading h1{font-size:var(--fs-page)!important;letter-spacing:-.04em;font-weight:800!important;line-height:1.1;margin:0 0 6px;padding:0}
+.page-heading p{font-size:var(--fs-meta);color:var(--muted);margin:0}
+
+/* ---- Brand: the Ford script, a hairline and DPF, centred on one axis ------------------------------------- */
+.brand{display:flex;align-items:center;gap:14px;margin:0;line-height:1}
+.brand img{height:32px;width:auto;display:block}
+.brand span{display:flex;align-items:center;gap:14px;font-size:22px;font-weight:800;letter-spacing:.08em;color:var(--electric);line-height:1}
+.brand span:before{content:'';width:1px;height:28px;background:linear-gradient(180deg,transparent,#3d5a82 22%,#3d5a82 78%,transparent)}
+/* Under the lockup, in sentence case: what it is, then where it comes from. */
+.brand-block{padding:0 0 22px;margin:0 0 14px;border-bottom:1px solid var(--line)}
+.st-key-side_nav{gap:4px!important}
+.brand-block .brand-tag{margin:18px 0 0!important;padding:0;font-size:var(--fs-meta)!important;font-weight:600;line-height:1.45;color:#c7d9ef}
+.brand-block .brand-event{margin:6px 0 0!important;padding:0;font-size:12px!important;font-weight:500;line-height:1.4;color:var(--muted)}
+
+/* ---- Frame: sidebar and top bar ---------------------------------------------------------------------------- */
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#0c1930,#070f20);border-right:1px solid var(--line);min-width:280px;max-width:280px}
+[data-testid="stSidebarUserContent"]{padding:2.3rem 1.3rem 2rem!important}
+/* Streamlit's header is hidden, so its reopen button is too; the collapse button would strand the sidebar. */
+[data-testid="stSidebarCollapseButton"],[data-testid="stSidebarHeader"]{display:none}
+/* The top bar: the replay label and «Cómo usar»; the brand joins it only in compact mode. */
+.st-key-topbar{justify-content:space-between;gap:16px!important;flex-wrap:nowrap!important}
+.st-key-topbar>[data-testid="stElementContainer"]:first-child{flex:1 1 auto!important;width:auto!important;min-width:0!important}
+.topbar-lead{display:flex;align-items:center;gap:16px;min-height:40px}
+.masthead-brand{display:none}
+.status{font-size:var(--fs-label);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#afcaed;white-space:nowrap}
+.status:before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--electric);margin-right:8px;box-shadow:0 0 12px #4da3ff;animation:beacon 3s ease-in-out infinite;vertical-align:.1em}
+[data-testid="stPageLink"] a{padding:12px 14px;border:1px solid transparent;border-radius:var(--radius-sm);color:#b9cde6}
+@media(hover:hover){[data-testid="stPageLink"] a:hover{background:#142b4a;border-color:var(--control-line)}}
+
+/* ---- Panels ---------------------------------------------------------------------------------------------- */
+.st-key-summary{background:var(--panel-agent);border:1px solid var(--line)!important;border-radius:var(--radius)!important}
+[data-testid="stForm"]{background:var(--panel);border:1px solid var(--line)!important;border-radius:var(--radius)!important}
+[data-testid="stExpander"]{border-color:var(--line)!important;background:var(--panel);border-radius:var(--radius-sm)}
+[data-testid="stExpander"] summary{font-weight:600}
+@media(hover:hover){[data-testid="stExpander"] summary:hover{color:var(--accent-text)}}
+[data-testid="stAlert"]{background:#112440;color:#e3edfb;border:1px solid #284a72;border-radius:var(--radius-sm)}
+[data-testid="stVegaLiteChart"]{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
+[data-testid="stSelectbox"] [data-baseweb="select"]>div{background:var(--control);color:var(--text);border-color:var(--control-line)}
+[data-baseweb="popover"],[role="listbox"]{background:#10213b!important;color:var(--text)!important}
+[data-testid="stSlider"] [role="slider"]{background:var(--electric)!important}
+[data-testid="stSlider"] [data-testid="stTickBarMin"],[data-testid="stSlider"] [data-testid="stTickBarMax"]{color:var(--muted)}
+
+/* ---- Metric tiles (st.metric; the counters iframe mirrors these values) ------------------------------------ */
+[data-testid="stMetric"]{display:flex;flex-direction:column;justify-content:flex-start;gap:6px;min-height:116px;background:var(--panel);border:1px solid var(--line)!important;border-radius:var(--radius)!important;padding:18px 20px!important}
+/* st.metric(border=True) pads its inner block; the tile already has the padding. */
+[data-testid="stMetric"]>div{display:flex;flex-direction:column;gap:6px;padding:0!important}
+[data-testid="stMetricLabel"],[data-testid="stMetricValue"]{margin:0!important;padding:0!important;min-height:0}
+[data-testid="stMetricLabel"] p{color:var(--muted);font-size:var(--fs-label);font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:1.35}
+/* Labels and values wrap instead of ellipsizing ("REVISIONES HAS…", "2 de 95 sa…"); labels reserve two lines, like
+   the counters, so values sit on one line across a row. */
+[data-testid="stMetricLabel"]{min-height:2.7em!important;align-items:start!important}
+[data-testid="stMetricLabel"]>div{align-items:flex-start!important}
+:is([data-testid="stMetricLabel"],[data-testid="stMetricValue"]) *{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+.st-key-vehicle_metrics [data-testid="stHorizontalBlock"]{align-items:stretch}
+.st-key-vehicle_metrics [data-testid="stColumn"] :is([data-testid="stVerticalBlock"],[data-testid="stElementContainer"],[data-testid="stMetric"]){height:100%}
+[data-testid="stMetricValue"]{font-variant-numeric:tabular-nums;color:var(--text);font-size:var(--fs-metric);font-weight:700;letter-spacing:-.03em}
+.st-key-vehicle_metrics [data-testid="stColumn"]:last-child [data-testid="stMetricValue"]{font-size:20px;line-height:1.4;white-space:normal}
+/* Sized by content, sharing the rest: equal columns would squeeze "2 de 95 sanos". */
+.st-key-season_metrics>*{flex:1 1 auto!important;width:auto!important;min-width:0!important}
+.st-key-season_metrics{align-items:stretch!important}
+.st-key-season_metrics [data-testid="stMetric"]{height:100%}
+/* The counters iframe sizes itself (presentation.metrics); its container must follow. */
+[data-testid="stElementContainer"]:has(>iframe[data-testid="stIFrame"]){height:auto!important}
+iframe[data-testid="stIFrame"]{background:transparent;color-scheme:dark}
+
+/* ---- Fleet calendar (timeline.js): one column per week, its bar the alerts; the segment under it is the
+   replay's progress and the ringed column is the week on screen. ---------------------------------------------- */
+.st-key-weekbar{margin-bottom:12px}
+.tl{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px 14px;color:var(--text);font-family:Manrope,Arial,sans-serif}
+.tl-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin-bottom:12px}
+.tl-when{display:flex;flex-direction:column;gap:6px;min-width:0}
+.tl-eyebrow{font-size:var(--fs-label);font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9cbbdf}
+.tl-titlerow{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
+.tl-title{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.25}
+.tl-short{display:none}
+.tl-chips{display:flex;gap:6px;flex-wrap:wrap}
+.tl-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:#132440;color:var(--muted);border:1px solid var(--line)}
+.tl-chip-new{background:#33260f;color:var(--amber);border-color:#6b4d1f}
+.tl-chip-esc{background:#361616;color:var(--red);border-color:#6e2c2c}
+.tl-chip-new:before,.tl-chip-esc:before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.tl-ctrl{display:flex;gap:8px;align-items:center}
+.tl-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;min-width:40px;margin:0;padding:0 10px;background:var(--control);border:1px solid var(--control-line);border-radius:var(--radius-sm);color:var(--text);font:600 var(--fs-meta)/1 Manrope,Arial,sans-serif;cursor:pointer;transition:background .18s,border-color .18s,transform .18s}
+.tl-btn svg{width:20px;height:20px;fill:currentColor;flex:none}
+.tl-skip{padding:0 16px 0 12px}
+@media(hover:hover){.tl-btn:not(:disabled):hover{background:#18365c;border-color:var(--electric);color:#fff;transform:translateY(-1px)}}
+.tl-btn:disabled{opacity:.4;cursor:default}
+.tl-plot{position:relative}
+.tl-cols,.tl-axis{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));column-gap:4px}
+.tl-col{position:relative;display:flex;flex-direction:column;gap:6px;height:88px;margin:0;padding:6px 0 0;background:transparent;border:0;border-radius:8px;color:inherit;font:inherit;cursor:pointer;transition:background .18s}
+.tl-bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-height:0}
+.tl-n{font-size:11px;font-weight:800;line-height:1;color:#c6d6ec;font-variant-numeric:tabular-nums}
+.tl-stack{display:flex;flex-direction:column;gap:2px;width:min(66%,18px);height:calc(var(--h) * 50px);min-height:8px;border-radius:4px 4px 2px 2px;overflow:hidden;transform-origin:bottom;animation:tl-grow .7s cubic-bezier(.16,1,.3,1) both}
+.tl-stack i{display:block;flex-basis:0;min-height:3px}
+.tl-new{background:var(--amber)}
+.tl-esc{background:var(--red)}
+.tl-empty{width:4px;height:4px;margin-bottom:2px;border-radius:50%;background:#2a3f5f}
+.tl-seg{height:4px;margin:0 1px 7px;border-radius:2px;background:#1c2c45;transition:background .25s}
+.tl-col.is-past .tl-seg{background:#285489}
+.tl-col.is-current{background:#13315b}
+.tl-col.is-current:after{content:'';position:absolute;inset:0;border:1px solid var(--active-line);border-radius:8px;pointer-events:none}
+.tl-col.is-current .tl-seg{background:var(--electric);box-shadow:0 0 10px #4da3ffaa}
+.tl-col.is-current .tl-empty{background:var(--accent-text)}
+@media(hover:hover){.tl-col:not(.is-current):hover{background:#112642}}
+.tl-col:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.tl-axis{margin-top:6px;font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;text-transform:capitalize}
+.tl-year{font-weight:500;color:#7f95b3}
+.tl-tip{position:absolute;top:-6px;left:0;z-index:5;transform:translate(-50%,-100%);display:flex;flex-direction:column;gap:2px;padding:8px 12px;background:#10213b;border:1px solid var(--control-line);border-radius:var(--radius-sm);box-shadow:0 10px 24px #0009;font-size:12px;white-space:nowrap;pointer-events:none}
+.tl-tip[hidden]{display:none}
+.tl-tip strong{font-weight:700;color:var(--text)}
+.tl-tip span{color:var(--muted)}
+.tl-foot{display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12px;color:var(--muted)}
+.tl-key{display:inline-flex;align-items:center;gap:6px}
+.tl-key i{width:10px;height:10px;border-radius:3px}
+.tl-key-new{background:var(--amber)}
+.tl-key-esc{background:var(--red)}
+.tl-hint{margin-left:auto}
+.tl-hint-touch{display:none}
+@media(hover:none){.tl-hint-fine{display:none}.tl-hint-touch{display:inline}}
+
+/* ---- «Cómo usar» (tour.js): the button, and the tour that dims the app and rings one part at a time -------- */
+/* It glows: an electric edge and halo that breathe, and a sheen that crosses it every few seconds. With reduced
+   motion the halo stays, still. */
+.tour-btn{position:relative;overflow:hidden;isolation:isolate;display:inline-flex;align-items:center;gap:8px;min-height:40px;margin:0;padding:0 16px 0 12px;background:linear-gradient(180deg,#17396a,#0f2548);border:1px solid #4d8fdd;border-radius:999px;color:#fff;font:600 var(--fs-meta)/1 Manrope,Arial,sans-serif;white-space:nowrap;cursor:pointer;box-shadow:0 0 16px #4da3ff66,inset 0 1px 0 #ffffff1f;animation:tour-glow 3.2s ease-in-out infinite;transition:background .18s,border-color .18s}
+.tour-btn:after{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(105deg,transparent 30%,#b5dcff5c 50%,transparent 70%);transform:translateX(-130%);animation:tour-sheen 5s ease-in-out infinite}
+.tour-btn svg{width:20px;height:20px;fill:#9fd0ff;flex:none;filter:drop-shadow(0 0 4px #4da3ffaa)}
+@media(hover:hover){.tour-btn:hover{background:linear-gradient(180deg,#1d4a86,#133262);border-color:var(--electric)}}
+.tour-btn:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+/* Until the first tour, it also sends out a ring that invites without insisting. */
+.tour-btn.is-new{border-color:var(--electric);animation:tour-invite 2.4s ease-in-out infinite}
+.tour-layer{position:fixed;inset:0;z-index:1000010;visibility:hidden;opacity:0;transition:opacity .2s,visibility 0s .2s;font-family:Manrope,Arial,sans-serif}
+.tour-layer.is-on{visibility:visible;opacity:1;transition:opacity .2s}
+.tour-block{position:absolute;inset:0}
+.tour-spot{position:absolute;border-radius:16px;pointer-events:none;box-shadow:0 0 0 2px var(--electric),0 0 28px 4px #4da3ff40,0 0 0 200vmax #020610c2;transition:left .38s cubic-bezier(.2,.8,.2,1),top .38s cubic-bezier(.2,.8,.2,1),width .38s cubic-bezier(.2,.8,.2,1),height .38s cubic-bezier(.2,.8,.2,1)}
+.tour-layer.is-center .tour-spot{box-shadow:0 0 0 200vmax #020610cc}
+.tour-card{position:absolute;left:0;top:0;box-sizing:border-box;width:min(380px,calc(100vw - 24px));padding:16px 20px 16px;background:var(--panel-agent);border:1px solid var(--active-line);border-radius:var(--radius);box-shadow:0 24px 64px #000c;color:var(--text);transition:transform .38s cubic-bezier(.2,.8,.2,1)}
+.tour-card.is-sheet{width:calc(100vw - 24px)}
+.tour-card.is-welcome{overflow:hidden;isolation:isolate;border-color:#4d8fdd;box-shadow:0 24px 64px #000c,0 0 24px #4da3ff66;animation:tour-card-glow 3.2s ease-in-out infinite}
+.tour-card.is-welcome:after{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(105deg,transparent 35%,#b5dcff3d 50%,transparent 65%);transform:translateX(-130%);animation:tour-sheen 5s ease-in-out infinite}
+.tour-layer.is-instant :is(.tour-spot,.tour-card){transition:none}
+.tour-card.is-in>:is(.tour-title,.tour-body){animation:tour-in .3s ease-out both}
+.tour-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.tour-count{font-size:var(--fs-label);font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9cbbdf}
+.tour-close{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;margin:-8px -10px -8px 0;padding:0;background:transparent;border:0;border-radius:8px;color:var(--muted);cursor:pointer}
+.tour-close svg{width:18px;height:18px;fill:currentColor}
+@media(hover:hover){.tour-close:hover{background:#142b4a;color:var(--text)}}
+.tour-card .tour-title{margin:0 0 8px;padding:0;font:800 18px/1.3 Manrope,Arial,sans-serif;letter-spacing:-.01em;color:var(--text)}
+.tour-body{font-size:14.5px;line-height:1.6;color:#d8e5f6}
+.tour-body b{font-weight:700;color:var(--text)}
+.tour-progress{height:3px;margin:16px 0 14px;overflow:hidden;border-radius:2px;background:#1c2c45}
+.tour-progress i{display:block;height:100%;background:var(--electric);transition:width .3s}
+.tour-actions{display:flex;justify-content:space-between;gap:8px}
+.tour-actions button{min-height:40px;margin:0;padding:0 16px;border-radius:var(--radius-sm);font:600 var(--fs-meta)/1 Manrope,Arial,sans-serif;cursor:pointer;transition:background .18s,border-color .18s}
+.tour-prev{background:transparent;border:1px solid var(--control-line);color:var(--text)}
+.tour-prev:disabled{opacity:.35;cursor:default}
+.tour-next{min-width:116px;background:var(--primary);border:1px solid var(--primary-line);color:#fff}
+@media(hover:hover){.tour-next:hover{background:#1a5fcc;border-color:var(--electric)}.tour-prev:not(:disabled):hover{background:#142b4a}}
+.tour-layer button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+@media(pointer:coarse){.tour-actions button,.tour-btn,.tl-btn{min-height:44px}}
+
+/* ---- Alert cards ------------------------------------------------------------------------------------------- */
+[class*="st-key-alertcard_"]{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:var(--s3);gap:14px!important;animation:arrive .5s cubic-bezier(.16,1,.3,1) both}
+[class*="st-key-alertcard_1_"]{animation-delay:70ms}[class*="st-key-alertcard_2_"]{animation-delay:140ms}[class*="st-key-alertcard_3_"]{animation-delay:210ms}
+[class*="st-key-cardhead_"]{gap:8px 12px!important}
+[class*="st-key-cardhead_"] [data-testid="stCaptionContainer"] p{margin:0}
+/* The dot carries the kind: amber for a new alert, red for an escalation (same meaning as the badge). */
+[class*="st-key-alertcard_"] h4:before{content:'';display:inline-block;width:8px;height:8px;background:var(--amber);border-radius:50%;margin-right:12px;vertical-align:.14em}
+[class*="st-key-alertcard_"][class*="_persistencia"] h4:before{background:var(--red)}
+.card-lead{font-size:16px;line-height:1.55;color:var(--text);margin:0;max-width:78ch}
+[class*="st-key-alertcard_"] [data-testid="stCaptionContainer"]{max-width:92ch}
+[class*="st-key-cardactions_"]{gap:8px!important;align-items:center}
+[class*="st-key-cardactions_"]>:last-child{margin-left:auto}
+
+/* ---- Messages: a preview of what the driver or the workshop receives, text untouched ----------------------- */
+.message-body{max-width:72ch;overflow-wrap:anywhere;font:400 var(--fs-body)/1.65 Manrope,Arial,sans-serif;color:#d8e5f6;background:var(--inset);border:1px solid var(--line-soft);border-radius:var(--radius-sm);padding:20px 24px}
+.message-body p{margin:0 0 .9em;white-space:pre-wrap}
+.message-body p:last-child{margin-bottom:0}
+.message-body span{display:block}
+.message-body .msg-subject{font-size:16px;font-weight:700;color:var(--text)}
+.message-body .msg-label{font-weight:700;color:var(--text)}
+.message-body .msg-li{padding-left:1.1em;text-indent:-1.1em}
+.message-body .msg-note{font-size:var(--fs-meta);color:var(--muted)}
+
+/* ---- Controls ---------------------------------------------------------------------------------------------- */
+[data-testid="stButton"] button,[data-testid="stFormSubmitButton"] button{background:var(--control);border:1px solid var(--control-line);color:var(--text);border-radius:var(--radius-sm);font-size:var(--fs-meta);font-weight:600;min-height:40px;transition:background .18s,border-color .18s,transform .18s}
+[data-testid="stButton"] button[kind="primary"],[data-testid="stFormSubmitButton"] button{background:var(--primary);border-color:var(--primary-line);color:#fff;padding:0 18px}
+[data-testid="stButton"] button[kind="tertiary"]{background:transparent;border-color:transparent;color:var(--accent-text)}
+@media(hover:hover){
+  [data-testid="stButton"] button:hover{background:#18365c;border-color:var(--electric);color:#fff;transform:translateY(-1px)}
+  [data-testid="stButton"] button[kind="primary"]:hover,[data-testid="stFormSubmitButton"] button:hover{background:#1a5fcc;border-color:var(--electric);color:#fff}
+  [data-testid="stButton"] button[kind="tertiary"]:hover{background:#142b4a;border-color:transparent;transform:none}
+}
+button:disabled{opacity:.45}
+button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--focus)!important;outline-offset:3px!important}
+/* Toggles hide their input; ring the label instead. */
+label:has(input[type="checkbox"]:focus-visible){outline:2px solid var(--focus);outline-offset:4px;border-radius:6px}
+[data-testid="stTabs"] [role="tablist"]{gap:24px;border-bottom:1px solid var(--line)}
+[data-testid="stTabs"] [role="tab"]{color:var(--muted);font-size:var(--fs-meta);font-weight:600;background:transparent}
+[data-testid="stTabs"] [aria-selected="true"]{color:var(--accent-text)!important}
+[data-baseweb="tab-highlight"]{background:var(--electric)!important}
+/* Badges carry facts ("No falló dentro de la ventana del registro (falsa alarma)"): wrap them, never ellipsize. */
+.stMarkdownBadge{display:inline-block;white-space:normal!important;text-overflow:clip!important;max-width:100%;line-height:1.45;vertical-align:middle}
+/* Icon-only week arrows (dock): the label stays for screen readers. */
+:is(.st-key-dock_prev,.st-key-dock_next) button [data-testid="stMarkdownContainer"]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---- Tables (presentation.table): they wrap instead of scrolling sideways like st.dataframe ---------------- */
+.data-table{container-type:inline-size;overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.data-table table{width:100%;border-collapse:collapse;font-size:var(--fs-meta);line-height:1.5;color:#d8e5f6;font-variant-numeric:tabular-nums}
+.data-table th,.data-table td{padding:11px 16px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line-soft)}
+.data-table td{overflow-wrap:anywhere}
+.data-table.nowrap-values td{white-space:nowrap}
+.data-table thead th{font-size:var(--fs-label);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--panel-head)}
+.data-table tbody th{font-weight:600;color:var(--text)}
+.data-table tbody tr:last-child>*{border-bottom:0}
+/* Stacked tables: each row becomes a block of label/value pairs when narrow. */
+@container (max-width:520px){
+  .data-table.stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .data-table.stack :is(table,tbody,tr,th,td){display:block}
+  .data-table.stack tr{padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+  .data-table.stack tbody tr:last-child{border-bottom:0}
+  .data-table.stack :is(th,td){padding:0;border:0}
+  .data-table.stack td{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;margin-top:4px}
+  .data-table.stack td::before{content:attr(data-label);color:var(--muted);font-size:12px}
+}
+
+/* ---- Login ------------------------------------------------------------------------------------------------- */
+.st-key-login{max-width:420px;width:100%;margin:12vh auto 0}
+.st-key-login .brand img{height:44px}
+.st-key-login .brand span{font-size:30px;gap:18px}
+.st-key-login .brand span:before{height:38px}
+.st-key-login .brand-block{border:0;padding-bottom:8px;margin-bottom:20px}
+
+/* ---- Compact mode (app.py). Streamlit collapses the sidebar at 768 px and below, and with the header hidden it
+   cannot be reopened, so the compact set shows exactly while the sidebar is collapsed. -------------------------- */
+.stApp:not(:has([data-testid="stSidebar"][aria-expanded="false"])) :is(.st-key-compact_dock,.st-key-compact_notes),
+.stApp:not(:has([data-testid="stSidebar"][aria-expanded="false"])) [data-testid="stLayoutWrapper"]:has(>:is(.st-key-compact_dock,.st-key-compact_notes)){display:none!important}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stMainBlockContainer"]{padding:1rem 1rem calc(148px + env(safe-area-inset-bottom))}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .status{display:none}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .masthead-brand{display:flex;margin:0}
+.masthead-brand{gap:10px}
+.masthead-brand img{height:24px}
+.masthead-brand span{font-size:17px;gap:10px}
+.masthead-brand span:before{height:20px}
+/* The calendar in compact mode: the dock already has the arrows, so the card keeps the week and the chart. */
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl{padding:14px 12px 10px}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-ctrl{display:none}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-head{margin-bottom:8px}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-title{font-size:17px}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-long{display:none}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-short{display:inline}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) :is(.tl-cols,.tl-axis){column-gap:2px}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-col{height:78px;border-radius:6px}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-col.is-current:after{border-radius:6px}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-stack{height:calc(var(--h) * 42px);width:min(70%,14px)}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-year{display:none}
+[data-testid="stLayoutWrapper"]:has(>.st-key-compact_notes),.st-key-compact_notes{order:99}
+.st-key-compact_notes{border-top:1px solid var(--line);padding-top:16px;margin-top:8px}
+/* The dock: the week and the pages, at the bottom, within thumb reach. */
+[data-testid="stLayoutWrapper"]:has(>.st-key-compact_dock){position:fixed;left:0;right:0;bottom:0;z-index:100;margin:0}
+.st-key-compact_dock{gap:6px!important;padding:8px 12px max(6px,env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -10px 30px #0009}
+.st-key-dock_week{flex-wrap:nowrap!important;gap:6px!important}
+.st-key-dock_week>[data-testid="stElementContainer"]:has(.dock-week){flex:1 1 auto!important;min-width:0!important;width:auto!important}
+.dock-week{display:flex;flex-direction:column;align-items:center;line-height:1.25}
+.dock-week span{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.dock-week strong{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;font-variant-numeric:tabular-nums}
+.st-key-dock_prev button,.st-key-dock_next button{width:44px!important;min-width:44px!important;height:44px;padding:0}
+.st-key-dock_skip button{min-height:44px;padding:0 12px}
+.st-key-dock_nav{flex-wrap:nowrap!important;gap:4px!important;border-top:1px solid var(--line-soft);padding-top:4px}
+.st-key-dock_nav>*{flex:1 1 0!important;min-width:0!important;width:auto!important}
+.st-key-dock_nav [data-testid="stPageLink"] a{flex-direction:column;justify-content:center;align-items:center;gap:2px;min-height:52px;padding:4px 2px;border:0;border-radius:var(--radius-sm);color:var(--muted)}
+.st-key-dock_nav [data-testid="stPageLink"] a:hover{background:transparent}
+.st-key-dock_nav [data-testid="stPageLink"] a>span{margin:0!important}
+.st-key-dock_nav [data-testid="stIconMaterial"]{padding:3px 16px;border-radius:999px;font-size:20px;transition:background .18s}
+.st-key-dock_nav [data-testid="stPageLink"] a p{font-size:var(--fs-label);font-weight:600;line-height:1.2;color:var(--muted);white-space:nowrap}
+
+/* ---- Metric rows follow their own width, not the screen's: with the sidebar open on a tablet they are as narrow
+   as on a phone. --------------------------------------------------------------------------------------------- */
+:is(.st-key-vehicle_metrics,.st-key-season_metrics){container-type:inline-size}
+@container (max-width:640px){
+  .st-key-vehicle_metrics [data-testid="stHorizontalBlock"]{flex-wrap:wrap;gap:10px}
+  .st-key-vehicle_metrics [data-testid="stColumn"]{flex:1 1 calc(50% - 5px)!important;min-width:calc(50% - 5px)!important;width:auto!important}
+  .st-key-season_metrics>*{flex:1 1 calc(50% - 8px)!important;min-width:calc(50% - 8px)!important;width:auto!important}
+  :is(.st-key-vehicle_metrics,.st-key-season_metrics) [data-testid="stMetric"]{min-height:0;padding:14px 16px!important}
+  :is(.st-key-vehicle_metrics,.st-key-season_metrics) [data-testid="stMetricValue"]{font-size:24px}
+  .st-key-vehicle_metrics [data-testid="stColumn"]:last-child [data-testid="stMetricValue"]{font-size:17px;line-height:1.35}
+}
+
+/* ---- Narrow windows and touch ------------------------------------------------------------------------------ */
+@media(max-width:900px){
+  [data-testid="stMainBlockContainer"]{padding:1.5rem}
+  [data-testid="stSidebar"]{min-width:256px;max-width:256px}
+  [data-testid="stSidebarUserContent"]{padding-left:1rem!important;padding-right:1rem!important}
+}
+@media(max-width:768px){
+  .page-heading h1{font-size:27px!important;line-height:1.12}
+  .page-heading p{font-size:14px}
+  h3{font-size:19px!important}
+  [class*="st-key-alertcard_"]{padding:16px}
+  .message-body{padding:16px}
+  [data-testid="stTabs"] [role="tablist"]{gap:16px}
+  .data-table th,.data-table td{padding:10px 12px}
+}
+@media(pointer:coarse){
+  [data-testid="stButton"] button,[data-testid="stFormSubmitButton"] button{min-height:44px}
+  [data-testid="stTabs"] [role="tab"]{min-height:44px}
+  [data-testid="stExpander"] summary{min-height:44px}
+}
+
+/* ---- Motion: the cards arrive once; the replay beacon is the only ambient signal --------------------------- */
+@keyframes arrive{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadein{from{opacity:0}}
+@keyframes beacon{50%{box-shadow:0 0 4px #4da3ff66}}
+@keyframes tl-grow{from{transform:scaleY(0)}}
+@keyframes tour-in{from{opacity:0}}
+@keyframes tour-glow{0%,100%{box-shadow:0 0 12px #4da3ff4d,inset 0 1px 0 #ffffff1f}50%{box-shadow:0 0 24px #4da3ff99,0 0 4px #4da3ff66,inset 0 1px 0 #ffffff2e}}
+@keyframes tour-card-glow{0%,100%{box-shadow:0 24px 64px #000c,0 0 16px #4da3ff4d}50%{box-shadow:0 24px 64px #000c,0 0 36px #4da3ff99,0 0 6px #4da3ff66}}
+@keyframes tour-sheen{0%,55%{transform:translateX(-130%)}85%,100%{transform:translateX(130%)}}
+@keyframes tour-invite{0%{box-shadow:0 0 16px #4da3ff80,0 0 0 0 #4da3ff99,inset 0 1px 0 #ffffff1f}70%{box-shadow:0 0 26px #4da3ffaa,0 0 0 10px #4da3ff00,inset 0 1px 0 #ffffff2e}100%{box-shadow:0 0 16px #4da3ff80,0 0 0 0 #4da3ff00,inset 0 1px 0 #ffffff1f}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
