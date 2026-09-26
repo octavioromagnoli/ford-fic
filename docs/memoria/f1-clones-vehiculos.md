@@ -1,5 +1,7 @@
 # 13 vehículos contados cuatro veces
 
+> **Se sostiene en la entrega v2 (26-09-2026):** los 7 pares que siguen en la cohorte de fallados vienen otra vez con los viajes repetidos bajo los dos códigos, con historia idéntica (Jaccard 1,0); los otros 6 están solo entre los sanos, cuyo archivo no cambió ([f9-entrega-v2.md](f9-entrega-v2.md) §3).
+
 **Fecha:** 2026-09-15 · **Fase:** F1 · **Reproduce:** `python scripts/eda_raw.py`
 (sección 1b; deja `experiments/eda/clones.csv`)
 

@@ -1,0 +1,26 @@
+# VARIANTE CON LA VENTANA DE PRODUCCIÓN (universo de 557, holdout test_split_ventana.json).
+# Se conserva para comparar contra el universo vigente sin ventana (990): ver
+# docs/memoria/f9-universo-v2.md y f9-remedicion-v2.md.
+#
+# Folds del panel v2 con CV REPETIDA (R = 3), en un archivo aparte (mismo motivo que
+# splits_panel_v1_r3.yaml). La repetición 0 son exactamente los folds de splits.json.
+#
+#   python scripts/make_splits.py --config configs/data/splits_panel_v2_ventana_r3.yaml
+seed: 42
+
+test_split: ${DATA_DIR}/processed/test_split_ventana.json
+
+splits:
+  n_splits: 5
+  seed: 42
+  stratify:
+    column: label
+    level: vehicle
+    extra_columns: [static_SalesCountry_cd, aux_static_Engine]
+    min_stratum_size: 5
+  min_valid_positives: 5
+  n_repeats: 3
+
+output:
+  panel: ${DATA_DIR}/processed/panel_ventana.parquet
+  splits: ${DATA_DIR}/processed/splits_ventana_r3.json

@@ -1,5 +1,7 @@
 # El anclaje temporal existe (la regla 4 se puede levantar)
 
+> **Entrega v2 (26-09-2026):** el anclaje se sostiene (IQR 0 d sobre 1.012 autos) solo después de corregir en −538 d el `ProductionDay` de la estática de fallados, que viene contado desde otro origen ([f9-entrega-v2.md](f9-entrega-v2.md) §2).
+
 **Fecha:** 2026-09-15 · **Fase:** F1 · **Reproduce:** `python scripts/eda_raw.py`
 (sección 4; deja `experiments/eda/anchor.csv`)
 

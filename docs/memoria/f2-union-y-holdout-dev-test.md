@@ -1,5 +1,7 @@
 # La unión cierra 1:1 y el holdout dev/test quedó congelado
 
+> **Entrega v2 (26-09-2026):** el holdout se re-sorteó sobre el universo v2 con la misma semilla y un estrato evento × mercado × motor ([f9-universo-v2.md](f9-universo-v2.md) §4). El de abajo sigue congelado en `data/processed-v1/` y se reproduce con `configs/data/test_split_v1.yaml`.
+
 **Fecha:** 2026-09-16 · **Fase:** F2 (previo) · **Reproduce:**
 `python scripts/make_test_split.py --config configs/data/test_split.yaml`
 (deja `data/processed/test_split.json`, `vehicles.parquet` y `raw_quality.csv`).

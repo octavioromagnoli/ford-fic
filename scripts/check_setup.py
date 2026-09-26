@@ -43,6 +43,11 @@ fallan, invalidan todo lo que venga después:
     aditivo sobre el log-odds medio del hazard, la agregación por vehículo usa el umbral y la
     `k` de la curva, la referencia de flota sale solo de los sanos del train, el mensaje nunca
     nombra contexto ni síntomas y ningún output lleva un vehículo de test.
+16. La entrega v2 (26-09-2026): el loader corrige cada parte (renombre, corrimiento de
+    `ProductionDay`, fin de extracción) también en lecturas parciales; el dedupe se queda con
+    el primer evento; el estrato compuesto funde los chicos y el holdout por estrato es 1/5 ± 1;
+    la ventana de producción del universo, el sorteo en una etapa, la extensión de un holdout y
+    la comparación con el holdout viejo; y los folds sin `extra_columns` son los de siempre.
 """
 
 from __future__ import annotations
@@ -1990,6 +1995,190 @@ def explain_checks() -> None:
     )
 
 
+def delivery_v2_checks() -> None:
+    """Entrega v2 (26-09-2026): correcciones por parte del loader, estrato compuesto, ventana
+    de producción del universo, sorteo sobre el universo y eventos repetidos."""
+    import shutil
+    import tempfile
+
+    import yaml
+
+    from src.config import repo_root
+    from src.data.dedupe import dedupe_vehicles
+    from src.data.loader import iter_table, load_table
+    from src.data.usable import select_universe
+    from src.eval.splits import (
+        compare_holdouts,
+        composite_strata,
+        holdout_on_universe,
+        make_test_split,
+        split_options,
+        splits_match_options,
+    )
+
+    tmp = Path(tempfile.mkdtemp(prefix="_check_v2_", dir=repo_root() / "experiments"))
+    try:
+        # --- loader: rename + offsets + truncate_after -----------------------------------
+        pd.DataFrame({"VehicleCode": ["A", "B"], "IdentificationDaysSinceProduction": [300, 250],
+                      "daysUntilSale": [50, 40], "ProductionDay": [600, 540]}).to_csv(tmp / "sf.csv", index=False)
+        pd.DataFrame({"VehicleCode": ["C"], "IdentificationDate": [np.nan], "daysUntilSale": [30],
+                      "ProductionDay": [10]}).to_csv(tmp / "sn.csv", index=False)
+        pd.DataFrame({"VehicleCode": ["A", "A", "B"],
+                      "TripDatetimeStart": ["2026-09-10T10:00:00+00:00", "2026-09-20T10:00:00+00:00",
+                                            "2026-09-11T10:00:00+00:00"],
+                      "OdometerTripEnd": [10.0, 20.0, 5.0]}).to_csv(tmp / "tf.csv", index=False)
+        pd.DataFrame({"VehicleCode": ["C"], "TripDatetimeStart": ["2026-09-12T10:00:00+00:00"],
+                      "OdometerTripEnd": [7.0]}).to_csv(tmp / "tn.csv", index=False)
+        sources = {
+            "tables": {
+                "vehicles": {"parts": {
+                    "failed": {"path": str(tmp / "sf.csv"), "rename": {"IdentificationDaysSinceProduction": "IdentificationDate"},
+                               "offsets": {"ProductionDay": -538}},
+                    "not_failed": str(tmp / "sn.csv")},
+                    "dtypes": {"VehicleCode": "str", "IdentificationDate": "float64", "ProductionDay": "float64"}},
+                "trips": {"date_format": "ISO8601",
+                          "parts": {"failed": str(tmp / "tf.csv"), "not_failed": str(tmp / "tn.csv")},
+                          "truncate_after": {"column": "TripDatetimeStart", "at": "2026-09-14T00:00:00+00:00"},
+                          "dtypes": {"VehicleCode": "str", "OdometerTripEnd": "float64"},
+                          "date_columns": ["TripDatetimeStart"]},
+            }
+        }
+        cfg_path = tmp / "sources.yaml"
+        cfg_path.write_text(yaml.safe_dump(sources), encoding="utf-8")
+        rel = cfg_path.relative_to(repo_root())
+        veh = load_table("vehicles", rel)
+        check(
+            "loader v2: `rename` unifica la columna del evento y `offsets` corre ProductionDay solo en su parte",
+            "IdentificationDate" in veh.columns and "IdentificationDaysSinceProduction" not in veh.columns
+            and veh.set_index("VehicleCode").loc[["A", "B", "C"], "ProductionDay"].tolist() == [62.0, 2.0, 10.0],
+        )
+        trips = load_table("trips", rel)
+        check(
+            "loader v2: `truncate_after` saca lo posterior al fin de extracción común",
+            sorted(trips["VehicleCode"]) == ["A", "B", "C"]
+            and trips["TripDatetimeStart"].max() <= pd.Timestamp("2026-09-14", tz="UTC"),
+            f"{len(trips)} filas",
+        )
+        partial = pd.concat(list(iter_table("trips", rel, columns=["VehicleCode", "OdometerTripEnd"])))
+        check(
+            "loader v2: una lectura parcial que no pide la fecha igual se recorta (y no la devuelve)",
+            len(partial) == 3 and "TripDatetimeStart" not in partial.columns,
+        )
+        # --- dedupe: una fila por evento -> se queda el primero ------------------------
+        dup = pd.DataFrame({"VehicleCode": ["A", "A", "B", "C"], "IdentificationDate": [400.0, 250.0, np.nan, 90.0],
+                            "cohort": ["failed", "failed", "not_failed", "failed"]})
+        clones_cfg = tmp / "dedupe.yaml"
+        clones_cfg.write_text(yaml.safe_dump({"clone_groups": []}), encoding="utf-8")
+        d = dedupe_vehicles(dup, config_path=clones_cfg.relative_to(repo_root())).set_index("VehicleCode")
+        check(
+            "dedupe v2: con varios eventos se queda el primero y `n_events_recorded` los cuenta",
+            d.loc["A", "IdentificationDate"] == 250.0 and d.loc["A", "n_events_recorded"] == 2
+            and d.loc["B", "n_events_recorded"] == 0 and d.loc["B", "cohort"] == "not_failed",
+        )
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # --- estrato compuesto -------------------------------------------------------------
+    rng = np.random.default_rng(11)
+    n = 600
+    vehicles = pd.DataFrame({
+        "vehicle_id": [f"V{i:04d}" for i in range(n)],
+        "event_observed": (rng.random(n) < 0.3).astype(int),
+        "static_SalesCountry_cd": rng.choice(["ARG", "BRA", "CHL", "COL", "PER"], n, p=[0.2, 0.3, 0.2, 0.25, 0.05]),
+        "static_Engine": rng.choice(["ENG_1", "ENG_2", "ENG_3"], n, p=[0.15, 0.5, 0.35]),
+        "static_ProductionDay": rng.integers(-150, 340, n),
+        "event_day_since_production": np.nan,
+        "static_daysUntilSale": 60.0,
+    })
+    keys = composite_strata(vehicles, ["event_observed", "static_SalesCountry_cd", "static_Engine"], min_size=5)
+    counts = pd.Series(keys).value_counts()
+    full_depth = [k for k in counts.index if k.count("|") == 2]
+    check(
+        "estrato compuesto: todo estrato completo tiene al menos `min_size` y los chicos se funden hacia arriba",
+        all(counts[k] >= 5 for k in full_depth) and len(counts) < len(pd.Series(
+            ["|".join(r) for r in vehicles[["event_observed", "static_SalesCountry_cd", "static_Engine"]].astype(str).to_numpy()]
+        ).unique()),
+        f"{len(counts)} estratos",
+    )
+    split = make_test_split(vehicles, test_size=0.2, seed=42,
+                            stratify_columns=["event_observed", "static_SalesCountry_cd", "static_Engine"])
+    by = pd.DataFrame({"k": keys, "t": vehicles["vehicle_id"].isin(split["test_vehicles"])}).groupby("k")["t"].agg(["size", "sum"])
+    check(
+        "holdout estratificado: en cada estrato el test es 1/5 ± 1 vehículo",
+        bool(((by["sum"] - by["size"] / 5).abs() <= 1).all()) and split["stratify"]["min_stratum_size"] == 5,
+    )
+    plain = make_test_split(vehicles, test_size=0.2, seed=42)
+    check(
+        "holdout: sin `stratify_columns` no hay bloque de estratos y el test sigue siendo 1/5 (el camino de la entrega 1)",
+        "stratify" not in plain and abs(len(plain["test_vehicles"]) - n / 5) <= 5,
+    )
+
+    # --- universo: ventana de producción + sorteo en una etapa ----------------------------
+    vehicles["event_day_since_production"] = np.where(vehicles["event_observed"].eq(1), 200.0, np.nan)
+    vehicles.loc[vehicles["event_observed"].eq(1) & vehicles["static_ProductionDay"].gt(190), "event_observed"] = 0
+    vehicles.loc[vehicles["event_observed"].eq(0), "event_day_since_production"] = np.nan
+    keep, universe = select_universe(vehicles, require_usable_event_date=True, keep_markets=None,
+                                     production_day_window=[1, 193])
+    inside = vehicles["static_ProductionDay"].between(1, 193)
+    check(
+        "universo: la ventana de producción saca exactamente a los de afuera y lo cuenta por cohorte",
+        bool((keep == inside).all()) and universe["n_dropped_production"] == int((~inside).sum())
+        and sum(universe["dropped_production_by_cohort"].values()) == int((~inside).sum()),
+    )
+    holdout = holdout_on_universe(vehicles, keep, seed=42,
+                                  stratify_columns=["event_observed", "static_SalesCountry_cd", "static_Engine"],
+                                  universe=universe)
+    in_universe = set(vehicles.loc[keep, "vehicle_id"])
+    check(
+        "sorteo sobre el universo: dev ∪ test = universo, excluidos = el resto, sin solapamiento",
+        set(holdout["dev_vehicles"]) | set(holdout["test_vehicles"]) == in_universe
+        and set(holdout["excluded_vehicles"]) == set(vehicles["vehicle_id"]) - in_universe
+        and not set(holdout["dev_vehicles"]) & set(holdout["test_vehicles"]),
+    )
+    panel_ok = pd.DataFrame({"vehicle_id": sorted(in_universe)})
+    panel_bad = pd.DataFrame({"vehicle_id": [holdout["excluded_vehicles"][0]]})
+    dev_mask, test_mask = test_split_masks(panel_ok, holdout)
+    check(
+        "sorteo sobre el universo: test_split_masks lo consume y grita si aparece un excluido",
+        int(dev_mask.sum()) == len(holdout["dev_vehicles"]) and int(test_mask.sum()) == len(holdout["test_vehicles"])
+        and _raises(lambda: test_split_masks(panel_bad, holdout), ValueError),
+    )
+    old = {"dev_vehicles": holdout["test_vehicles"][:3] + holdout["dev_vehicles"][:5],
+           "test_vehicles": holdout["dev_vehicles"][5:7], "excluded_vehicles": []}
+    cmp_ = compare_holdouts(holdout, old)
+    check(
+        "compare_holdouts: cuenta las transiciones y lista los autos del test nuevo que estaban en el dev viejo",
+        cmp_["n_test_vehicles_in_old_dev"] == 3 and cmp_["transitions"].get("dev->test") == 3
+        and cmp_["transitions"].get("test->dev") == 2,
+    )
+
+    # --- folds con estrato compuesto ----------------------------------------------------
+    folds_panel = build_dummy_panel({**SMALL_PANEL, "seed": 3})
+    vid = folds_panel["vehicle_id"].astype(str)
+    folds_panel["aux_static_Engine"] = np.where(vid.str[-1].isin(list("0123")), "ENG_1", "ENG_2")
+    base = make_splits(folds_panel, n_splits=3, seed=5, min_valid_positives=1)
+    same = make_splits(folds_panel, n_splits=3, seed=5, min_valid_positives=1, stratify_extra_columns=())
+    comp = make_splits(folds_panel, n_splits=3, seed=5, min_valid_positives=1,
+                       stratify_extra_columns=["aux_static_Engine"], min_stratum_size=3)
+    check(
+        "folds: sin columnas extra el reparto es el de siempre, bit a bit",
+        [f["valid_vehicles"] for f in base["folds"]] == [f["valid_vehicles"] for f in same["folds"]]
+        and "extra_columns" not in base["stratify"],
+    )
+    check(
+        "folds: con estrato compuesto quedan declaradas las columnas y cada vehículo en un solo fold",
+        comp["stratify"]["extra_columns"] == ["aux_static_Engine"]
+        and sorted(v for f in comp["folds"] for v in f["valid_vehicles"]) == sorted(vid.unique()),
+    )
+    opts_old = split_options({"splits": {"n_splits": 5}})
+    opts_new = split_options({"splits": {"stratify": {"extra_columns": ["aux_static_Engine"], "min_stratum_size": 3}}})
+    check(
+        "folds: un YAML sin `extra_columns` arma los kwargs de siempre, y uno con ellas choca con un archivo sin",
+        "stratify_extra_columns" not in opts_old
+        and bool(splits_match_options(base, opts_new)) and not splits_match_options(comp, {**opts_new, "n_splits": 3, "seed": 5}),
+    )
+
+
 def main() -> int:
     set_seed(7)
     panel = build_dummy_panel(SMALL_PANEL)
@@ -2540,6 +2729,7 @@ def main() -> int:
     f7_variance_checks()
     dashboard_checks()
     explain_checks()
+    delivery_v2_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()

@@ -45,6 +45,31 @@ habríamos visto. Uno de CNTRY_1 no.
 
 Los números de arriba se reproducen con `market_usability()`, y el detalle está en
 `docs/memoria/f2-universo-fecha-usable.md`.
+
+## Entrega v2 (26-09-2026): la selección pasó del mercado a la fecha de producción
+
+En v2 ningún fallado tiene la fecha por defecto: Ford sacó a esos 278 autos en vez de
+corregirles la fecha, y los cinco mercados tienen eventos fechados. El criterio 1 ya
+no tira a nadie y el 2 deja de ser necesario (se declaran los mercados con sanos).
+
+Pero apareció el mismo problema en otro eje. Las dos cohortes se muestrearon sobre
+**períodos de producción distintos**:
+
+| producción | fallados | sanos |
+|---|---|---|
+| ago-2024 → 19-01-2025 | 93 | **0** |
+| 20-01-2025 → 31-07-2025 | 177 | 380 |
+| ago-2025 → dic-2025 | **0** | 341 |
+
+Los 93 fallados producidos en 2024 no tienen sanos de su época: son positivos de otra
+población. Y ningún auto producido desde agosto de 2025 figura como fallado, aunque
+el hazard por días desde la venta de los producidos en ene-jun 2025 predice ~50
+eventos entre ellos (28 en ago-sep, 22 en oct-dic). Cero observados contra ~50
+esperados no es falta de exposición: es que sus fallas no están en la muestra. Un
+sano de octubre de 2025 no es un negativo verificable, igual que no lo era uno de
+CNTRY_1 en la entrega 1. Es la misma regla simétrica, en otro eje: se conserva el
+período de producción donde las dos cohortes se muestrearon (criterio 3,
+`production_day_window`). El detalle está en `docs/memoria/f9-universo-v2.md`.
 """
 
 from __future__ import annotations
@@ -61,6 +86,7 @@ EVENT_COL = "event_observed"
 EVENT_DAY_COL = "event_day_since_production"
 SALE_DAY_COL = "static_daysUntilSale"
 MARKET_COL = "static_SalesCountry_cd"
+PRODUCTION_DAY_COL = "static_ProductionDay"
 
 
 def event_date_usable(vehicles: pd.DataFrame) -> pd.Series:
@@ -109,26 +135,52 @@ def market_usability(vehicles: pd.DataFrame) -> pd.DataFrame:
     ]
 
 
+def production_by_cohort(
+    vehicles: pd.DataFrame, window: tuple[float, float] | list[float] | None = None
+) -> pd.DataFrame:
+    """Vehículos por cohorte antes, dentro y después de la ventana de producción.
+
+    Es el cuadro que justifica el criterio 3: si una cohorte tiene vehículos en un
+    tramo de producción donde la otra no tiene ninguno, ese tramo es de otra población.
+    """
+    _require(vehicles, [ID_COL, EVENT_COL, PRODUCTION_DAY_COL])
+    day = pd.to_numeric(vehicles[PRODUCTION_DAY_COL], errors="coerce")
+    if window is None:
+        band = pd.Series("todo", index=vehicles.index)
+    else:
+        lo, hi = float(window[0]), float(window[1])
+        band = pd.Series("dentro", index=vehicles.index).mask(day < lo, "antes").mask(day > hi, "después")
+    out = (
+        vehicles.assign(_band=band, _cohort=vehicles[EVENT_COL].map({1: "fallados", 0: "sanos"}))
+        .groupby(["_band", "_cohort"]).size().unstack(fill_value=0)
+    )
+    return out.reindex([b for b in ("antes", "dentro", "después", "todo") if b in out.index])
+
+
 def select_universe(
     vehicles: pd.DataFrame,
     *,
     require_usable_event_date: bool = True,
     keep_markets: list[str] | None = None,
+    production_day_window: tuple[float, float] | list[float] | None = None,
 ) -> tuple[pd.Series, dict[str, Any]]:
     """Máscara del universo del estudio + el informe de por qué quedó así.
 
-    Los dos criterios se componen con AND y ninguno es un default silencioso: los
-    dos salen del YAML (`configs/data/test_split.yaml`, sección `universe`), así que
-    volver al universo completo es cambiar una clave, no editar código.
+    Los criterios se componen con AND y ninguno es un default silencioso: salen del
+    YAML (`configs/data/test_split.yaml`, sección `universe`), así que volver al
+    universo completo es cambiar una clave, no editar código.
 
     - `require_usable_event_date`: tira los positivos con fecha por defecto. Los
       sanos no se tocan —no tienen fecha—.
     - `keep_markets`: se queda con los mercados listados. `None` los deja todos, que
       es lo que reintroduce la selección sobre el resultado descrita arriba.
+    - `production_day_window`: `[desde, hasta]` en `ProductionDay` (inclusive), el
+      período de producción donde las dos cohortes se muestrearon. `None` no recorta.
+      Un vehículo sin `ProductionDay` queda afuera si hay ventana.
 
     Devuelve `(mask, report)`. El informe se serializa dentro del holdout: quien
     lea `test_split.json` dentro de seis meses tiene que poder ver cuántos
-    vehículos se descartaron y por cuál de los dos criterios, sin correr nada.
+    vehículos se descartaron y por cuál criterio, sin correr nada.
     """
     _require(vehicles, [ID_COL, EVENT_COL, MARKET_COL])
     keep = pd.Series(True, index=vehicles.index)
@@ -147,23 +199,49 @@ def select_universe(
     else:
         dropped_by_market = 0
 
+    dropped_by_production = {"fallados": 0, "sanos": 0}
+    if production_day_window is not None:
+        _require(vehicles, [PRODUCTION_DAY_COL])
+        lo, hi = float(production_day_window[0]), float(production_day_window[1])
+        day = pd.to_numeric(vehicles[PRODUCTION_DAY_COL], errors="coerce")
+        before = keep.copy()
+        keep &= day.between(lo, hi)
+        dropped = before & ~keep
+        dropped_by_production = {
+            "fallados": int((dropped & vehicles[EVENT_COL].eq(1)).sum()),
+            "sanos": int((dropped & vehicles[EVENT_COL].ne(1)).sum()),
+        }
+
     report = {
         "require_usable_event_date": bool(require_usable_event_date),
         "keep_markets": list(keep_markets) if keep_markets is not None else None,
+        "production_day_window": (
+            [float(production_day_window[0]), float(production_day_window[1])]
+            if production_day_window is not None else None
+        ),
         "n_input": int(len(vehicles)),
         "n_kept": int(keep.sum()),
         "n_dropped_no_usable_date": dropped_by_date,
         "n_dropped_market": dropped_by_market,
+        "n_dropped_production": int(sum(dropped_by_production.values())),
+        "dropped_production_by_cohort": dropped_by_production,
         "events_input": int(vehicles[EVENT_COL].sum()),
         "events_kept": int(vehicles.loc[keep, EVENT_COL].sum()),
         "markets": market_usability(vehicles).to_dict(orient="records"),
     }
+    if production_day_window is not None:
+        table = production_by_cohort(vehicles, production_day_window)
+        report["production_by_cohort"] = {
+            str(band): {str(k): int(v) for k, v in row.items()} for band, row in table.iterrows()
+        }
     logger.info(
-        "Universo: %d -> %d vehículos (%d sin fecha usable, %d por mercado); eventos %d -> %d",
+        "Universo: %d -> %d vehículos (%d sin fecha usable, %d por mercado, %d por producción); "
+        "eventos %d -> %d",
         report["n_input"],
         report["n_kept"],
         dropped_by_date,
         dropped_by_market,
+        report["n_dropped_production"],
         report["events_input"],
         report["events_kept"],
     )

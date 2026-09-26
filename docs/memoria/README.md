@@ -21,6 +21,10 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 
 | Archivo | Qué contesta |
 |---|---|
+| [f9-entrega-v2.md](f9-entrega-v2.md) | **La entrega v2 de Ford (26-09):** qué archivos cambiaron (los de sanos son byte a byte los de la entrega 1), las cinco trampas de formato (columna renombrada, `ProductionDay` +538 d, una fila por evento, filas repetidas, extracción asimétrica), qué pasó con cada código y por qué la fecha nueva cae ~2 semanas después de la intervención |
+| [f9-universo-v2.md](f9-universo-v2.md) | **Por qué el universo v2 son 557 vehículos (446 dev / 111 test):** la selección pasó del mercado a la fecha de producción (93 fallados de 2024 sin sanos; 0 fallados producidos desde agosto de 2025 contra ~50 esperados), cómo se re-sorteó el holdout (semilla 42, evento × mercado × motor) y los 36 autos del test que estaban en el dev viejo |
+| [f9-eda-v2.md](f9-eda-v2.md) | **La EDA sobre el dev v2, dentro del mercado:** qué hallazgos de la entrega 1 se sostienen (reloj en días, idle, marcador cortado, confusor calendario), cuáles ya no pasan (ventana del registro, velocidad, bajo régimen entre los que se mueven, "sin trayectoria") y qué es nuevo (ENG_3 en Brasil, altura, cohorte de venta) |
+| [f9-remedicion-v2.md](f9-remedicion-v2.md) | **Los modelos de F3 re-medidos sobre v2:** survival stacking aprueba (a0) y (a′) igual que en v1; la separación sube (ROC por fila 0,59 → 0,71) pero dentro de mercado × motor el uso ordena autos con AUC ~0,58, como en v1; motor y modelo aportan la tasa de su celda; la detección a presupuesto fijo no es comparable |
 | [f1-datos-reales.md](f1-datos-reales.md) | Qué hay en `data/raw/`, con qué esquema y cómo joinea |
 | [f1-clones-vehiculos.md](f1-clones-vehiculos.md) | 13 vehículos contados cuatro veces, y por qué rompen el split |
 | [f1-sesgo-eng3.md](f1-sesgo-eng3.md) | `ENG_3` no aparece entre los fallados: sesgo de muestreo |
@@ -69,6 +73,16 @@ decisiones** antes de escribir código, y que no se deduce leyendo el repo.
 ## Cómo se reproduce todo esto
 
 ```bash
+# --- entrega v2 (26-09-2026): lo vigente ---------------------------------------------
+python scripts/compare_deliveries.py --config configs/data/compare_deliveries.yaml  # entrega 1 contra v2 (f9-entrega-v2.md)
+python scripts/make_test_split.py --config configs/data/test_split.yaml --force     # universo + holdout v2 (f9-universo-v2.md)
+python scripts/build_city_elevation.py --config configs/data/city_geocode.yaml      # altura de la ciudad de venta (red)
+python scripts/build_eda_cache.py --config configs/data/eda_cache_v2.yaml && python scripts/eda_gaps.py --config configs/data/eda_cache_v2.yaml
+python scripts/eda_v2.py --config configs/eda_v2.yaml                               # EDA dentro del mercado (f9-eda-v2.md)
+python scripts/build_dataset.py --config configs/data/panel_v2.yaml                 # panel v2 (diseño v1, referencia − 21 d)
+WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2_ss_r3.yaml     # re-medición (f9-remedicion-v2.md)
+
+# --- entrega 1 (15-09-2026): lo de abajo mide la entrega 1; sus artefactos están en data/processed-v1/ ---
 python scripts/eda_raw.py          # deja los CSV en experiments/eda/
 python scripts/make_test_split.py  # auditoría del join + holdout dev/test congelado
 python scripts/build_eda_cache.py  # cache dev-only del EDA (experiments/eda/dev/)

@@ -1,55 +1,69 @@
-# Holdout dev/test congelado. Se corre UNA vez, antes de F2.
+# Holdout dev/test VIGENTE de la entrega v2 (26-09-2026): sin la ventana de producción.
 #
-#   python scripts/make_test_split.py --config configs/data/test_split.yaml
+#   python scripts/make_test_split.py --config configs/data/test_split_ventana.yaml --force   # la base (557)
+#   python scripts/make_test_split.py --config configs/data/test_split.yaml --force           # este (990)
 #
-# El universo son los vehículos reales (post-dedupe de los 13 clones), no las filas
-# del panel: el panel de F2 todavía no existe, y ese es justamente el punto. Si el
-# holdout se eligiera después de construir el panel y mirar las features, cada
-# decisión de diseño tomada en el medio se habría tomado con el test a la vista.
+# Decisión del equipo (26-09): no recortar el universo por fecha de producción, para no
+# tirar 433 vehículos; los cortes son por km. El costo medido de esa decisión y cómo leer
+# cualquier número con los autos de fuera de la ventana: docs/memoria/f9-universo-v2.md.
 #
-# Congelado el archivo, no se regenera: cambiar la semilla o el test_size después
-# de haber medido contra el test es elegir el test que mejor queda.
-seed: 42
+# El holdout no se re-sortea: se EXTIENDE el de la ventana (nadie cambia de lado; la EDA
+# de ese dev ya se hizo) y, entre los que entran, los que estaban en el dev o el test de
+# la entrega 1 vuelven a ese lado. El resto se sortea una vez, con la misma semilla.
+#
+# El holdout de la entrega 1 (290 dev / 74 test) está congelado en data/processed-v1/ y se
+# reproduce bit a bit con configs/data/test_split_v1.yaml.
+seed: 42                  # la misma semilla de la entrega 1
 test_size: 0.2            # 1/5: un fold de StratifiedGroupKFold (ver src/eval/splits.py)
 
 sources: configs/data/raw_sources.yaml
-dedupe: configs/data/vehicle_dedupe.yaml    # 13 vehículos duplicados bajo dos códigos (F1)
+dedupe: configs/data/vehicle_dedupe.yaml    # los mismos 13 pares (en v2, 7 siguen en fallados, con historia idéntica)
 panel: configs/data/panel_v1.yaml           # de acá salen las columnas static_*
+extra_static_columns: [SalesCity]           # nueva en v2; se reporta, no se estratifica
 
 group_column: vehicle_id                    # regla 2: ningún vehículo en los dos lados
-event_column: event_observed                # estratificación: IdentificationDate no nula
+event_column: event_observed                # IdentificationDate no nula
 
-# Universo del estudio: qué vehículo entra, antes de repartir. Los dos criterios
-# se aplican DESPUÉS del sorteo, sobre el resultado ya congelado: cada vehículo que
-# sobrevive conserva el lado que le tocó. Re-sortear el universo recortado sería
-# un dado nuevo tirado después de haber mirado los datos que motivaron el recorte.
-# El detalle está en `src/data/usable.py` y en
-# `docs/memoria/f2-universo-fecha-usable.md`. Poner las dos claves en `false`/`null`
-# devuelve el universo completo de 1081 sin tocar una línea de código.
+# Universo del estudio: qué vehículo entra, ANTES de sortear (src/data/usable.py).
 universe:
-  # `IdentificationDate == daysUntilSale` exactamente en 284 de los 365 positivos:
-  # el evento queda pegado al día de la venta, con el odómetro en ~13 km. No es
-  # física (nunca hay un evento ANTERIOR a la venta: 0 de 365), es una convención
-  # de registro. Sin historial previo no hay ventana W ni gap G, así que esas filas
-  # no se pueden etiquetar.
+  # En v2 ningún fallado tiene IdentificationDate == daysUntilSale (0 de 298 filas):
+  # Ford sacó a los 278 que la tenían. El criterio queda por si vuelve a aparecer.
   require_usable_event_date: true
 
-  # La convención es del mercado, no del vehículo: en CNTRY_1 y CNTRY_5 ningún
-  # evento tiene fecha utilizable y en CNTRY_2 uno de 105. Si se tiran esos
-  # positivos y se dejan sus sanos, los tres mercados aportan 432 negativos y 1
-  # positivo: eso es selección sobre el resultado, y los negativos dejan de venir
-  # de la misma población que los positivos. Se conservan los mercados donde el
-  # evento SE PUEDE observar; un sano de CNTRY_4 es un negativo legítimo porque si
-  # hubiera fallado lo habríamos visto, uno de CNTRY_1 no.
-  keep_markets: [CNTRY_3, CNTRY_4]
+  # Los cinco mercados tienen eventos fechados y sanos. PRY tiene 1 fallado y 0 sanos
+  # (y es un auto de 2024, fuera de la ventana de abajo). PER no tiene fallados dentro
+  # de la ventana, pero registra eventos fechados (2, de autos de 2024): un sano de PER
+  # es un negativo en un mercado donde el evento se puede ver, así que entra.
+  keep_markets: [ARG, BRA, CHL, COL, PER]
 
-# Columnas cuyo balance se REPORTA entre dev y test. No se estratifica por ellas:
-# forzar el balance de una covariable con 1081 vehículos gasta grados de libertad
-# para arreglar algo que la estratificación por evento ya deja razonable.
-balance_columns: [static_Engine, static_ModelSeries, static_SalesCountry_cd]
+  # Sin recorte por fecha de producción (decisión del equipo, 26-09). Con la ventana eran
+  # 557 vehículos: configs/data/test_split_ventana.yaml. Afuera de ella quedan 92 fallados
+  # producidos en 2024 sin ningún sano de su época y 341 sanos producidos desde agosto de
+  # 2025 sin ningún fallado (~50 esperados por exposición): leer f9-universo-v2.md §2
+  # antes de interpretar una diferencia entre cohortes.
+  production_day_window: null
+
+# Extensión del holdout de la ventana (src/eval/splits.py::extend_holdout).
+draw:
+  mode: extend        # `on:` no: YAML lo lee como booleano
+  base: ${DATA_DIR}/processed/test_split_ventana.json
+  # Los que entran y estaban en el dev/test del holdout previo (la entrega 1) vuelven a
+  # ese lado: ningún auto mirado en F2-F8 se suma al test.
+  keep_previous_sides: true
+  # El resto se sortea estratificado por evento × mercado × motor, como la base.
+  stratify: [event_observed, static_SalesCountry_cd, static_Engine]
+  min_stratum_size: 5
+
+# Con qué holdout se compara el nuevo: cuántos autos cambian de lado, y cuáles del
+# test nuevo estaban en el dev viejo (se miraron durante F3-F8). La lista queda en el
+# JSON para reportar el test final también sin ellos.
+previous_holdout: ${DATA_DIR}/processed-v1/test_split.json
+
+# Columnas cuyo balance se REPORTA entre dev y test (las dos primeras también estratifican).
+balance_columns: [static_Engine, static_SalesCountry_cd, static_ModelSeries]
 
 scan:
-  chunksize: 500000       # signals son 10,6M de filas: se leen por chunks
+  chunksize: 500000       # signals son 10M de filas: se leen por chunks
 
 output:
   test_split: ${DATA_DIR}/processed/test_split.json

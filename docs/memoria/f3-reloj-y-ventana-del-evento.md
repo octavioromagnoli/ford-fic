@@ -1,5 +1,7 @@
 # F3 · El reloj del evento y la ventana del registro
 
+> **Entrega v2 (26-09-2026):** la ventana del registro no existe en v2 (el mes calendario no agrega nada, LR p = 0,16); el reloj en días se sostiene. Ver [f9-eda-v2.md](f9-eda-v2.md) §C y [decisiones.md](decisiones.md) (26-09).
+
 **22-09-2026 · solo dev** (290 vehículos, 60 con evento; test sin mirar) · rama
 `feat/landmark-post-venta` · Fase 1 del cure model.
 

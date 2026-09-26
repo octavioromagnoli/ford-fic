@@ -1,5 +1,7 @@
 # `ENG_3` no aparece entre los fallados
 
+> **Ya no vale en la entrega v2 (26-09-2026):** ENG_3 tiene 47 eventos en el universo (46 en Brasil). El motivo de la exclusión ya no está; lo que aporta está medido en [f9-remedicion-v2.md](f9-remedicion-v2.md) y la decisión en [decisiones.md](decisiones.md) (26-09).
+
 **Fecha:** 2026-09-15 · **Fase:** F1 · **Reproduce:** `python scripts/eda_raw.py` (sección 2)
 
 Proporción dentro de cada cohorte:

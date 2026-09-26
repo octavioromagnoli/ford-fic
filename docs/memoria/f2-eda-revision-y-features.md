@@ -1,5 +1,7 @@
 # Revisión del EDA y feature engineering de F2: qué se sostiene, qué estaba mal y qué se construyó
 
+> **Entrega v2 (26-09-2026):** varios hallazgos cambiaron. Dentro del mercado, la velocidad y el bajo régimen entre los que se mueven ya no separan; hay trayectoria hacia el evento; el marcador, el idle y el confusor calendario se sostienen. La tabla completa está en [f9-eda-v2.md](f9-eda-v2.md) §1.
+
 **Fecha:** 2026-09-18 · **Fase:** F2 · **Alcance:** dev (290 vehículos, 60 eventos) para
 todo lo que se mide; el panel se construye con los 364 del universo. · **Reproduce:**
 

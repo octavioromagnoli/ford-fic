@@ -90,14 +90,24 @@ def dedupe_vehicles(
     Además del colapso de clones, la tabla estática trae el mismo código en las dos
     cohortes: la fila `failed` es la que tiene `IdentificationDate`, así que se
     queda esa.
+
+    Desde la entrega v2 la estática de fallados trae **una fila por evento** (19 autos
+    con dos o más). Se queda el **primero** —el orden por `IdentificationDate` ya lo
+    elegía—, que es el que define el tiempo al evento, y `n_events_recorded` cuenta
+    cuántos distintos tenía el auto. Es información de la etiqueta: nunca una feature.
     """
     out = vehicles.copy()
     out[id_col] = out[id_col].replace(canonical_map(config_path))
 
+    n_events = None
     if event_day_col in out.columns:
-        # Ordena dejando primero la fila con el día del evento: es la informativa.
-        out = out.sort_values(event_day_col, na_position="last")
+        n_events = out.groupby(id_col)[event_day_col].nunique()
+        # Ordena dejando primero la fila con el día del evento: es la informativa. Con
+        # varios eventos, el más temprano.
+        out = out.sort_values(event_day_col, na_position="last", kind="stable")
     out = out.drop_duplicates(subset=[id_col], keep="first", ignore_index=True)
+    if n_events is not None:
+        out["n_events_recorded"] = out[id_col].map(n_events).fillna(0).astype(int)
 
     if event_day_col in out.columns and cohort_col in out.columns:
         out[cohort_col] = out[event_day_col].notna().map({True: EVENT_COHORT, False: "not_failed"})
