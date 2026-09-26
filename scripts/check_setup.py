@@ -43,6 +43,10 @@ fallan, invalidan todo lo que venga después:
     aditivo sobre el log-odds medio del hazard, la agregación por vehículo usa el umbral y la
     `k` de la curva, la referencia de flota sale solo de los sanos del train, el mensaje nunca
     nombra contexto ni síntomas y ningún output lleva un vehículo de test.
+16. La demo de producto (F9): la política asigna la acción y la herramienta del agente rechaza otra, el
+    verificador rechaza números inventados, causas, síntomas al conductor y textos que contradicen la
+    acción, el redactor reintenta y cae a la plantilla, el triage completa lo que el agente no hizo y la
+    caché del LLM reproduce un pedido sin red. Con un LLM de mentira: no necesita key ni datos.
 """
 
 from __future__ import annotations
@@ -1990,6 +1994,186 @@ def explain_checks() -> None:
     )
 
 
+def _demo_bundle():
+    """Un bundle de la demo chico y sintético: tres autos, uno con hábitos, uno sin, uno sano."""
+    from src.agents.bundle import Bundle
+
+    day = pd.Timestamp("2025-09-29")
+    rows = []
+    # A alerta el 30-09 (2 cortes ≥ 0,5) y sigue alto 2 revisiones más; B alerta el 02-10 y baja; C nunca.
+    for vid, scores in {"VEH_A": [0.1, 0.6, 0.7, 0.8, 0.9], "VEH_B": [0.2, 0.6, 0.6, 0.1, 0.1],
+                        "VEH_C": [0.1, 0.2, 0.1, 0.2, 0.1]}.items():
+        for i, s in enumerate(scores):
+            rows.append({"vehicle_id": vid, "cut_odo": 500.0 * (i + 1), "score": s,
+                         "cut_date": day + pd.Timedelta(days=i - 1 + (2 if vid == "VEH_B" else 0) + 7 * max(0, i - 2))})
+    cuts = pd.DataFrame(rows)
+    habit = {"feature": "feat_speed_kmh_mean", "label": "Velocidad media en viaje", "value_text": "16 km/h",
+             "reference_text": "19 km/h", "recommendation": "ruta"}
+    signal = {"label": "Carga del DPF al final del viaje", "value_text": "52%", "reference_text": "41%"}
+    base = {"market": "CNTRY_4", "horizon_weeks_lo": 1, "horizon_weeks_hi": 4, "km_per_day": 118.0, "symptoms_up": True,
+            "technician_signals": [signal], "template_message": "Riesgo ALTO: plantilla.", "event_date": pd.NaT}
+    vehicles = pd.DataFrame([
+        {**base, "vehicle_id": "VEH_A", "alerted": True, "failed": True, "n_factors": 1, "factors": [habit],
+         "alert_confirm_date": cuts.loc[(cuts.vehicle_id == "VEH_A"), "cut_date"].iloc[2]},
+        {**base, "vehicle_id": "VEH_B", "alerted": True, "failed": False, "n_factors": 0, "factors": [],
+         "alert_confirm_date": cuts.loc[(cuts.vehicle_id == "VEH_B"), "cut_date"].iloc[2]},
+        {**base, "vehicle_id": "VEH_C", "alerted": False, "failed": False, "n_factors": 0, "factors": [],
+         "alert_confirm_date": pd.NaT},
+    ]).set_index("vehicle_id", drop=False)
+    meta = {"threshold": 0.5, "k_consecutive": 2, "gap_km": 500.0, "horizon_km": 3000.0, "budget_per_1000": 50.0,
+            "replay": {"start": "2025-09-01", "end": "2026-03-11", "first_week": "2025-09-29"},
+            "texts": {"recommendations": {"ruta": "Sumá tramos de ruta o autopista."}, "disclaimer": "No es una causa."},
+            "official": {"curve": [{"budget_per_1000": 50, "detection": 0.17, "lead_km": 7438.0}]}}
+    return Bundle(cuts=cuts, vehicles=vehicles, waterfall=pd.DataFrame(), meta=meta, root=Path("."))
+
+
+class _ScriptedLLM:
+    """Un LLM de mentira que devuelve respuestas en orden: prueba la lógica sin red."""
+
+    model, mode, available = "stub", "live", True
+
+    def __init__(self, parses=(), responds=()):
+        self.parses, self.responds = list(parses), list(responds)
+        self.calls = {"cache": 0, "api": 0}
+
+    def parse(self, **_):
+        self.calls["api"] += 1
+        return self.parses.pop(0), {"cached": False}
+
+    def respond(self, **_):
+        self.calls["api"] += 1
+        return self.responds.pop(0), {"cached": False}
+
+
+def demo_agents_checks() -> None:
+    """18 · Demo de producto: el verificador, el redactor, la política y el triage, sin red ni datos."""
+    import json
+    import tempfile
+
+    from src.agents.drafter import draft_event
+    from src.agents.facts import driver_view, vehicle_facts
+    from src.agents.llm import LLM, LLMUnavailable
+    from src.agents.policy import DEALER, DRIVER, all_events, check_action
+    from src.agents.triage import run_triage
+    from src.agents.verifier import numbers_in, verify_drafts, verify_text
+
+    acfg = load_config("configs/agents.yaml")
+    bundle = _demo_bundle()
+    events = all_events(bundle, acfg["policy"])
+    kinds = [(e.vehicle_id, e.kind, e.action) for e in events]
+    check(
+        "demo · política: con hábitos, aviso al conductor; sin hábitos, concesionario; si el riesgo sigue "
+        "alto las revisiones siguientes, escalamiento; y la herramienta rechaza otra acción",
+        kinds == [("VEH_A", "alerta_nueva", DRIVER), ("VEH_B", "alerta_nueva", DEALER), ("VEH_A", "persistencia", DEALER)]
+        and _raises(lambda: check_action(events, "VEH_A", events[0].week, DEALER), ValueError)
+        and check_action(events, "VEH_A", events[0].week, DRIVER).vehicle_id == "VEH_A",
+        f"{kinds}",
+    )
+
+    alert_a = events[0]
+    facts = vehicle_facts(bundle, alert_a, acfg)
+    dview = driver_view(facts)
+    good = {"conductor": {"asunto": "Tu auto y el filtro de partículas",
+                          "cuerpo": "Tu velocidad media en viaje es de 16 km/h, contra 19 km/h en autos sanos "
+                                    "comparables: se parece al uso de autos que tuvieron problemas en los próximos "
+                                    "500 a 3.500 km.",
+                          "recomendaciones": ["ruta"]},
+            "taller": {"resumen": "Alerta de VEH_A. Carga del DPF al final del viaje: 52% contra 41% en sanos.",
+                       "chequeos": ["leer_dpf"]},
+            "linea_bandeja": "VEH_A: aviso al conductor por velocidad media baja."}
+    bad_numbers = json.loads(json.dumps(good))
+    bad_numbers["conductor"]["cuerpo"] = good["conductor"]["cuerpo"].replace("3.500", "3.600")
+    causal = json.loads(json.dumps(good))
+    causal["conductor"]["cuerpo"] += " Va a fallar porque manejás lento."
+    symptom = json.loads(json.dumps(good))
+    symptom["conductor"]["cuerpo"] += " La carga del DPF está en 52%."
+    wrong_rec = json.loads(json.dumps(good))
+    wrong_rec["conductor"]["recomendaciones"] = ["inventada"]
+    to_dealer = json.loads(json.dumps(good))
+    to_dealer["conductor"]["cuerpo"] += " Coordiná un turno en el concesionario."
+    dealer_facts = vehicle_facts(bundle, events[1], acfg)
+    p_dealer = verify_drafts(good, dealer_facts, driver_view(dealer_facts), acfg)
+    p_bad, p_causal, p_symptom = (verify_drafts(x, facts, dview, acfg) for x in (bad_numbers, causal, symptom))
+    check(
+        "demo · verificador: pasa un texto que solo cita los hechos, y rechaza un número inventado, lenguaje "
+        "causal, un síntoma del filtro en el mensaje al conductor (el taller sí puede), una recomendación fuera "
+        "de la lista y un texto que contradice la acción de la política",
+        verify_drafts(good, facts, dview, acfg) == []
+        and any("3.600" in p for p in p_bad)
+        and any("porque" in p for p in p_causal) and any("va a fallar" in p.lower() for p in p_causal)
+        and any("carga" in p for p in p_symptom) and any("52" in p for p in p_symptom)
+        and any("inventada" in p for p in verify_drafts(wrong_rec, facts, dview, acfg))
+        and any("no una visita" in p for p in verify_drafts(to_dealer, facts, dview, acfg))
+        and any("falta decirlo" in p for p in p_dealer)
+        and verify_text("Se sugiere revisar la carga del DPF (52%).", facts, acfg, field="taller") == []
+        and [v for _, v in numbers_in("VEH_0513: 3.500 km, 3,5 y 25%")] == [3500.0, 3.5, 25.0],
+        f"{len(p_bad)} / {len(p_causal)} / {len(p_symptom)} problemas",
+    )
+
+    attempts = int(acfg["llm"]["max_verification_retries"]) + 1
+    retried = draft_event(bundle, alert_a, acfg, _ScriptedLLM(parses=[bad_numbers, good]))
+    rejected = draft_event(bundle, alert_a, acfg, _ScriptedLLM(parses=[causal] * attempts))
+
+    class _Offline(_ScriptedLLM):
+        def parse(self, **_):
+            raise LLMUnavailable("sin key")
+
+    offline = draft_event(bundle, alert_a, acfg, _Offline())
+    check(
+        "demo · redactor: si el verificador rechaza, reintenta con los problemas; si rechaza todos los intentos o "
+        "no hay LLM, queda la plantilla; las recomendaciones las escribe el código",
+        retried.source == "agente" and retried.attempts == 2 and retried.problems[0] and not retried.problems[1]
+        and "Sumá tramos de ruta o autopista." in retried.driver_text and "No es una causa." in retried.driver_text
+        and rejected.source == "plantilla" and rejected.attempts == attempts and "plantilla" in rejected.note
+        and offline.source == "plantilla" and offline.driver_text.endswith("Riesgo ALTO: plantilla."),
+        f"{retried.source}/{retried.attempts} · {rejected.source}/{rejected.attempts} · {offline.source}",
+    )
+
+    week = alert_a.week
+
+    def call(name, args, cid):
+        return {"name": name, "arguments": json.dumps(args), "call_id": cid}
+
+    script = [
+        {"text": "", "tool_calls": [call("eventos_de_la_semana", {}, "c1")]},
+        {"text": "", "tool_calls": [call("accion_de_la_politica", {"vehiculo": "VEH_A"}, "c2"),
+                                    call("redactar_mensajes", {"vehiculo": "VEH_A", "accion": DEALER}, "c3")]},
+        {"text": "", "tool_calls": [call("redactar_mensajes", {"vehiculo": "VEH_A", "accion": DRIVER}, "c4")]},
+        {"text": "Semana con 2 alertas; VEH_A recibe un aviso con 99 km de horizonte.", "tool_calls": []},
+        {"text": "Semana con 2 alertas nuevas: VEH_A recibe un aviso al conductor y VEH_B pasa al concesionario.",
+         "tool_calls": []},
+    ]
+    # VEH_B no tiene hábitos: el texto de VEH_A no pasa sus hechos en ningún intento y queda la plantilla.
+    triage = run_triage(bundle, events, week, acfg, _ScriptedLLM(parses=[good] * (1 + attempts), responds=script))
+    steps = [t.get("tool") or t["step"] for t in triage["trace"]]
+    tool_errors = [t for t in triage["trace"] if t.get("error")]
+    check(
+        "demo · triage: la herramienta rechaza una acción distinta de la política, el resumen con un número "
+        "inventado se rechaza y se reescribe, y el evento que el agente no redactó lo completa el código",
+        triage["summary"]["source"] == "agente" and len(triage["summary"]["problems"]) == 2
+        and any("99" in p for p in triage["summary"]["problems"][0])
+        and len(tool_errors) == 1 and "política" in tool_errors[0]["error"]
+        and "completado por el sistema" in steps
+        and [r["event"]["vehicle_id"] for r in triage["events"]] == ["VEH_A", "VEH_B"]
+        and all(r["draft"]["drafts"] for r in triage["events"]),
+        f"{steps}",
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cached = LLM(acfg["llm"], Path(tmp), mode="cache_only")
+        from src.agents.drafter import Drafts
+
+        request = {"kind": "parse", "instructions": "x", "input": "y", "schema": Drafts.model_json_schema()}
+        cached._put(cached._key(request), {"output": good, "model": "stub"})
+        out, meta = cached.parse(instructions="x", payload="y", schema=Drafts)
+        miss = _raises(lambda: cached.parse(instructions="x", payload="otra", schema=Drafts), LLMUnavailable)
+    check(
+        "demo · caché del LLM: el mismo pedido se sirve del disco sin red, y en cache_only un pedido nuevo no "
+        "llama a la API",
+        out == good and meta["cached"] and miss,
+    )
+
+
 def main() -> int:
     set_seed(7)
     panel = build_dummy_panel(SMALL_PANEL)
@@ -2540,6 +2724,7 @@ def main() -> int:
     f7_variance_checks()
     dashboard_checks()
     explain_checks()
+    demo_agents_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()

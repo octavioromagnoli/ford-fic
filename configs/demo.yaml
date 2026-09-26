@@ -1,0 +1,76 @@
+# Demo de producto (MVP para el pitch del 02-10-2026): la flota de dev reproducida en el calendario
+# con K2, una bandeja semanal de triage y dos agentes (redactor + verificador, triage).
+#
+#   FORD_DATA_DIR=$PWD/data/rebuild-0921 python scripts/build_demo_bundle.py --config configs/demo.yaml
+#   python scripts/warm_demo_cache.py --config configs/demo.yaml          # agentes, todas las semanas
+#   python scripts/build_demo_bundle.py --config configs/demo.yaml --publish-only
+#   streamlit run scripts/demo_app/app.py
+#
+# Necesita K2 entrenado, su window_eval.json, la capa de decisión y la explicabilidad
+# (docs/memoria/f4-explicabilidad-k2.md). **No es un candidato ni cambia ninguna métrica**: el score,
+# el umbral y la alerta son los de K2 en una repetición, tal cual. Solo dev: el builder falla si
+# aparece un vehículo de test.
+
+product_name: Ford DPF
+
+# La corrida de K2, la capa de decisión y la explicabilidad salen de la config del dashboard de F4.
+dashboard_config: configs/dashboard_k2.yaml
+
+# Una sola repetición, la misma para el score, el umbral, la alerta y el mensaje. R1 con V al 5% es
+# el punto preregistrado de la explicabilidad: detecta 7 de 45 fallados y alerta a 2 de 95 sanos.
+# V deja solo los cortes cuyo horizonte cae entero dentro de la ventana del registro: son los únicos
+# en los que se puede saber si una alerta acertó.
+label: corrected
+repeat: 0
+budget_per_1000: 50
+
+replay:
+  # La ventana del registro de eventos (configs/data/event_clock.yaml). Semanas de lunes a domingo.
+  start: "2025-09-01"
+  end: "2026-03-11"
+  # La semana en que abre la demo: VEH_0535, VEH_0513 y VEH_0451 alertan entre el 30-09 y el 03-10.
+  first_week: "2025-09-29"
+
+# Perfil de uso que se grafica en la ficha del vehículo (accionables del mensaje + ritmo).
+profile_features:
+  - feat_speed_kmh_mean
+  - feat_trips_below_regime_temp_frac
+  - feat_idle_frac
+  - feat_idle_per_1000km
+  - feat_short_trip_frac_5km
+  - feat_trips_below_30kmh_frac
+  - feat_engine_temp_avg_median
+  - feat_km_per_day
+
+# Señales del propio filtro: van al resumen del taller, nunca al conductor (son síntomas, no hábitos).
+# Se comparan con la mediana de los autos sanos de dev del mismo mercado (una mediana por auto, y la
+# mediana de esas). `scale` pasa el valor a la unidad de `format` (los niveles del DPF vienen en %).
+technician_signals:
+  feat_dpf_end_mean:                   {label: Carga del DPF al final del viaje, format: pct, scale: 0.01}
+  feat_dpf_end_max:                    {label: Carga máxima del DPF, format: pct, scale: 0.01}
+  feat_regen_residual_mean:            {label: Carga que queda después de regenerar, format: pct, scale: 0.01}
+  feat_dpf_positive_delta_frac:        {label: Viajes en que la carga del DPF sube, format: pct}
+  feat_regenerations_per_1000km:       {label: Regeneraciones cada 1.000 km, format: dec1}
+  feat_distance_between_regen_mean_km: {label: Km entre regeneraciones, format: int_km}
+  feat_msgs_per_1000km:                {label: Avisos del filtro cada 1.000 km, format: int}
+  feat_oil_life_mean:                  {label: Vida de aceite restante, format: pct, scale: 0.01}
+
+# Cuántas accionables abre el waterfall del "por qué" (igual que el dashboard de K2).
+waterfall_top: 6
+
+# Fecha del evento de cada fallado: el origen del calendario congelado en el build del panel y la
+# tabla estática (src/data/anchor.py::event_dates). La app no la recalcula: viaja en el bundle.
+event_dates:
+  sources: configs/data/raw_sources.yaml
+  dedupe: configs/data/vehicle_dedupe.yaml
+  panel_config: configs/data/panel_v1.yaml
+  anchor_meta: ${DATA_DIR}/processed/panel_meta.json
+
+bundle:
+  dir: experiments/demo-bundle
+  # wandb Artifact que baja la app desplegada. Después de la primera publicación la versión se fija
+  # acá (`v0`, `v1`…) para que la demo no cambie sola: publicar y cambiar el pin es una decisión.
+  artifact: demo-bundle
+  version: v0
+  entity: oromagnoli-
+  project: ford-fic

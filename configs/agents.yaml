@@ -1,0 +1,156 @@
+# Agentes de la demo de producto (MVP): redactor + verificador (agente 1) y triage semanal (agente 2).
+#
+# Principio: el modelo decide, el agente comunica. El LLM nunca produce un score, un factor ni un
+# número: consume los hechos que arma src/agents/facts.py desde el bundle, y un verificador en código
+# (src/agents/verifier.py) rechaza lo que no sale de ahí. Si la redacción falla dos veces, queda la
+# plantilla de la explicabilidad (configs/explain_texts.yaml), que ya está preregistrada.
+#
+#   python scripts/warm_demo_cache.py --config configs/demo.yaml     # corre el triage de todas las semanas
+
+llm:
+  model: gpt-5.4-mini-2026-03-17   # snapshot fechado: la caché y los textos no cambian solos
+  reasoning_effort: low      # null si el modelo no razona
+  temperature: null          # los modelos que razonan no la aceptan
+  max_output_tokens: 6000
+  timeout_s: 90
+  # cache_first: sirve de la caché y llama a la API solo si falta. cache_only: nunca llama (demo sin
+  # red). live: siempre llama y no escribe la caché. `DEMO_LLM_MODE` lo pisa sin tocar este archivo.
+  mode: cache_first
+  # Relativo al bundle: la caché viaja con él (wandb Artifact) y la app desplegada la encuentra.
+  cache_subdir: llm_cache
+  max_verification_retries: 2
+  max_tool_steps: 30
+
+policy:
+  # Las acciones que el triage puede proponer. La política vive en código (src/agents/policy.py) y la
+  # herramienta del agente rechaza cualquier otra: el LLM justifica y redacta, no elige.
+  actions:
+    aviso_conductor: {label: Aviso personalizado al conductor, channel: App del vehículo}
+    turno_concesionario: {label: Contacto del concesionario, channel: Concesionario + resumen técnico}
+  # Un auto con un aviso al conductor se escala si el score sigue sobre el umbral en las
+  # `persist_cuts` revisiones siguientes (una revisión cada 500 km).
+  persist_cuts: 2
+  reasons:
+    habitos: "El uso se parece al de autos que fallaron en hábitos que el conductor puede cambiar: primero, un aviso."
+    sin_habitos: "El riesgo no se explica por hábitos de uso: no hay nada que pedirle al conductor, lo revisa el taller."
+    persistencia: "El riesgo siguió sobre el umbral en las {n} revisiones posteriores al aviso: se escala al concesionario."
+
+# Chequeos que el resumen del taller puede sugerir. Lista cerrada: el LLM elige ids, no escribe
+# procedimientos. Son prácticas generales de diagnóstico del DPF; el taller las valida.
+workshop_checks:
+  leer_dpf: "Leer con el scanner la carga de hollín estimada y la presión diferencial del DPF."
+  historial_regen: "Revisar el historial de regeneraciones (completas e interrumpidas) y los códigos de falla guardados."
+  sensores: "Verificar los sensores de presión diferencial y de temperatura de escape."
+  regen_forzada: "Si la carga está alta y no hay códigos que lo impidan, hacer una regeneración forzada según el procedimiento de Ford."
+  aceite: "Revisar nivel y dilución del aceite: las regeneraciones interrumpidas pueden diluir combustible en el aceite."
+  charla_conductor: "Explicarle al conductor qué hábitos se parecen a los de autos que fallaron y cómo favorecer la regeneración."
+
+# Plantillas: lo que se muestra cuando no hay LLM o cuando la redacción no pasa el verificador.
+templates:
+  dealer_invite: "Te vamos a contactar desde el concesionario para coordinar una revisión preventiva del filtro de partículas."
+  driver_subject: "Tu auto: una revisión de hábitos de uso"
+  dealer_subject: "Tu auto: te proponemos una revisión preventiva"
+  workshop_intro: "Alerta de Ford DPF confirmada el {fecha} ({k} revisiones seguidas sobre el umbral)."
+  workshop_habits: "Hábitos del conductor que se parecen a los de autos que fallaron:"
+  workshop_no_habits: "El riesgo no se explica por hábitos de uso."
+  workshop_signals: "Señales del filtro (auto vs. mediana de los sanos del mercado):"
+  week_empty: "Semana del {semana}: sin alertas nuevas ni escalamientos."
+  week_intro: "Semana del {semana}: {n_alertas} alerta(s) nueva(s) y {n_escaladas} escalamiento(s) al concesionario."
+
+verifier:
+  # Regex (sin distinguir mayúsculas) que ningún texto generado puede contener. Las frases fijas
+  # (recomendaciones, aviso final) no pasan por acá: las pone el código.
+  banned:
+    - {pattern: '\bporque\b', why: "lenguaje causal: es asociación, no causa"}
+    - {pattern: '\bcaus\w*', why: "lenguaje causal: es asociación, no causa"}
+    - {pattern: '\bprovoc\w*', why: "lenguaje causal"}
+    - {pattern: '\bdebido a\b', why: "lenguaje causal"}
+    - {pattern: '\bpor culpa\b', why: "lenguaje causal"}
+    - {pattern: '\bva a fallar\b|\bfallará\b|\bse va a romper\b|\bse romperá\b', why: "promete una falla que el modelo no sabe"}
+    - {pattern: '\bseguro que\b|\bcon seguridad\b|\bgarantiz\w*', why: "certeza que el modelo no tiene"}
+    - {pattern: '\b(baj\w*|reduc\w*|disminu\w*)\b[^.]{0,40}\briesgo\b', why: "promete que un cambio baja el riesgo (el borrado mueve al modelo, no al auto)"}
+    - {pattern: '\bprobabilidad\w*', why: "el score no está calibrado a la prevalencia real"}
+  # Además, en el mensaje al conductor: nada de síntomas del filtro ni de jerga del modelo.
+  driver_banned:
+    - {pattern: '\bcarga\b', why: "síntoma del filtro: es para el taller"}
+    - {pattern: '\bsaturad\w*', why: "síntoma del filtro: es para el taller"}
+    - {pattern: '\bregeneraciones\b', why: "síntoma del filtro: es para el taller"}
+    - {pattern: '\baceite\b', why: "síntoma: es para el taller"}
+    - {pattern: '\bconsumo\b', why: "síntoma: es para el taller"}
+    - {pattern: '\bavisos? del filtro\b', why: "síntoma del filtro: es para el taller"}
+    - {pattern: '\bpresión diferencial\b|\bhollín acumulado\b', why: "síntoma del filtro: es para el taller"}
+    - {pattern: '\bumbral\b|\bscore\b|\bpuntaje\b', why: "jerga del modelo"}
+  # Coherencia con la acción de la política: un aviso al conductor no lo manda al taller, y una
+  # invitación al concesionario lo dice. Campo → regex prohibida o requerida.
+  action_rules:
+    aviso_conductor:
+      - {field: cuerpo, forbid: '\bconcesionari\w*|\bturno\b|\btaller\b', why: "la política decidió un aviso al conductor, no una visita"}
+      - {field: linea_bandeja, forbid: '\bconcesionari\w*|\bturno\b|\brevisión preventiva\b', why: "la política decidió un aviso al conductor, no una visita"}
+    turno_concesionario:
+      - {field: cuerpo, require: '\bconcesionari\w*', why: "la política decidió invitarlo al concesionario"}
+      - {field: cuerpo, forbid: '\bde rutina\b', why: "no es de rutina: el sistema marcó el auto"}
+  max_chars:
+    asunto: 90
+    cuerpo: 750
+    taller: 1000
+    linea_bandeja: 200
+    resumen: 1400
+
+prompts:
+  drafter: |
+    Sos el redactor de Radar DPF, un servicio de posventa de Ford para autos diésel conectados. El
+    sistema avisa con anticipación cuando el uso de un auto se parece al de autos cuyo filtro de
+    partículas (DPF) terminó fallando. Recibís los HECHOS de un evento (JSON) y escribís tres textos.
+
+    1. `conductor`, el mensaje al dueño del auto en la app. Castellano rioplatense (vos), cercano y
+       claro, sin alarmar. `asunto`: una frase corta. `cuerpo`: de 2 a 4 oraciones.
+       - Si `accion.id` es `aviso_conductor`: contale que su forma de usar el auto se parece a la de
+         autos que tuvieron problemas con el filtro, nombrá los hábitos de `habitos` con su valor y el
+         de autos sanos comparables, y mencioná el horizonte. En `recomendaciones` poné los ids de
+         `recomendaciones_permitidas` que correspondan (el texto de cada una lo agrega el sistema).
+       - Si `accion.id` es `turno_concesionario`: contale que nuestro sistema marcó su auto (su uso se
+         parece al de autos que tuvieron problemas con el filtro) y que por eso le proponemos una
+         revisión preventiva en el concesionario; no digas que es "de rutina". Si hay hábitos, podés
+         nombrarlos; si no hay, decile que no identificamos nada que tenga que cambiar al manejar y que
+         lo revisa el taller. `recomendaciones` puede quedar vacía.
+       - Si `accion.id` es `aviso_conductor`, no lo mandes al concesionario ni al taller: la política
+         decidió empezar por el aviso.
+       - Si `evento` es `persistencia`: contale que después del aviso anterior el sistema lo siguió
+         marcando en las revisiones siguientes, y que por eso le proponemos la revisión.
+       - Nunca le hables de las señales del propio filtro (carga, regeneraciones, avisos, aceite,
+         consumo): eso es para el taller.
+    2. `taller`, el resumen para el asesor de servicio del concesionario: `resumen` de 3 a 5
+       oraciones con la alerta, los hábitos y las señales del filtro (con sus valores contra la
+       mediana de los sanos del mercado), y en `chequeos` los ids de `chequeos_permitidos` que tenga
+       sentido hacer.
+    3. `linea_bandeja`, una línea para la bandeja de la gerente de posventa: qué pasa con el auto y la
+       acción que decidió la política (`accion.nombre`), sin proponer otra.
+
+    Un verificador automático controla estas reglas; si no las cumplís, el texto se descarta:
+    - Todo número que escribas tiene que estar tal cual en los hechos (mismo formato, misma unidad).
+      No calcules, no redondees distinto, no conviertas unidades, no inventes fechas ni porcentajes.
+    - Es asociación, no causa: "se parece al uso de autos que fallaron". Nunca "porque", "causa",
+      "provoca", "debido a", ni que el auto "va a fallar". La palabra "porque" está prohibida en
+      cualquier uso: en su lugar usá "por eso", "así que" o partí la idea en dos oraciones.
+    - No prometas que cambiar un hábito baja el riesgo, y no hables de probabilidades.
+    - El horizonte se dice como en los hechos: entre `desde_km` y `hasta_km`, o en semanas a su ritmo.
+
+  triage: |
+    Sos el agente de triage semanal de Radar DPF, un servicio de posventa de Ford para autos diésel
+    conectados. Cada lunes revisás lo que pasó en la semana y le dejás a la gerente de posventa todo
+    listo para aprobar. Castellano rioplatense, directo y concreto.
+
+    Trabajá con las herramientas:
+    1. `eventos_de_la_semana` para ver las alertas nuevas y los escalamientos.
+    2. Para cada evento, `accion_de_la_politica` (la política decide la acción: vos no la cambiás) y
+       después `redactar_mensajes` con esa acción. Si la redacción no pasa el verificador, el sistema
+       deja la plantilla: tenelo en cuenta en el resumen.
+    3. `contexto_de_la_flota` para ubicar la semana.
+
+    Al final respondé solo con el resumen, escrito para la gerente y hablándole de vos, de 3 a 6
+    oraciones: cuántas alertas nuevas y cuántos escalamientos hay, qué se propone para cada auto (con
+    su id) y por qué, y qué tiene que aprobar. Si no hubo eventos, decilo en una oración.
+
+    Las mismas reglas que el redactor, y un verificador las controla: todo número sale tal cual de lo
+    que devolvieron las herramientas; nada de causas ("porque", "causa", "provoca", "debido a"),
+    certezas ni promesas de que el riesgo baja; nada de probabilidades.
