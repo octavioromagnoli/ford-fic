@@ -58,6 +58,15 @@ siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha 
 repeticiones), y al cliente solo llegan hábitos cuyo efecto coincide con la física del DPF; síntomas y contexto
 nunca se nombran (`docs/memoria/f4-explicabilidad-k2.md`).
 
+**F9 (26-09) es la demo de producto para el pitch (Radar DPF, no es candidato).** Reproduce la flota de dev en el
+calendario con K2 (R1, V, 5%) y agrega una bandeja semanal de posventa con dos agentes de OpenAI:
+- **el redactor**, con un verificador en código: todo número sale de los hechos, nada de causas, y los síntomas
+  no llegan al conductor;
+- **el triage**, con herramientas: la política de acción es determinista y el agente no la cambia.
+
+La app lee solo un bundle precalculado (`demo-bundle` en wandb) y se despliega en Railway. Cómo se reproduce,
+las decisiones y los límites están en `docs/memoria/f9-demo-producto.md`.
+
 **El presupuesto de comparaciones está agotado** (§0, punto 2 de ese doc): con ~12
 eventos por fold, agregar candidatos sobre la marcha garantiza que "el mejor" sea ruido.
 Una corrida nueva se justifica por hacer comparable una fila que ya existe, no por sumar
@@ -285,6 +294,13 @@ src/eval/explain.py      explicabilidad de K2, funciones puras: refit_folds() (e
                          permutation_shap_score, V4 family_sums; explained_cuts() (la alerta de la curva), la mediana
                          sana comparable (FleetReferenceNormalizer, train del fold), borrado, estabilidad, plausibilidad
                          física, message_factors()/render_vehicle_message() y dev_only_guard()
+src/agents/              capa de producto de la demo (F9), liviana: solo pandas, yaml y openai, nunca src/eval ni
+                         modelos. bundle.py (lee el bundle), policy.py (calendario del replay, eventos y acción de
+                         la política; check_action), facts.py (los hechos de un evento, sin el desenlace),
+                         verifier.py (números, frases prohibidas, listas cerradas, coherencia con la acción),
+                         llm.py (OpenAI Responses con caché en disco: cache_first | cache_only | live),
+                         drafter.py (agente 1, salida estructurada + reintento + plantilla), triage.py (agente 2,
+                         loop de herramientas)
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
 scripts/build_dataset.py panel real: universo del holdout → crudos → evento en km → cortes/etiqueta/features →
@@ -344,7 +360,16 @@ scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run script
                          con el waterfall y el mensaje al cliente, perfil de uso contra los sanos), Costos (punto de
                          operación y ahorro según costos y prevalencia real, con escenarios precargados) y Modelo
                          (contra la referencia y los pisos, límites); configs/dashboard_k2.yaml
-scripts/check_setup.py   smoke test del harness (190 chequeos)
+scripts/build_demo_bundle.py  bundle de la demo (F9, solo dev): cortes, alerta de la repetición, factores, mensaje,
+                         waterfall, señales del filtro y números oficiales → experiments/demo-bundle/;
+                         `--publish-only` lo sube como wandb Artifact `demo-bundle` (configs/demo.yaml)
+scripts/warm_demo_cache.py  corre el triage en todas las semanas con eventos y guarda triage/ y llm_cache/ en el
+                         bundle (`--prune` borra lo que no usó); necesita OPENAI_API_KEY (entorno o .env)
+scripts/demo_app/        la demo de producto: `streamlit run scripts/demo_app/app.py`. Bandeja (resumen del agente,
+                         tarjetas con mensaje al conductor, resumen del taller, hechos y verificador), Vehículo y
+                         Qué pasó después; fetch_bundle.py baja el bundle en el contenedor. Deploy: Dockerfile,
+                         requirements-demo.txt, railway.json; configs/agents.yaml (modelo, política, prompts, reglas)
+scripts/check_setup.py   smoke test del harness (195 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4
