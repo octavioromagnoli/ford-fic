@@ -10,9 +10,69 @@ from src.agents.llm import LLM
 from src.agents.policy import events_in_week
 from src.agents.triage import run_triage, save_triage
 
-from scripts.demo_app.presentation import heading, metrics, message, table
+from scripts.demo_app.presentation import agent_trace, heading, metrics, message
 
 b, acfg = bundle(), agents_cfg()
+
+
+def _ids(ids: list[str]) -> str:
+    return ids[0] if len(ids) == 1 else ", ".join(ids[:-1]) + " y " + ids[-1]
+
+
+def _count(n: int, one: str, many: str) -> str:
+    return f"{n} {one if n == 1 else many}"
+
+
+def _events_line(result) -> str:
+    found = result.get("eventos", []) if isinstance(result, dict) else []
+    new = [e["vehiculo"] for e in found if e["tipo"] == "alerta_nueva"]
+    esc = [e["vehiculo"] for e in found if e["tipo"] != "alerta_nueva"]
+    parts = ([f"{_count(len(new), 'alerta nueva', 'alertas nuevas')}: {_ids(new)}"] if new else []) + \
+            ([f"{_count(len(esc), 'escalamiento', 'escalamientos')}: {_ids(esc)}"] if esc else [])
+    return " · ".join(parts) or "Ninguno esta semana."
+
+
+def trace_steps(trace: list[dict], actions: dict) -> list[dict]:
+    """La traza del triage en castellano: qué hizo el agente, qué le devolvió cada herramienta y qué aprobó el
+    verificador. Todo sale de lo que el triage guardó; nada se recalcula."""
+    steps, summaries = [], 0
+    for t in trace:
+        if t["step"] == "tool":
+            tool, args, res, err = t["tool"], t["args"], t.get("result"), t.get("error")
+            vid = args.get("vehiculo", "")
+            if tool == "eventos_de_la_semana":
+                step = {"title": "Revisó los eventos de la semana", "detail": "" if err else _events_line(res)}
+            elif tool == "contexto_de_la_flota":
+                step = {"title": "Leyó el contexto de la flota",
+                        "detail": "Los autos revisados, las alertas de la semana y de la temporada y el punto de "
+                                  "operación del modelo: los únicos números que puede citar."}
+            elif tool == "accion_de_la_politica":
+                step = {"title": f"Le preguntó a la política qué hacer con {vid}"}
+                if not err:
+                    step |= {"result": ("policy", res["nombre"]), "quote": res["motivo"]}
+            elif tool == "redactar_mensajes":
+                label = actions.get(args.get("accion"), {}).get("label")
+                step = {"title": f"Redactó los mensajes de {vid}", "detail": f"Para la acción: {label}" if label else ""}
+                if not err:
+                    step["result"] = (("ok", "El verificador los aprobó") if res.get("fuente") == "agente"
+                                      else ("fail", "El verificador no los aprobó: quedó la plantilla"))
+            else:
+                step = {"title": tool}
+            if err:
+                step["result"] = ("fail", f"La herramienta lo rechazó: {err}")
+        elif t["step"] == "resumen":
+            summaries += 1
+            step = {"title": "Escribió el resumen de la semana" if summaries == 1 else "Reescribió el resumen",
+                    "result": ("ok", "El verificador lo aprobó") if not t["problems"]
+                    else ("fail", "El verificador lo rechazó: " + "; ".join(t["problems"]))}
+        elif t["step"] == "completado por el sistema":
+            step = {"title": f"El sistema completó los mensajes de {t['vehicle_id']}",
+                    "detail": "El agente no los pidió: los redactó el redactor, con el mismo verificador."}
+        else:
+            step = {"title": "El agente no estuvo disponible", "detail": t.get("error", ""),
+                    "result": ("fail", "Quedaron las plantillas")}
+        steps.append(step)
+    return steps
 week = current_week()
 week_events = events_in_week(events(), week)
 result = triage_for(week)
@@ -61,22 +121,18 @@ with st.container(border=True, key="summary"):
             store_triage(result)   # solo en la sesión: no pisa la versión guardada en el bundle
             st.rerun()
     if result["trace"]:
-        with st.expander("Qué hizo el agente", icon=":material/account_tree:"):
-            rows = []
-            for t in result["trace"]:
-                if t["step"] == "tool":
-                    detail = ", ".join(f"{k}={v}" for k, v in t["args"].items()) or "—"
-                    status = "error: " + t["error"] if t.get("error") else "ok"
-                    rows.append([t["tool"], detail, status])
-                elif t["step"] == "resumen":
-                    rows.append(["resumen", "—", "verificado" if not t["problems"] else "; ".join(t["problems"])])
-                else:
-                    rows.append([t["step"], t.get("vehicle_id", "—"), t.get("error", "")])
-            table(["paso", "argumentos", "resultado"], rows, stack=True)
-            if result.get("model"):
-                calls = result.get("llm_calls", {})
-                st.caption(f"Modelo {result['model']} · {calls.get('api', 0)} llamadas a la API, "
-                           f"{calls.get('cache', 0)} desde la caché.")
+        with st.expander("Cómo llegó el agente a este resumen", icon=":material/account_tree:"):
+            # Solo las llamadas en vivo: los triages del bundle guardaron un conteo de caché acumulado entre
+            # semanas (el precalentado compartía el LLM), así que ese número no se muestra.
+            api = result.get("llm_calls", {}).get("api", 0)
+            note = (f"Modelo {result['model']} · "
+                    + (f"{api} {'llamada' if api == 1 else 'llamadas'} a la API en vivo." if api
+                       else "respuestas guardadas en la caché de la demo, sin llamar a la API.")
+                    ) if result.get("model") else ""
+            agent_trace(trace_steps(result["trace"], acfg["policy"]["actions"]),
+                        lead="La acción de cada auto no la elige el agente: se la pregunta a la política, que es fija. "
+                             "Todo lo que escribe pasa por el verificador antes de llegar a esta bandeja.",
+                        note=note)
 
 if not week_events:
     later = [e.week for e in events() if e.week > week]

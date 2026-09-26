@@ -88,6 +88,25 @@ def message(text, subject=False, note=None):
     st.html(f'<div class="message-body">{"".join(html)}</div>')
 
 
+def agent_trace(steps, lead="", note=""):
+    """The agent's trace as numbered steps: a title, a detail, the result (`ok`, `fail` or the policy's
+    `policy` answer, each with its icon from theme.css) and a quote. Every string is escaped."""
+    items = []
+    for i, s in enumerate(steps, start=1):
+        parts = [f'<p class="trace-title">{escape(s["title"])}</p>']
+        if s.get("detail"):
+            parts.append(f'<p class="trace-detail">{escape(s["detail"])}</p>')
+        if s.get("result"):
+            kind, text = s["result"]
+            parts.append(f'<p class="trace-result is-{kind}"><span>{escape(text)}</span></p>')
+        if s.get("quote"):
+            parts.append(f'<p class="trace-quote">«{escape(s["quote"])}»</p>')
+        items.append(f'<li><span class="trace-n" aria-hidden="true">{i}</span><div>{"".join(parts)}</div></li>')
+    body = (f'<p class="trace-lead">{escape(lead)}</p>' if lead else "") + f'<ol class="trace">{"".join(items)}</ol>' \
+        + (f'<p class="trace-note">{escape(note)}</p>' if note else "")
+    st.html(f'<div class="agent-trace">{body}</div>')
+
+
 def table(columns, rows, first_is_header=True, nowrap_values=False, stack=False):
     """A static HTML table: it wraps its text instead of scrolling sideways like st.dataframe on a phone.
 

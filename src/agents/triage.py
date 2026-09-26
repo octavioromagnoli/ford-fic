@@ -133,6 +133,9 @@ def run_triage(bundle: Bundle, events: list[Event], week: pd.Timestamp, agents_c
     summary, summary_source, summary_problems = None, "plantilla", []
     tools = None
     mode = "plantilla"
+    # El LLM puede venir de antes (la app lo comparte, el precalentado recorre todas las semanas): se cuentan
+    # solo las llamadas de este triage.
+    calls_before = dict(llm.calls) if llm is not None else {}
 
     if llm is not None:
         tools = _Tools(bundle, events, week, agents_cfg, llm)
@@ -188,5 +191,5 @@ def run_triage(bundle: Bundle, events: list[Event], week: pd.Timestamp, agents_c
         "events": [_event_record(bundle, e, drafts[e.vehicle_id], agents_cfg) for e in week_events],
         "fleet": fleet_facts(bundle, events, week),
         "trace": trace,
-        "llm_calls": dict(llm.calls) if llm is not None else {},
+        "llm_calls": {k: v - calls_before.get(k, 0) for k, v in llm.calls.items()} if llm is not None else {},
     }
