@@ -1,0 +1,43 @@
+# Confirmación del sweep de la GRU (27-09-2026): la configuración de hoy, promedio por rango de las semillas 3, 4 y 5
+# (el sweep solo usó la 42). Mismas filas y folds.
+#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_sweep_gru_seeds3_base.yaml
+name: sweep-gru-seeds3-base
+seed: 42
+ensemble:
+  method: rank_mean
+  members:
+  - run: sweep-gru-base-s3-r3
+    config: configs/exp_sweep_gru_base_s3_r3.yaml
+    weight: 0.3333
+  - run: sweep-gru-base-s4-r3
+    config: configs/exp_sweep_gru_base_s4_r3.yaml
+    weight: 0.3333
+  - run: sweep-gru-base-s5-r3
+    config: configs/exp_sweep_gru_base_s5_r3.yaml
+    weight: 0.3333
+compare:
+  reference: f9-v2-ss-r3
+  against:
+  - f9-v2-lgbm-r3
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f10-sweep-gru-confirm
+  job_type: ensemble
+  tags:
+  - f10
+  - v2
+  - sweep
+  - gru
+  - confirm
+  - semillas
+  mode: online
+  log_artifacts: false
+output_dir: experiments

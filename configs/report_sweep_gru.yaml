@@ -1,0 +1,56 @@
+# Confirmación del sweep de la GRU (27-09-2026): el mejor trial (t112) contra la configuración de hoy,
+# las dos con semillas que el sweep no usó (3, 4, 5), misma cuenta que report_v2_models.yaml. Solo dev.
+#   python scripts/report_v2_models.py --config configs/report_sweep_gru.yaml
+seed: 0
+output_name: report-sweep-gru
+experiments_dir: experiments
+strata_panel: ${DATA_DIR}/processed/panel.parquet
+k_consecutive: 2
+n_thresholds: 50
+budgets:
+- 0.02
+- 0.05
+- 0.1
+- 0.15
+- 0.2
+- 0.25
+- 0.3
+null_permutations: 200
+n_boot: 1000
+reference: sweep-gru-seeds3-base
+extra_references:
+- piso-celda
+bag_diag:
+  healthy_cuts: 9
+runs:
+- run: f9-v2-ss-r3
+  label: Survival stacking (F3)
+  family: supervivencia
+- run: v2all-seeds3-gru-trips-estaticas
+  label: 'GRU de hoy ×3 (semillas 42, 1, 2: las del reporte v2)'
+  family: secuencial ×3
+- run: sweep-gru-seeds3-base
+  label: GRU de hoy ×3 (semillas 3, 4, 5)
+  family: secuencial ×3
+- run: sweep-gru-seeds3-top1
+  label: GRU del sweep t112 ×3 (semillas 3, 4, 5)
+  family: secuencial ×3
+- run: sweep-gru-base-s3-r3
+  label: hoy (semilla 3)
+  family: semilla
+- run: sweep-gru-base-s4-r3
+  label: hoy (semilla 4)
+  family: semilla
+- run: sweep-gru-base-s5-r3
+  label: hoy (semilla 5)
+  family: semilla
+- run: sweep-gru-top1-s3-r3
+  label: t112 (semilla 3)
+  family: semilla
+- run: sweep-gru-top1-s4-r3
+  label: t112 (semilla 4)
+  family: semilla
+- run: sweep-gru-top1-s5-r3
+  label: t112 (semilla 5)
+  family: semilla
+rank_mixes: []

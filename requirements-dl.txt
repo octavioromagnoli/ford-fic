@@ -3,3 +3,5 @@
 # registry la importa recién al construir el modelo, así que sin torch todo lo demás corre.
 #   uv pip install -r requirements-dl.txt
 torch==2.14.0
+# Sweep de hiperparámetros de la GRU (scripts/sweep_gru.py): TPE + poda, estudio en un archivo.
+optuna==5.0.0
