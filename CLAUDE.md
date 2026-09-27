@@ -49,6 +49,13 @@ cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del
     reportan siempre como promedio de 3 semillas.
 
   Ver `docs/memoria/f9-remedicion-completa-v2.md`.
+- **El sweep bayesiano de la GRU (27-09) no cambió la configuración.** Fueron 130 trials de
+  Optuna, todos con la semilla 42. El mejor (0,492 contra 0,475) empata con la de hoy al re-medirlo
+  con semillas nuevas (0,469 contra 0,471, bootstrap pareado).
+  - Se queda `exp_v2all_gru_trips_estaticas_r3.yaml` con las semillas 42, 1 y 2.
+  - La semilla mueve más que los hiperparámetros, y "×3 semillas" es el ensamble por rango.
+
+  Ver `docs/memoria/f10-sweep-gru.md`.
 
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
@@ -408,6 +415,9 @@ scripts/report_v2_models.py  reporte de muchas corridas con la misma cuenta: det
                          la celda, mezclas por rango y bootstrap pareado (configs/report_v{1,2}_models.yaml)
 scripts/report_v2_leads.py  anticipación de la primera alerta (km, días aprox.) y trayectoria del score de los
                          fallados según la distancia al evento (configs/report_v2_leads.yaml)
+scripts/sweep_gru.py     sweep bayesiano (Optuna TPE + poda por repetición, workers en paralelo sobre un journal) de
+                         los hiperparámetros de la GRU, solo dev; `--write-configs` escribe las top_k con semillas que
+                         el sweep no usó, para confirmarlas con train.py y report_v2_models.py (configs/sweep_gru.yaml)
 scripts/explain_k2.py    explicabilidad de K2 de punta a punta (preregistro configs/explain_k2.yaml): reentrena y
                          verifica los folds, V1-V4, criterios, elección, mensajes al cliente (configs/explain_texts.yaml)
                          y casos → experiments/explain-k2/; scripts/explain_k2_report.py hace las figuras y cases.md

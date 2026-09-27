@@ -5,6 +5,33 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-27 · El sweep de la GRU no cambia la configuración: se queda la de hoy, con las semillas 42, 1 y 2
+
+**Decidió:** el equipo, después de la confirmación con semillas nuevas. **Configs:**
+`configs/sweep_gru.yaml`, `configs/exp_sweep_gru_*.yaml`, `configs/report_sweep_gru.yaml`. Detalle:
+[f10-sweep-gru.md](f10-sweep-gru.md).
+
+**Qué se midió:** un sweep Optuna TPE de 1 h sobre 13 hiperparámetros de la GRU + trips + estática
+completa (130 trials, semilla 42). El objetivo fue la detección por auto con umbral exacto, promedio
+al 5–20%. El mejor, t112, dio 0,492 contra 0,475 de la configuración de hoy. Re-medidos con las
+semillas 3, 4 y 5 en ensamble de 3, dan **0,469 contra 0,471**, y el bootstrap pareado no separa
+ningún presupuesto del cero.
+
+**Por qué:**
+- El +1,7 del sweep era el máximo de 65 intentos con una misma semilla. La semilla sola mueve el
+  objetivo ~8 puntos (0,395–0,476).
+- Las semillas no se eligen por resultado. Las 42, 1 y 2 son las del reporte v2, las auditorías y la
+  explicabilidad de la GRU.
+
+**Consecuencias:**
+- **No volver a barrer hiperparámetros de la GRU esperando mejoras.** Lo que sí rinde es ensamblar
+  semillas (~2–3 puntos), y un ensamble de más semillas va declarado en el preregistro del finalista v2.
+- "×3 semillas" es el ensamble por rango (0,460), no el promedio de las semillas sueltas (0,439).
+- La tasa de la celda mercado × motor (18 · 33 · 48 · 62% al 5 · 10 · 15 · 20%) sigue siendo el
+  piso: tres celdas concentran 117 de los 135 fallados de dev.
+
+---
+
 ## 2026-09-26 · Re-medición completa sobre v2: los secuenciales con TripSummary pasan adelante; el finalista v2 sale de un preregistro contra la celda
 
 **Decidió:** nadie todavía; es una medición exploratoria pedida por el equipo ("volvé a correr todos

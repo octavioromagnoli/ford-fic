@@ -1,0 +1,63 @@
+# Confirmación del sweep de la GRU (top1, semilla del modelo 5, que el sweep no usó).
+# Generado por scripts/sweep_gru.py --write-configs desde sweep-gru/top.yaml.
+#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_sweep_gru_top1_s5_r3.yaml
+name: sweep-gru-top1-s5-r3
+seed: 42
+data:
+  panel: ${DATA_DIR}/processed/panel_seq_trips_v2_estaticas.parquet
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+    extra_columns:
+    - static_SalesCountry_cd
+    - aux_static_Engine
+    min_stratum_size: 5
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+model:
+  name: gru_seq
+  params:
+    sequence_meta: ${DATA_DIR}/processed/panel_seq_trips_v2_estaticas_meta.json
+    pooling: attention
+    hidden: 9
+    num_layers: 1
+    attention_hidden: 4
+    static_hidden: 12
+    head_hidden: 36
+    dropout: 0.3232060688250523
+    epochs: 30
+    batch_size: 256
+    learning_rate: 0.005981406266442629
+    weight_decay: 9.580340395860058e-05
+    grad_clip: 1.2527840780665338
+    class_weight: null
+    device: cpu
+    random_state: 5
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f10-sweep-gru-confirm
+  job_type: train
+  tags:
+  - f10
+  - v2
+  - sweep
+  - gru
+  - confirm
+  mode: online
+  log_artifacts: false
+output_dir: experiments
