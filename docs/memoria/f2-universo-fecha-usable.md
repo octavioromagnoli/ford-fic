@@ -1,5 +1,7 @@
 # El universo del estudio son 364 vehículos, no 1081
 
+> **Reemplazado para la entrega v2 (26-09-2026) por [f9-universo-v2.md](f9-universo-v2.md):** 557 vehículos, recortados por período de producción y no por mercado. Lo de abajo sigue describiendo el universo de la entrega 1, y además de exposición tenía el mismo corte de producción.
+
 **Fecha:** 2026-09-17 · **Fase:** F2 (previo) · **Reproduce:**
 `python scripts/make_test_split.py --config configs/data/test_split.yaml --force`
 (imprime el cuadro por mercado y deja el recorte en `data/processed/test_split.json`).

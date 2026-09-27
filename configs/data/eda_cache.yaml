@@ -24,17 +24,17 @@
 # cosas dejaron de ser lo mismo.
 seed: 42
 
-sources: configs/data/raw_sources.yaml
+sources: configs/data/raw_sources_v1.yaml
 dedupe: configs/data/vehicle_dedupe.yaml    # 13 vehículos duplicados bajo dos códigos (F1)
 panel: configs/data/panel_v1.yaml           # de acá salen las columnas static_*
 
 # Holdout congelado. `dev_vehicles` es el universo del EDA; contra esa lista se
 # chequea cada tabla.
-test_split: ${DATA_DIR}/processed/test_split.json
+test_split: ${DATA_DIR}/processed-v1/test_split.json
 
 # Unión a nivel vehículo ya construida por `scripts/make_test_split.py`. Trae los
 # 1081 sin recortar —es el artefacto de auditoría—; acá se recorta a dev.
-vehicle_table: ${DATA_DIR}/processed/vehicles.parquet
+vehicle_table: ${DATA_DIR}/processed-v1/vehicles.parquet
 
 scan:
   chunksize: 500000       # signals son 10,6M de filas: se leen por chunks

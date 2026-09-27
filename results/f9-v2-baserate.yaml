@@ -1,0 +1,93 @@
+run: f9-v2-baserate
+logged_on: '2026-09-26'
+note: 'Entrega v2, universo vigente (ventana de producción, dev 446): piso de tasa
+  base. Referencia de las re-mediciones de f9-remedicion-v2.md.'
+source:
+  config_path: configs\exp_v2_baserate.yaml
+  config_versioned: true
+  branch: feat/datos-v2-completos
+  commit: 78a9859
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: baserate
+  pr_auc: 0.05677769570914165
+  cohort_ceiling: 0.1766839378238342
+  cohort_lift: 3.0318652849740935
+  within_failed: 0.17079027541925512
+  within_failed_lift: 0.9666429077981301
+  when_delta: -0.0022632132367429447
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.3088415179208053
+  vehicle_lift: 0.9745665676612076
+  vehicle_base_rate: 0.31690140845070425
+  pr_auc_lo: 0.05654488564698227
+  pr_auc_hi: 0.06026903487005355
+  base_rate: 0.058275655814748355
+  lift: 0.974295268158482
+  roc_auc: 0.4889163875629597
+  brier: 0.054882277018703365
+  detection_rate: 0.0
+  median_lead_km: .nan
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel.parquet
+  panel_generation: '2026-09-26'
+  splits: ${DATA_DIR}/processed/splits.json
+  n_positive: 682
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: f9-v2-baserate
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+      extra_columns:
+      - static_SalesCountry_cd
+      - aux_static_Engine
+      min_stratum_size: 5
+    min_valid_positives: 5
+    n_repeats: 1
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: baserate
+    params: {}
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f9-v2
+    job_type: train
+    tags:
+    - f9
+    - v2
+    - baserate
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_v2_baserate.yaml

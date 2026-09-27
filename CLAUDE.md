@@ -7,6 +7,37 @@ resumen operativo que hay que respetar al escribir código.
 
 ## Estado
 
+**Entrega v2 de Ford (26-09-2026): el pipeline vigente lee v2, y todo lo de F1–F8 de abajo se
+midió con la entrega 1.** Ford mandó estática nueva (con ciudad de venta y país ISO) y los
+viajes y señales de fallados nuevos. Los de sanos son byte a byte los de la entrega 1. Lo que
+cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del 26-09 de
+[`decisiones.md`](docs/memoria/decisiones.md):
+- **Cinco trampas de formato**, corregidas en el loader desde `raw_sources.yaml`:
+  - la columna del evento renombrada;
+  - `ProductionDay` de fallados +538 d;
+  - una fila por evento;
+  - filas repetidas;
+  - la extracción de fallados diez días más larga.
+- **Universo v2: 557 vehículos (177 eventos), 446 dev / 111 test**, re-sorteado con la semilla
+  42 y un estrato evento × mercado × motor. **36 autos del test estaban en el dev viejo**
+  (`test_split.json → previous`): el test final se reporta también sin ellos.
+- **No hay ventana del registro**, la **fecha registrada cae ~2 semanas después de la
+  intervención** (la referencia del evento es fecha − 21 d) y **ENG_3 ya falla** (46 de sus 47
+  eventos en Brasil).
+- **Re-medido sobre v2:**
+  - survival stacking aprueba (a0) y (a′) como en v1;
+  - la separación agrupada sube (ROC por fila 0,59 → 0,71), pero **dentro de mercado × motor el
+    uso ordena autos con AUC ~0,58**, como en v1;
+  - K2 perdió su corrección (la ventana): sin ella falla (a′) y detecta menos que survival
+    stacking, que da **~11–14% al 5% de falsas alarmas sobre dev v2** (el 15–17% del pitch es de
+    la entrega 1). **No hay finalista elegido sobre v2.**
+
+  Ver `docs/memoria/f9-remedicion-v2.md`.
+- **Se probó sacar la ventana de producción (990 autos) y se volvió a ella** (26-09): con los
+  autos de afuera la fecha de producción sola separa las cohortes (AUC 0,87 dentro del mercado) y los modelos ordenan
+  peor a los autos comparables. La variante queda como `*_sinventana*`, con el holdout extendido
+  (`test_split_sinventana.json`), y no se usa para elegir ni medir (`f9-universo-v2.md` §6).
+
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
 archivos reales. El bloqueante de la fecha del evento se cerró el 17-09 recortando
@@ -65,45 +96,60 @@ un modelo. F6 gastó uno nuevo, explícito y cerrado: tres candidatos preregistr
 regla más estricta. Otro candidato necesita su propio preregistro.
 
 **Antes de tocar los datos, leer [`docs/memoria/`](docs/memoria/README.md).** Ahí
-están los hallazgos de F1/F2 y las decisiones tomadas, con la evidencia y el comando
-que las reproduce. Nueve que cambian cómo se escribe el código:
+están los hallazgos de F1/F2/F9 y las decisiones tomadas, con la evidencia y el comando
+que las reproduce. Las que cambian cómo se escribe el código (entrega v2; entre
+paréntesis, lo que valía con la entrega 1):
 
 - Los datos vienen en **dos cohortes de muestreo** (failed / not_failed) y la
   cohorte *es* la etiqueta: `IdentificationDate` nula ⇔ sin evento. Nunca entra
-  como feature.
-- El **universo del estudio son 364 vehículos, no 1081**. `IdentificationDate`
-  mezcla dos convenciones de registro y la que no sirve es mayoría; además la
-  convención es **del mercado**, así que se descartan los positivos sin fecha
-  utilizable *y* los sanos de los mercados donde ningún evento es observable. El
-  criterio vive en `src/data/usable.py` y se declara en `universe` de
-  `configs/data/test_split.yaml`. **El panel se construye con los 364.**
-- Hay **13 vehículos duplicados bajo dos códigos**: se colapsan con
-  `src/data/dedupe.py` antes de cualquier split, o la regla 2 se viola en silencio.
-- **`Engine` está excluido** del set base: `ENG_3` es el 36% de los sanos y el 0%
-  de los fallados. Ojo: en el universo recortado `ModelSeries` lleva casi la misma
-  información (el cruce es diagonal), así que excluir solo `Engine` no alcanza.
-- El **test está congelado** desde antes de F2 (74 vehículos, `test_split.json`).
-  El recorte a dev lo hace `test_split_masks()`, y `dev_mask` es pertenencia
-  explícita a `dev_vehicles`, **no** el complemento de test.
-- **El marcador `signals.Regenerations` se corta el 25-05-2026** para toda la flota.
-  Una tasa de marcadores por km mide el calendario, y el calendario mide la etiqueta
-  (los eventos caen entre sep-2025 y mar-2026; la exposición sana, en 2026). La
-  familia B se cuenta desde las caídas de `trips.AirRegeneration*`; el marcador y
-  `DistanceBetweenRegenerations` quedan como `aux_`.
-- **Los sanos se emparejan por odómetro y por mes** (`sampling` en `panel_v1.yaml`).
-  Solo por odómetro, tres columnas de calendario suben el ROC de 0,67 a 0,76; con mes,
-  de 0,57 a 0,60. Cualquier feature con deriva temporal (temperatura ambiente,
-  `ProductionDay`, `daysUntilSale`) va como `aux_`, no como `feat_`/`static_`.
-- **El 35% de las filas de `trips` son idle de 0 km** (motor encendido sin moverse) y
+  como feature. En v2 la estática de fallados trae **una fila por evento**: el dedupe
+  se queda con el primero (`n_events_recorded` cuenta el resto).
+- **La entrega v2 se lee con correcciones por parte** (`src/data/loader.py`, declaradas en
+  `configs/data/raw_sources.yaml`):
+  - la columna del evento de la estática de fallados se renombra;
+  - `ProductionDay` de fallados se corre −538 d;
+  - todo lo posterior al fin de extracción de los sanos (14-09-2026) se descarta.
+
+  La entrega 1 se lee con `raw_sources_v1.yaml` (`data/old_raw/`).
+- El **universo del estudio son 557 vehículos** (entrega 1: 364). Cambió la selección:
+  - las dos cohortes se muestrearon en períodos de producción distintos, así que se conserva
+    el período común, del 20-01-2025 al 31-07-2025 (`production_day_window: [1, 193]`);
+  - el recorte por mercado de la entrega 1 ya no hace falta.
+
+  El criterio vive en `src/data/usable.py` y se declara en `universe` de
+  `configs/data/test_split.yaml`. **El panel se construye con los 557.** Los 433 de afuera no
+  entran en ninguna comparación fallado/sano (`f9-universo-v2.md` §6).
+- Hay **13 vehículos duplicados bajo dos códigos** (en v2 los 7 pares que siguen en
+  fallados vuelven a traer los viajes repetidos): se colapsan con `src/data/dedupe.py` antes
+  de cualquier split, o la regla 2 se viola en silencio.
+- **`Engine` y `ModelSeries` son candidatas, ya no excluidas** (entrega 1: ENG_3 era el 0%
+  de los fallados). Aportan la tasa de su celda y no orden entre autos: todo modelo que
+  las use se reporta también **dentro de mercado × motor**.
+- **Toda comparación fallado/sano se hace dentro del mercado** (y el AUC también dentro de
+  mercado × motor). La tasa por mercado está cruzada con cómo Ford armó la lista.
+- El **test es el holdout v2** (111 vehículos, `test_split.json`, re-sorteado el 26-09).
+  El recorte a dev lo hace `test_split_masks()`, y `dev_mask` es pertenencia explícita
+  a `dev_vehicles`, **no** el complemento de test. 36 autos del test estaban en el dev
+  viejo (`previous.test_vehicles_in_old_dev`).
+- **El marcador `signals.Regenerations` se corta el 25-05-2026** para toda la flota (también
+  en v2). Una tasa de marcadores por km mide el calendario. La familia B se cuenta desde las
+  caídas de `trips.AirRegeneration*`; el marcador y `DistanceBetweenRegenerations` quedan
+  como `aux_`.
+- **Los sanos se emparejan por odómetro y por mes** (`sampling` en `panel_v1.yaml` /
+  `panel_v2.yaml`). En v2 la exposición previa al evento de los fallados sigue cayendo antes
+  que la de los sanos. Cualquier feature con deriva temporal o de cohorte (temperatura
+  ambiente, `ProductionDay`, `daysUntilSale`, fecha de venta) va como `aux_`, no como
+  `feat_`/`static_`.
+- **El 33% de las filas de `trips` son idle de 0 km** (motor encendido sin moverse) y
   son la señal que más anticipa. Toda fracción "de viaje" se calcula entre los que se
   mueven; `KilometerPerHour` es nulo exactamente ahí y se recalcula como km/duración.
-- **El registro de eventos tiene ventana de calendario:** 01-09-2025 → 11-03-2026,
-  `configs/data/event_clock.yaml`.
-  - **La censura de un sano es el fin de su exposición dentro de esa ventana, no su último
-    viaje**, y un sano sin exposición en la ventana no es un negativo.
+- **En v2 no hay ventana del registro** (entrega 1: 01-09-2025 → 11-03-2026,
+  `configs/data/event_clock.yaml`, que describe esa entrega).
+  - La censura de un sano es el fin de extracción.
   - El riesgo se mide en días desde la venta: el evento se ordena por días, no por km.
-  - El panel v1 no se corrigió: el 28% de sus horizontes sanos cae en parte fuera de la ventana
-    (`docs/memoria/decisiones.md`, 22-09).
+- **La fecha registrada v2 cae ~2 semanas después de la intervención.** La referencia del
+  evento del panel es `fecha − 21 d` (`label.reference_offset_days`). Sin eso, el gap G deja
+  el taller y los síntomas en la última ventana.
 
 ## Contrato de datos
 
@@ -124,7 +170,7 @@ Artefacto: `data/processed/panel.parquet` (dummy: `panel_dummy.parquet`).
 | `feat_*` | float | todas las features de ventana (53 en v1, declaradas en `configs/data/features_v1.yaml`) |
 | `static_*` | mixto | solo `SalesCountry_cd` en el set base v1 |
 | `aux_km_observed_after_cut` | float | km observados **después** del corte (`last_odo − c`). En los censurados es la única forma de saber hasta dónde estuvieron en riesgo: un sano no es un cero, es "llegó hasta acá sin fallar" |
-| `aux_*` | mixto | **en el panel, fuera del modelo**: `aux_static_{Engine, ModelSeries, ProductionDay, daysUntilSale}`, `aux_air_temp_*`, `aux_regen_marker_per_1000km`, controles de ventana. Para ablaciones y auditorías sin reconstruir |
+| `aux_*` | mixto | **en el panel, fuera del modelo**: `aux_static_{Engine, ModelSeries, ProductionDay, daysUntilSale}` (+ `SalesCity` en v2; motor y modelo pasan a `static_` en `panel_v2_estaticas.yaml`), `aux_air_temp_*`, `aux_regen_marker_per_1000km`, controles de ventana. Para ablaciones y auditorías sin reconstruir |
 
 **El panel de hitos del cure model** (`panel_landmark_ps.parquet`) usa los mismos nombres, pero
 tiene una fila por (vehículo, hito post-venta). `horizon_km`/`gap_km` van en NaN, y el riesgo
@@ -149,15 +195,18 @@ folds. Agregar un modo es una función con `@register_target` y cero líneas en 
 2. **Split agrupado por vehículo.** Un `vehicle_id` nunca cae en train y
    validación a la vez. La lógica está centralizada en `src/eval/splits.py` y no
    se reimplementa en ningún otro lado. Arriba de la CV hay un **holdout dev/test
-   congelado** (`data/processed/test_split.json`, sorteado antes de F2), con tres
-   listas: `dev_vehicles` (290), `test_vehicles` (74) y `excluded_vehicles` (717,
-   fuera del universo). El panel se construye con los **364** del universo, y
+   congelado** (`data/processed/test_split.json`, re-sorteado sobre el universo v2 el
+   26-09 antes de mirar ninguna feature contra la etiqueta), con tres listas:
+   `dev_vehicles` (446), `test_vehicles` (111) y `excluded_vehicles` (434, fuera del
+   universo). El de la entrega 1 (290/74/717) sigue congelado en `data/processed-v1/`.
+   El panel se construye con los **557** del universo, y
    **todo lo que se mira es dev**: la CV, la selección de modelo y cualquier figura
    salen de `dev_mask`. Las filas de test existen y nadie las toca hasta que el
    modelo está elegido. El recorte lo hace `scripts/train.py` (`select_dev()`) antes
    de armar los folds, nunca filtrando `vehicle_id` a mano. Dentro de dev, los folds
    se estratifican por `label` a nivel vehículo —la variable que mide el PR-AUC, no
-   `event_observed`—, ningún fold puede quedar con menos de `min_valid_positives`
+   `event_observed`—, en v2 cruzado con mercado y motor (`stratify.extra_columns`),
+   ningún fold puede quedar con menos de `min_valid_positives`
    filas positivas en validación, y `n_repeats` habilita CV repetida; los tres salen
    del bloque `splits:` del YAML y el archivo congelado declara con cuáles se armó
    (si el YAML dice otra cosa, `train.py` falla). Por eso **todo YAML de
@@ -172,8 +221,8 @@ folds. Agregar un modo es una función con `@register_target` y cero líneas en 
    producción y `TripDatetimeStart` es calendario. F1 encontró el anclaje que
    faltaba (`ProductionDay` está en el eje del calendario, IQR de 0 días: ver
    `docs/memoria/f1-anclaje-temporal.md`), así que el evento **sí** se puede
-   traducir al eje de km —para los vehículos del universo cae en una mediana de
-   7.987 km con el 39% del historial por delante—. Eso no asciende al eje de días:
+   traducir al eje de km —en v2 cae en una mediana de 12.808 km, desde la referencia
+   `fecha registrada − 21 d` (entrega 1: 7.987 km)—. Eso no asciende al eje de días:
    sigue siendo reporte secundario, y el origen se estima una vez y se congela.
 5. **Métricas.** PR-AUC out-of-fold **para ordenar**, curva de anticipación vs.
    falsas alarmas para el pitch, accuracy nunca. **No elige el finalista**: por la
@@ -184,19 +233,24 @@ folds. Agregar un modo es una función con `@register_target` y cero líneas en 
 6. **Un PR-AUC se audita antes de celebrarse, y el piso es el techo de cohorte.**
    Dos mitades. (i) Uno **sospechosamente alto**: variables como el nivel del DPF
    son casi la definición del evento; sin gap, el modelo memoriza en vez de
-   predecir. (ii) Uno **normal tampoco se celebra solo**: en dev las 254 filas
-   positivas están *todas* dentro de los 967 cortes de vehículos fallados, así
-   que puntuar cada fila con "¿este auto falla?" —sin nada del *cuándo*— da
-   **PR-AUC 0,2627 y lift 2,10×** (`src/eval/metrics.py::cohort_ceiling`). Ese es
-   el piso, no la tasa base de 0,1252: **por debajo de 0,2627 un PR-AUC por fila
-   no demuestra anticipación**, y el objetivo de 1,6–2× de lift del plan se
-   alcanza sin anticipar nunca. Para el *cuándo* se miran `pr_auc_within_failed`
-   (lift sobre 0,2627) y **(a')**, y las dos las reporta toda corrida.
+   predecir. (ii) Uno **normal tampoco se celebra solo**: en el dev del panel v2 las
+   682 filas positivas están *todas* dentro de los 3.860 cortes de vehículos
+   fallados, así que puntuar cada fila con "¿este auto falla?" —sin nada del
+   *cuándo*— da **PR-AUC 0,1767 y lift 3,03×** (`src/eval/metrics.py::cohort_ceiling`;
+   panel v1: 0,2627 y 2,10×). Ese es el piso, no la tasa base de 0,0583: **por debajo
+   del techo un PR-AUC por fila no demuestra anticipación**, y el objetivo de 1,6–2×
+   de lift del plan se alcanza sin anticipar nunca. Para el *cuándo* se miran
+   `pr_auc_within_failed` (lift sobre el techo) y **(a')**, y las dos las reporta toda
+   corrida. En v2, además, un AUC agrupado se lee al lado del AUC dentro de
+   mercado × motor: la diferencia es composición de la muestra.
 
    Y **toda métrica que dependa del tamaño de la bolsa o del largo del historial se
    compara contra un nulo que conserve esa magnitud**, nunca contra la tasa base: el
-   panel le deja 18,25 cortes por vehículo fallado y 9,00 por sano, y el tamaño solo,
-   como score, ya da lift 1,79× (`scripts/audit_mil_bagsize.py`).
+   panel v1 le dejaba 18,25 cortes por vehículo fallado y 9,00 por sano, y el tamaño
+   solo, como score, daba lift 1,79× (`scripts/audit_mil_bagsize.py`). En el panel v2
+   las bolsas son casi simétricas (28,8 / 26,9), pero con 27 cortes por sano la
+   detección a un presupuesto fijo de falsas alarmas cambia de escala: no se compara
+   entre paneles sin ese nulo.
 
    Las auditorías obligatorias son `scripts/audit_model.py`. Aprueban **(a0)**
    —features permutadas entre todas las filas, el PR-AUC cae a la tasa base o hay
@@ -220,10 +274,12 @@ folds. Agregar un modo es una función con `@register_target` y cero líneas en 
 
 ```
 src/config.py            carga de YAML, resolución de paths, semillas
-src/data/loader.py       carga de las tres tablas crudas (esquema en configs/data/raw_sources.yaml)
+src/data/loader.py       carga de las tres tablas crudas (esquema en configs/data/raw_sources.yaml); correcciones
+                         por parte (`rename`, `offsets`) y por tabla (`truncate_after`)
                          load_table() entera, iter_table() por chunks (13M de filas)
 src/data/dedupe.py       colapso de los 13 vehículos duplicados (lista en configs/data/vehicle_dedupe.yaml)
-src/data/usable.py       universo del estudio: qué vehículo entra y por qué los demás no
+src/data/usable.py       universo del estudio: qué vehículo entra y por qué los demás no (fecha utilizable,
+                         mercado y, desde v2, ventana de producción `production_day_window`)
 src/data/join.py         unión a nivel vehículo + enriquecimiento de trips/signals con las estáticas
                          (trips y signals NO se mergean entre sí: no hay clave fila a fila)
 src/data/subset.py       trips/signals para un conjunto de vehículos: canoniza → filtra → deduplica la fila completa
@@ -266,7 +322,9 @@ src/training/targets.py  con qué se entrena (no con qué se mide) y cómo la sa
                          `window_survival` (el tramo en riesgo del panel v1 en días, F5 §3.3) y
                          `window_km_survival` (el mismo tramo en km, con entrada tardía: el finalista de F6).
                          Lo que se evalúa sigue siendo `label`; cv.py no sabe qué modos hay
-src/eval/splits.py       splits antileakage + serialización a splits.json
+src/eval/splits.py       splits antileakage + serialización a splits.json; estrato compuesto (`composite_strata`,
+                         `extra_columns`), holdout sobre el universo (`holdout_on_universe`), `compare_holdouts` y
+                         `extend_holdout` (agranda un holdout congelado sin mover a nadie)
                          estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML;
                          extend_splits() conserva los folds de un split existente y reparte solo los vehículos nuevos
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
@@ -286,7 +344,16 @@ src/eval/explain.py      explicabilidad de K2, funciones puras: refit_folds() (e
                          sana comparable (FleetReferenceNormalizer, train del fold), borrado, estabilidad, plausibilidad
                          física, message_factors()/render_vehicle_message() y dev_only_guard()
 scripts/make_dummy.py    panel dummy con el esquema del contrato
-scripts/make_test_split.py  auditoría del join + sorteo dev/test + recorte al universo (se corre una vez)
+scripts/make_test_split.py  auditoría del join + universo + holdout (`draw.mode: universe` en v2; `all` =
+                         sorteo + recorte de la entrega 1, con test_split_v1.yaml; `extend` = la variante sin
+                         ventana, test_split_sinventana.yaml). Se corre una vez
+scripts/audit_vehicle_strata.py  AUC por vehículo agrupado / dentro de mercado / dentro de mercado × motor de varias
+                         corridas, sobre todos sus autos y sobre un subconjunto (p. ej. el dev de la ventana)
+scripts/compare_deliveries.py  entrega 1 contra v2: archivos, estática, anclaje, etiquetas, telemetría, corte de
+                         producción y qué marca la fecha nueva (sin test) -> experiments/entregas/
+scripts/build_city_elevation.py  altura de cada ciudad de venta (Open-Meteo/GeoNames) -> configs/data/city_elevation.yaml
+scripts/eda_v2.py        EDA de la entrega v2 sobre dev, con las comparaciones dentro del mercado (riesgo con
+                         exposición, ventana, reloj, perfil alineado, rasgo temprano, altura, motor)
 scripts/build_dataset.py panel real: universo del holdout → crudos → evento en km → cortes/etiqueta/features →
                          sanos emparejados → panel.parquet + splits.json (folds sobre dev) + panel_meta.json
 scripts/eda_gaps.py      complemento del EDA sobre dev: factibilidad de W/G/H, perfil alineado al evento,
@@ -319,7 +386,8 @@ scripts/audit_event_dating.py  ¿una marca de intervención (aceite, días sin u
 scripts/cost_scenarios.py  punto de operación de K2 bajo escenarios de costo con fuente (configs/cost_scenarios_k2.yaml),
                          con el ahorro sobre el azar; reporte, nunca selección
 scripts/decision_layer.py  capa de decisión sobre una corrida: curva a varios presupuestos de falsas alarmas con
-                         su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson)
+                         su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson); sin
+                         `window_eval` (v2) solo con la etiqueta dura (configs/exp_decision_v2_{k2,ss}.yaml)
 scripts/explain_k2.py    explicabilidad de K2 de punta a punta (preregistro configs/explain_k2.yaml): reentrena y
                          verifica los folds, V1-V4, criterios, elección, mensajes al cliente (configs/explain_texts.yaml)
                          y casos → experiments/explain-k2/; scripts/explain_k2_report.py hace las figuras y cases.md
@@ -344,7 +412,7 @@ scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run script
                          con el waterfall y el mensaje al cliente, perfil de uso contra los sanos), Costos (punto de
                          operación y ahorro según costos y prevalencia real, con escenarios precargados) y Modelo
                          (contra la referencia y los pisos, límites); configs/dashboard_k2.yaml
-scripts/check_setup.py   smoke test del harness (190 chequeos)
+scripts/check_setup.py   smoke test del harness (206 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

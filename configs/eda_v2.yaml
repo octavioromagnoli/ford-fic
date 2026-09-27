@@ -1,0 +1,65 @@
+# EDA de la entrega v2 sobre el DEV nuevo (446 vehículos, 141 eventos), con las
+# comparaciones fallado/sano ESTRATIFICADAS POR MERCADO.
+#
+#   python scripts/build_eda_cache.py --config configs/data/eda_cache_v2.yaml   # cache dev-only
+#   python scripts/eda_gaps.py --config configs/data/eda_cache_v2.yaml          # la EDA del 18-09, mismo código
+#   python scripts/eda_v2.py --config configs/eda_v2.yaml                       # esto
+#
+# Por qué un script nuevo y no solo `eda_gaps.py`: en la entrega 1 el dev eran dos
+# mercados parecidos (CHL, COL) y comparar fallados contra sanos agrupados era
+# razonable. En v2 son cinco, con climas, usos y tasas de falla de hasta 8× de
+# diferencia, y la tasa por mercado está cruzada con cuántos fallados sin fecha sacó
+# Ford de cada uno. Una comparación agrupada mezcla mercado con señal. Lectura:
+# docs/memoria/f9-eda-v2.md.
+seed: 42
+
+test_split: ${DATA_DIR}/processed/test_split.json
+eda_cache_dir: ${REPO_ROOT}/experiments/eda_v2/dev          # build_eda_cache.py (vehicles_dev, meta)
+gaps_dir: ${REPO_ROOT}/experiments/eda_v2/dev/gaps          # eda_gaps.py (trips/signals dev completos)
+features_spec: configs/data/features_v1.yaml                 # umbrales y topes de derive_trip_columns
+city_elevation: configs/data/city_elevation.yaml
+v1_static:                                                   # fechas de la entrega 1, solo para §I
+  failed: ${DATA_DIR}/old_raw/StaticInformation_FailedVins.csv
+
+# Ventana de producción en la que se muestrearon las dos cohortes (ProductionDay, origen
+# 2025-01-19): solo etiqueta los períodos de la sección P, no filtra nada.
+production_window_days: [1, 193]
+
+# Fin común de la extracción (el último viaje de los sanos). Un evento registrado
+# después no tiene telemetría comparable: cuenta como censura en esa fecha.
+extraction_end: "2026-09-14"
+
+hazard:
+  # El último tramo junta 450-720 d: pasados los 540 d no hay eventos y casi no hay exposición.
+  dss_bins: [0, 60, 120, 180, 240, 300, 360, 450, 720]
+  first_month: "2025-07"          # meses anteriores fundidos en un nivel (3 eventos en total)
+
+clock:
+  max_first_trip_odo_km: 300      # historial desde casi 0 km (si no, los acumulados están truncados)
+  n_bootstrap: 2000
+
+aligned:
+  offsets_days: [0, 21]           # referencia = fecha registrada − offset
+  tramos_km:                      # km ANTES de la referencia (negativo = después)
+    lejos: [4000, 8000]
+    medio: [2000, 4000]
+    cerca: [0, 2000]
+    ultimos_1000: [0, 1000]
+    post: [-3000, 0]
+  min_trips: 20
+  odo_bin_km: 2000                # comparador sano: mismo mercado y mismo tramo de odómetro
+  min_comparators: 5
+  long_idle_min: 15               # idle de 0 km que dura >= 15 min (regeneración con el auto parado)
+  n_bootstrap: 1000
+
+early:
+  landmarks_days: [60, 90]        # ventana [venta, venta + L]
+  gap_days: 30
+  min_trips: 15
+
+around_event:
+  days_before: 60
+  days_after: 30
+  baseline_days: [-120, -60]
+
+output_dir: ${REPO_ROOT}/experiments/eda_v2/dev/v2

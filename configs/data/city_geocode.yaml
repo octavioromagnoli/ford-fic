@@ -1,0 +1,56 @@
+# Altura de la ciudad de venta (entrega v2, `SalesCity`).
+#
+#   python scripts/build_city_elevation.py --config configs/data/city_geocode.yaml
+#
+# Por qué: la altura cambia cuánto oxígeno entra al motor, y con menos oxígeno la
+# combustión deja más hollín en el DPF. La entrega v2 trae la ciudad de venta y no
+# el GPS (los 4 campos de GPS del anexo 7.1 siguen sin venir): la ciudad de venta es
+# un proxy de dónde circula el auto, no una medición.
+#
+# Fuente: API de geocodificación de Open-Meteo (datos de GeoNames, CC BY 4.0), que
+# devuelve latitud, longitud y altura del lugar. Se consulta cada par (país, ciudad)
+# una vez; el resultado se congela en `output` y se versiona (son datos públicos de
+# lugares, no datos de Ford).
+
+vehicle_table: ${DATA_DIR}/processed/vehicles.parquet
+country_column: static_SalesCountry_cd
+city_column: static_SalesCity
+
+api:
+  url: https://geocoding-api.open-meteo.com/v1/search
+  count: 10
+  language: es
+  timeout_s: 20
+  pause_s: 0.25
+
+# Código ISO de 3 letras de los datos -> ISO de 2 letras de GeoNames.
+countries: {ARG: AR, BRA: BR, CHL: CL, COL: CO, PER: PE, PRY: PY}
+
+# Tipos de lugar poblado aceptados, en orden de preferencia (GeoNames feature codes).
+feature_codes: [PPLC, PPLA, PPLA2, PPLA3, PPLA4, PPL, PPLX, PPLL]
+
+# Altura plausible para una ciudad de estos seis países. GeoNames usa 9999 como "sin
+# dato" (Punta Arenas lo trae): fuera de este rango el candidato se descarta.
+elevation_range_m: [-50, 5000]
+
+# Nombres del dato que no son el nombre de un lugar en GeoNames.
+aliases:
+  ARG:
+    CAPITAL FEDERAL: Buenos Aires
+    EL DORADO: Eldorado            # Misiones; "El Dorado" no existe como localidad
+    SARANDI: Sarandí               # Avellaneda, Buenos Aires
+  BRA:
+    JI-PARANA: Ji Parana            # con guion GeoNames solo devuelve el aeropuerto
+  COL:
+    BOGOTA D.C.: Bogotá
+
+# Nombres que no identifican una ciudad: quedan sin altura (NaN), a propósito.
+ambiguous:
+  ARG:
+    CAPITAL: "Capital de alguna provincia, sin decir cuál (Córdoba, Mendoza, San Juan, Salta, ...)"
+
+output: configs/data/city_elevation.yaml
+
+# Sin altura aunque el lugar exista: GeoNames devuelve 9999 ("sin dato") y no se
+# inventa un valor. Queda NaN en la tabla generada (estado `not_found`).
+#   CHL / PUNTA ARENAS (1 auto)

@@ -85,18 +85,58 @@ def panel_fingerprint(panel: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+MIN_STRATUM_SIZE = 5
+
+
+def composite_strata(
+    frame: pd.DataFrame, columns: list[str], *, min_size: int = MIN_STRATUM_SIZE
+) -> np.ndarray:
+    """Estrato compuesto por fila (`"1|BRA|ENG_3"`), fundiendo hacia arriba los chicos.
+
+    El orden de `columns` es la prioridad: la primera (el evento) nunca se funde. Un
+    estrato con menos de `min_size` filas pierde su última columna y se junta con el
+    de nivel superior (`"1|BRA"`); si ese también queda chico, sube otra vez. Así cada
+    estrato que llega al splitter tiene, con `min_size = n_folds`, al menos un
+    representante por fold, y ninguno se descarta.
+
+    Pensado para una fila por vehículo (el holdout) o para la tabla colapsada por
+    vehículo de un panel; con muchas filas por vehículo, `min_size` cuenta filas.
+    """
+    if not columns:
+        raise ValueError("`columns` vacío: hace falta al menos la columna del evento")
+    missing = [c for c in columns if c not in frame.columns]
+    if missing:
+        raise KeyError(f"Faltan columnas de estratificación: {missing}")
+    parts = frame[columns].astype(str).fillna("NA").to_numpy()
+    depth = np.full(len(frame), len(columns))
+    while True:
+        keys = np.array(["|".join(row[:d]) for row, d in zip(parts, depth)], dtype=object)
+        counts = pd.Series(keys).value_counts()
+        small = np.array([counts[k] < min_size for k in keys]) & (depth > 1)
+        if not small.any():
+            return keys
+        depth[small] -= 1
+
+
 def stratify_labels(
     panel: pd.DataFrame,
     *,
     group_column: str = GROUP_COLUMN,
     column: str = STRATIFY_COLUMN,
     level: str = STRATIFY_LEVEL,
+    extra_columns: list[str] | tuple[str, ...] = (),
+    min_stratum_size: int = MIN_STRATUM_SIZE,
 ) -> np.ndarray:
-    """Vector binario por fila con el que se estratifican los folds.
+    """Vector por fila con el que se estratifican los folds.
 
     `level="row"` usa la columna tal cual. `level="vehicle"` la colapsa con `max`
     por vehículo y la reparte de vuelta a todas sus filas: con `column="label"` eso
     contesta *¿este vehículo tiene al menos un corte positivo?*.
+
+    Con `extra_columns` (constantes dentro del vehículo, p. ej. mercado y motor) el
+    estrato pasa a ser compuesto —`composite_strata` sobre una fila por vehículo— y
+    el vector devuelto es un código entero por estrato. Sin ellas, es el binario de
+    siempre, bit a bit.
 
     El nivel no cambia que el vehículo caiga entero de un lado —eso lo garantiza
     `groups=vehicle_id`, no la estratificación—: cambia qué se equilibra entre folds.
@@ -113,7 +153,27 @@ def stratify_labels(
     values = panel[column]
     if level == "vehicle":
         values = panel.groupby(group_column, observed=True)[column].transform("max")
-    return (values.astype(float) > 0).astype(int).to_numpy()
+    binary = (values.astype(float) > 0).astype(int)
+    if not extra_columns:
+        return binary.to_numpy()
+    if level != "vehicle":
+        raise ValueError("La estratificación compuesta (`extra_columns`) solo existe a nivel vehículo")
+    extra = list(extra_columns)
+    missing = [c for c in extra if c not in panel.columns]
+    if missing:
+        raise KeyError(f"El panel no tiene las columnas de estratificación {missing} (`splits.stratify.extra_columns`)")
+    varying = [c for c in extra if panel.groupby(group_column, observed=True)[c].nunique(dropna=False).gt(1).any()]
+    if varying:
+        raise ValueError(f"Las columnas {varying} cambian dentro de un vehículo: no sirven para estratificar vehículos")
+    per_vehicle = (
+        panel.assign(_y=binary.to_numpy()).groupby(group_column, observed=True)
+        .agg(_y=("_y", "max"), **{c: (c, "first") for c in extra})
+    )
+    keys = pd.Series(
+        composite_strata(per_vehicle, ["_y", *extra], min_size=min_stratum_size), index=per_vehicle.index
+    )
+    codes = pd.Series(pd.factorize(keys, sort=True)[0], index=keys.index)
+    return panel[group_column].map(codes).to_numpy()
 
 
 def _thin_fold_message(
@@ -213,6 +273,8 @@ def make_splits(
     label_column: str = LABEL_COLUMN,
     min_valid_positives: int = MIN_VALID_POSITIVES,
     n_repeats: int = N_REPEATS,
+    stratify_extra_columns: list[str] | tuple[str, ...] = (),
+    min_stratum_size: int = MIN_STRATUM_SIZE,
 ) -> dict[str, Any]:
     """Construye los folds agrupados por vehículo y estratificados.
 
@@ -238,6 +300,12 @@ def make_splits(
     `"row"` la usa fila a fila, lo que equilibra el CONTEO de filas positivas por
     fold. Ninguno de los dos afecta la integridad del vehículo: eso lo da `groups`.
 
+    **Estrato compuesto (entrega v2).** Con `stratify_extra_columns` (p. ej. mercado y
+    motor) cada vehículo se estratifica por `label × mercado × motor`, fundiendo hacia
+    arriba los estratos de menos de `min_stratum_size` vehículos (`composite_strata`).
+    En v2 el riesgo cambia 8× entre mercados y ENG_3 falla casi solo en Brasil: sin
+    esto, un fold puede quedarse con los fallados de un estrato entero.
+
     **Guarda de positivos.** Si un fold queda con menos de `min_valid_positives`
     filas `label=1` en validación, esto falla nombrando repetición, fold y conteo.
     Antes el caso pasaba en silencio y el PR-AUC del fold salía NaN.
@@ -260,10 +328,22 @@ def make_splits(
         )
 
     groups = panel[group_column].astype(str).to_numpy()
-    y = stratify_labels(
+    binary = stratify_labels(
         panel, group_column=group_column, column=stratify_column, level=stratify_level
     )
-    n_positive_vehicles = _group_max(y, groups)
+    y = (
+        stratify_labels(
+            panel,
+            group_column=group_column,
+            column=stratify_column,
+            level=stratify_level,
+            extra_columns=list(stratify_extra_columns),
+            min_stratum_size=min_stratum_size,
+        )
+        if stratify_extra_columns
+        else binary
+    )
+    n_positive_vehicles = _group_max(binary, groups)
     if n_positive_vehicles < n_splits:
         raise ValueError(
             f"Solo {n_positive_vehicles} vehículo(s) positivos según `{stratify_column}` "
@@ -305,6 +385,15 @@ def make_splits(
             "column": stratify_column,
             "level": stratify_level,
             "n_positive_vehicles": n_positive_vehicles,
+            **(
+                {
+                    "extra_columns": list(stratify_extra_columns),
+                    "min_stratum_size": int(min_stratum_size),
+                    "n_strata": int(len(np.unique(y))),
+                }
+                if stratify_extra_columns
+                else {}
+            ),
         },
         "label_column": label_column,
         "min_valid_positives": int(min_valid_positives),
@@ -475,7 +564,7 @@ def split_options(cfg: dict[str, Any], *, key: str = "splits") -> dict[str, Any]
     """
     block = cfg.get(key, {}) or {}
     stratify = block.get("stratify", {}) or {}
-    return {
+    options = {
         "n_splits": int(block.get("n_splits", 5)),
         "seed": int(block.get("seed", 42)),
         "stratify_column": str(stratify.get("column", STRATIFY_COLUMN)),
@@ -483,18 +572,28 @@ def split_options(cfg: dict[str, Any], *, key: str = "splits") -> dict[str, Any]
         "min_valid_positives": int(block.get("min_valid_positives", MIN_VALID_POSITIVES)),
         "n_repeats": int(block.get("n_repeats", N_REPEATS)),
     }
+    # Solo aparecen si el YAML las declara: un YAML viejo arma exactamente los mismos
+    # kwargs que antes, y `make_splits` no las recibe.
+    if stratify.get("extra_columns"):
+        options["stratify_extra_columns"] = [str(c) for c in stratify["extra_columns"]]
+        options["min_stratum_size"] = int(stratify.get("min_stratum_size", MIN_STRATUM_SIZE))
+    return options
 
 
 def splits_declared(splits: dict[str, Any]) -> dict[str, Any]:
     """Con qué parámetros se armó un `splits.json` (incluido uno del formato viejo)."""
     stratify = splits.get("stratify") or {}
-    return {
+    declared = {
         "n_splits": int(splits.get("n_splits", len(splits.get("folds", [])))),
         "seed": splits.get("seed"),
         "stratify_column": str(stratify.get("column", LEGACY_OPTIONS["stratify_column"])),
         "stratify_level": str(stratify.get("level", LEGACY_OPTIONS["stratify_level"])),
         "n_repeats": int(splits.get("n_repeats", len(_repeats_of(splits)))),
     }
+    if stratify.get("extra_columns"):
+        declared["stratify_extra_columns"] = list(stratify["extra_columns"])
+        declared["min_stratum_size"] = int(stratify.get("min_stratum_size", MIN_STRATUM_SIZE))
+    return declared
 
 
 def splits_match_options(splits: dict[str, Any], options: dict[str, Any]) -> list[str]:
@@ -510,6 +609,11 @@ def splits_match_options(splits: dict[str, Any], options: dict[str, Any]) -> lis
         want, got = options.get(key), declared.get(key)
         if want is not None and got is not None and want != got:
             diffs.append(f"{key} (YAML={want!r}, archivo={got!r})")
+    # Un estrato compuesto declarado de un solo lado también es una diferencia.
+    for key in ("stratify_extra_columns", "min_stratum_size"):
+        want, got = options.get(key), declared.get(key)
+        if want != got:
+            diffs.append(f"{key} (YAML={want!r}, archivo={got!r})")
     return diffs
 
 
@@ -521,8 +625,14 @@ def make_test_split(
     group_column: str = GROUP_COLUMN,
     event_column: str = EVENT_COLUMN,
     tolerance: float = 0.02,
+    stratify_columns: list[str] | None = None,
+    min_stratum_size: int = MIN_STRATUM_SIZE,
 ) -> dict[str, Any]:
     """Parte el universo de vehículos en dev/test, agrupado por vehículo y estratificado.
+
+    Con `stratify_columns` (entrega v2: `[event_observed, mercado, motor]`) el estrato
+    es compuesto (`composite_strata`, fundiendo los chicos hacia arriba); sin él, es
+    `event_column` como siempre, bit a bit.
 
     Acepta un panel (muchas filas por vehículo) o una tabla a nivel vehículo: lo
     primero que hace es colapsar a una fila por `group_column`, así el split es por
@@ -566,6 +676,23 @@ def make_test_split(
 
     groups = vehicle_level[group_column].astype(str).to_numpy()
     y = vehicle_level[event_column].to_numpy()
+    strata_info: dict[str, Any] | None = None
+    if stratify_columns:
+        if stratify_columns[0] != event_column:
+            raise ValueError(
+                f"La primera columna del estrato tiene que ser el evento (`{event_column}`): es la "
+                "única que nunca se funde."
+            )
+        extra = list(stratify_columns[1:])
+        per_vehicle = frame.groupby(group_column, observed=True)[extra].first()
+        vehicle_level = vehicle_level.join(per_vehicle, on=group_column)
+        keys = composite_strata(vehicle_level, stratify_columns, min_size=min_stratum_size)
+        y = pd.factorize(pd.Series(keys), sort=True)[0]
+        strata_info = {
+            "columns": list(stratify_columns),
+            "min_stratum_size": int(min_stratum_size),
+            "strata": {str(k): int(v) for k, v in pd.Series(keys).value_counts().sort_index().items()},
+        }
     splitter = StratifiedGroupKFold(n_splits=equivalent_folds, shuffle=True, random_state=seed)
     _, test_idx = next(iter(splitter.split(np.zeros(len(vehicle_level)), y, groups)))
 
@@ -575,9 +702,16 @@ def make_test_split(
     dev_vehicles = sorted(groups[~test_mask].tolist())
     assert_no_vehicle_leakage(np.array(dev_vehicles), np.array(test_vehicles))
 
+    extra_fields: dict[str, Any] = {}
+    if strata_info is not None:
+        by_side = pd.DataFrame({"stratum": keys, "test": test_mask}).groupby("stratum")["test"].agg(["size", "sum"])
+        strata_info["test_by_stratum"] = {str(k): int(v) for k, v in by_side["sum"].items()}
+        extra_fields["stratify"] = strata_info
+
     return {
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "kind": "dev_test_holdout",
+        **extra_fields,
         "test_size_requested": float(test_size),
         "test_size_achieved": float(test_mask.mean()),
         "equivalent_folds": equivalent_folds,
@@ -699,6 +833,191 @@ def restrict_test_split(
         out["test"] = _side_summary(vehicle_level, is_test, EVENT_COLUMN)
         out["n_event_vehicles"] = int(vehicle_level[EVENT_COLUMN].sum())
     return out
+
+
+def holdout_on_universe(
+    vehicles: pd.DataFrame,
+    keep: pd.Series | np.ndarray,
+    *,
+    test_size: float = 0.2,
+    seed: int = 42,
+    group_column: str = GROUP_COLUMN,
+    event_column: str = EVENT_COLUMN,
+    stratify_columns: list[str] | None = None,
+    min_stratum_size: int = MIN_STRATUM_SIZE,
+    universe: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Holdout dev/test sorteado **sobre el universo ya definido**, en una sola etapa.
+
+    Es el procedimiento de la entrega v2 (26-09-2026). En la entrega 1 se sorteaba la
+    población completa y después se recortaba (`restrict_test_split`), para que el
+    dado no se tirara después de mirar los datos que motivaron el recorte. En v2 el
+    universo, las etiquetas y los estratos cambiaron enteros, y se decidió volver a
+    sortear con la misma semilla: el universo se fija con criterios de calidad y de
+    muestreo (sin mirar ninguna feature contra la etiqueta) y recién ahí se sortea
+    una vez, estratificando por `stratify_columns`. Lo que se paga, y queda escrito
+    en el JSON por `compare_holdouts`, es que algunos autos que se miraron en el dev
+    viejo caen en el test nuevo.
+
+    Devuelve el mismo formato que `restrict_test_split` (tres listas, `universe`,
+    huella del universo), así `test_split_masks` lo consume igual.
+    """
+    keep = pd.Series(np.asarray(keep, dtype=bool), index=vehicles.index)
+    inside = vehicles.loc[keep]
+    split = make_test_split(
+        inside,
+        test_size=test_size,
+        seed=seed,
+        group_column=group_column,
+        event_column=event_column,
+        stratify_columns=stratify_columns,
+        min_stratum_size=min_stratum_size,
+    )
+    everyone = set(vehicles[group_column].astype(str))
+    excluded = sorted(everyone - set(split["dev_vehicles"]) - set(split["test_vehicles"]))
+    split.update(
+        {
+            "kind": "dev_test_holdout_universe",
+            "excluded_vehicles": excluded,
+            "n_excluded": len(excluded),
+            "universe": universe,
+            "population": {
+                "n_vehicles": len(everyone),
+                "vehicles_sha256_16": _digest(sorted(everyone)),
+            },
+        }
+    )
+    return split
+
+
+def extend_holdout(
+    base: dict[str, Any],
+    vehicles: pd.DataFrame,
+    keep: pd.Series | np.ndarray,
+    *,
+    test_size: float = 0.2,
+    seed: int = 42,
+    group_column: str = GROUP_COLUMN,
+    event_column: str = EVENT_COLUMN,
+    stratify_columns: list[str] | None = None,
+    min_stratum_size: int = MIN_STRATUM_SIZE,
+    keep_sides_of: dict[str, Any] | None = None,
+    universe: dict[str, Any] | None = None,
+    base_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Agranda un holdout ya congelado a un universo más grande **sin mover a nadie**.
+
+    Es lo que se hizo el 26-09-2026 al sacar la ventana de producción del universo v2
+    (557 → 990 vehículos). Tres reglas, en este orden:
+
+    1. Todo vehículo de `base` conserva su lado. Nadie que se haya mirado en dev pasa al
+       test (la EDA del dev de `base` ya se hizo), y el test de `base` sigue intacto.
+    2. Entre los que entran, los que estaban en dev o test de `keep_sides_of` (el holdout
+       de la entrega 1) vuelven a ese lado. Así no se suma al test ningún auto que se
+       miró durante F2–F8.
+    3. El resto se sortea una vez con `make_test_split` (misma semilla, mismo estrato).
+
+    Un universo más chico que el de `base` no se extiende: falla. Restringir es otra
+    operación (`restrict_test_split`), y como la extensión no mueve a nadie, restringir el
+    resultado al universo de `base` devuelve exactamente `base`.
+    """
+    keep = pd.Series(np.asarray(keep, dtype=bool), index=vehicles.index)
+    inside = set(vehicles.loc[keep, group_column].astype(str))
+    base_dev, base_test = set(base.get("dev_vehicles", [])), set(base["test_vehicles"])
+    lost = sorted((base_dev | base_test) - inside)
+    if lost:
+        raise ValueError(
+            f"{len(lost)} vehículo(s) del holdout base quedan fuera del universo nuevo (ej.: {lost[:3]}): "
+            "extender no saca a nadie. Para achicar el universo se restringe, no se extiende."
+        )
+    new = inside - base_dev - base_test
+    prev_dev = set((keep_sides_of or {}).get("dev_vehicles", []))
+    prev_test = set((keep_sides_of or {}).get("test_vehicles", []))
+    forced_dev, forced_test = sorted(new & prev_dev), sorted(new & prev_test)
+    to_draw = sorted(new - set(forced_dev) - set(forced_test))
+
+    drawn: dict[str, Any] = {"dev_vehicles": [], "test_vehicles": []}
+    if to_draw:
+        frame = vehicles[vehicles[group_column].astype(str).isin(to_draw)]
+        drawn = make_test_split(frame, test_size=test_size, seed=seed, group_column=group_column,
+                                event_column=event_column, stratify_columns=stratify_columns,
+                                min_stratum_size=min_stratum_size)
+
+    dev = sorted(base_dev | set(forced_dev) | set(drawn["dev_vehicles"]))
+    test = sorted(base_test | set(forced_test) | set(drawn["test_vehicles"]))
+    assert_no_vehicle_leakage(np.array(dev), np.array(test))
+    everyone = set(vehicles[group_column].astype(str))
+    excluded = sorted(everyone - set(dev) - set(test))
+
+    per_vehicle = vehicles.drop_duplicates(group_column)
+    events = pd.Series(per_vehicle[event_column].to_numpy(), index=per_vehicle[group_column].astype(str))
+    level = pd.DataFrame({group_column: dev + test, event_column: [int(events[v]) for v in dev + test]})
+    is_test = np.array([False] * len(dev) + [True] * len(test))
+    return {
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "kind": "dev_test_holdout_extended",
+        "seed": seed,
+        "group_column": group_column,
+        "event_column": event_column,
+        "test_size_requested": float(test_size),
+        "test_size_achieved": len(test) / (len(dev) + len(test)),
+        "panel": {"n_rows": len(dev) + len(test), "n_vehicles": len(dev) + len(test),
+                  "vehicles_sha256_16": _digest(dev + test)},
+        "population": {"n_vehicles": len(everyone), "vehicles_sha256_16": _digest(sorted(everyone))},
+        "n_vehicles": len(dev) + len(test),
+        "n_event_vehicles": int(level[event_column].sum()),
+        "dev": _side_summary(level, ~is_test, event_column),
+        "test": _side_summary(level, is_test, event_column),
+        "dev_vehicles": dev,
+        "test_vehicles": test,
+        "excluded_vehicles": excluded,
+        "n_excluded": len(excluded),
+        "universe": universe,
+        "extended_from": {
+            "path": None if base_path is None else str(base_path),
+            "created_at": base.get("created_at"),
+            "kind": base.get("kind"),
+            "dev_vehicles_sha256_16": _digest(sorted(base_dev)),
+            "test_vehicles_sha256_16": _digest(sorted(base_test)),
+            "n_base_dev": len(base_dev),
+            "n_base_test": len(base_test),
+            "n_new": len(new),
+            "n_forced_dev": len(forced_dev),
+            "n_forced_test": len(forced_test),
+            "n_drawn": len(to_draw),
+            "n_drawn_test": len(drawn["test_vehicles"]),
+            "stratify": drawn.get("stratify"),
+        },
+    }
+
+
+def compare_holdouts(new: dict[str, Any], old: dict[str, Any]) -> dict[str, Any]:
+    """De qué lado estaba en el holdout viejo cada vehículo del nuevo.
+
+    El número que importa es `dev->test`: autos que se miraron durante la selección
+    de modelo del holdout viejo y ahora están en el test. La lista se guarda para que
+    la evaluación final pueda reportar el test también sin ellos.
+    """
+    def side_map(split: dict[str, Any]) -> dict[str, str]:
+        out = {v: "dev" for v in split.get("dev_vehicles", [])}
+        out.update({v: "test" for v in split.get("test_vehicles", [])})
+        out.update({v: "excl" for v in split.get("excluded_vehicles", [])})
+        return out
+
+    before, after = side_map(old), side_map(new)
+    transitions: dict[str, int] = {}
+    for vehicle, side in after.items():
+        key = f"{before.get(vehicle, 'nuevo')}->{side}"
+        transitions[key] = transitions.get(key, 0) + 1
+    seen = sorted(v for v in new.get("test_vehicles", []) if before.get(v) == "dev")
+    return {
+        "old_created_at": old.get("created_at"),
+        "old_kind": old.get("kind"),
+        "old_counts": {k: len(old.get(k, [])) for k in ("dev_vehicles", "test_vehicles", "excluded_vehicles")},
+        "transitions": dict(sorted(transitions.items())),
+        "test_vehicles_in_old_dev": seen,
+        "n_test_vehicles_in_old_dev": len(seen),
+    }
 
 
 def test_split_masks(

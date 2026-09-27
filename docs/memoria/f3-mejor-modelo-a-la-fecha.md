@@ -1,5 +1,7 @@
 # El mejor modelo al 22-09: survival stacking con la ventana del registro (K2)
 
+> **Entrega v2 (26-09-2026):** todo lo de abajo es de la entrega 1. Sobre v2 no hay finalista elegido: K2 perdió su corrección (la ventana) y su variante sin ventana no aprueba (a′). Survival stacking sí la aprueba, y sobre dev v2 detecta ~11–14% al 5% de falsas alarmas; el 15–17% de abajo es de la entrega 1 ([f9-remedicion-v2.md](f9-remedicion-v2.md) § K2 sobre v2).
+
 **Fecha:** 2026-09-22 · **Fase:** F6 · **Alcance:** solo dev, R = 3; **test sin tocar.**
 Es el resumen para el equipo y para el pitch. La evidencia vive en
 [decisiones.md](decisiones.md) (cierre de F3, 20-09; cure model y F6, 22-09),

@@ -1,5 +1,7 @@
 # `IdentificationDate` es la fecha de venta en el 79% de los positivos
 
+> **Entrega v2 (26-09-2026):** ningún fallado tiene la fecha por defecto. Ford no las corrigió: sacó a los 278 autos que la tenían, que tampoco están entre los sanos ([f9-entrega-v2.md](f9-entrega-v2.md) §4).
+
 **Fecha:** 2026-09-16 · **Fase:** F2 (previo) · **Alcance de la medición:** dev
 (864 vehículos, 292 con evento) · **Reproduce:**
 `notebooks/eda-exhaustivo-dev.ipynb` §3.3 y §3.4.

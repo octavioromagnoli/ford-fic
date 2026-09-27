@@ -1,24 +1,28 @@
 # Fase 1 del cure model: en qué reloj ocurre el evento y en qué ventana de calendario
 # se registra. Solo dev; no entrena nada.
 #
+# ENTREGA 1. Lee los crudos y artefactos congelados de la entrega 1 (raw_sources_v1.yaml,
+# data/processed-v1/). En la entrega v2 la ventana del registro no existe (LR del mes
+# calendario p = 0,16): ver docs/memoria/f9-eda-v2.md §C.
+#
 #   python scripts/audit_event_clock.py --config configs/data/event_clock.yaml
 #
 # Lectura de los resultados: docs/memoria/f3-reloj-y-ventana-del-evento.md.
 seed: 0
 
-sources: configs/data/raw_sources.yaml
+sources: configs/data/raw_sources_v1.yaml
 dedupe: configs/data/vehicle_dedupe.yaml
 # De acá salen las columnas estáticas que `load_vehicle_static` renombra a `static_*`.
 panel_config: configs/data/panel_v1.yaml
 # Umbrales y topes físicos de `derive_trip_columns` (idle, régimen térmico, etc.).
 features_spec: configs/data/features_v1.yaml
 
-test_split: ${DATA_DIR}/processed/test_split.json
+test_split: ${DATA_DIR}/processed-v1/test_split.json
 # Origen del calendario congelado en F2 (`src/data/anchor.py`). El script lo re-estima
 # sobre dev y falla si no coincide.
-anchor_meta: ${DATA_DIR}/processed/panel_meta.json
+anchor_meta: ${DATA_DIR}/processed-v1/panel_meta.json
 # Panel v1, solo para H9 (qué parte de los horizontes sanos cae fuera de la ventana).
-panel_v1: ${DATA_DIR}/processed/panel.parquet
+panel_v1: ${DATA_DIR}/processed-v1/panel.parquet
 
 output_dir: experiments/audit_event_clock
 # Los viajes de dev derivados se cachean en output_dir (leer los crudos lleva minutos).

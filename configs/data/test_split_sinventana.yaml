@@ -1,0 +1,66 @@
+# VARIANTE SIN LA VENTANA DE PRODUCCIÓN (26-09-2026): 990 vehículos (788 dev / 202 test).
+# No es el holdout vigente (ese es configs/data/test_split.yaml, la ventana, 557): se conserva
+# como evidencia de por qué no se usa para elegir ni medir modelos (f9-universo-v2.md §6).
+#
+#   python scripts/make_test_split.py --config configs/data/test_split.yaml --force              # la base (557)
+#   python scripts/make_test_split.py --config configs/data/test_split_sinventana.yaml --force   # este (990)
+#
+# El holdout no se re-sortea: se EXTIENDE el de la ventana (nadie cambia de lado; la EDA
+# de ese dev ya se hizo) y, entre los que entran, los que estaban en el dev o el test de
+# la entrega 1 vuelven a ese lado. El resto se sortea una vez, con la misma semilla.
+seed: 42                  # la misma semilla de la entrega 1
+test_size: 0.2            # 1/5: un fold de StratifiedGroupKFold (ver src/eval/splits.py)
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml    # los mismos 13 pares (en v2, 7 siguen en fallados, con historia idéntica)
+panel: configs/data/panel_v1.yaml           # de acá salen las columnas static_*
+extra_static_columns: [SalesCity]           # nueva en v2; se reporta, no se estratifica
+
+group_column: vehicle_id                    # regla 2: ningún vehículo en los dos lados
+event_column: event_observed                # IdentificationDate no nula
+
+# Universo del estudio: qué vehículo entra, ANTES de sortear (src/data/usable.py).
+universe:
+  # En v2 ningún fallado tiene IdentificationDate == daysUntilSale (0 de 298 filas):
+  # Ford sacó a los 278 que la tenían. El criterio queda por si vuelve a aparecer.
+  require_usable_event_date: true
+
+  # Los cinco mercados tienen eventos fechados y sanos. PRY tiene 1 fallado y 0 sanos
+  # (y es un auto de 2024, fuera de la ventana de abajo). PER no tiene fallados dentro
+  # de la ventana, pero registra eventos fechados (2, de autos de 2024): un sano de PER
+  # es un negativo en un mercado donde el evento se puede ver, así que entra.
+  keep_markets: [ARG, BRA, CHL, COL, PER]
+
+  # Sin recorte por fecha de producción (lo que se probó el 26-09). Con la ventana son
+  # 557 vehículos: configs/data/test_split.yaml. Afuera de ella quedan 92 fallados
+  # producidos en 2024 sin ningún sano de su época y 341 sanos producidos desde agosto de
+  # 2025 sin ningún fallado (~50 esperados por exposición): leer f9-universo-v2.md §2
+  # antes de interpretar una diferencia entre cohortes.
+  production_day_window: null
+
+# Extensión del holdout de la ventana (src/eval/splits.py::extend_holdout).
+draw:
+  mode: extend        # `on:` no: YAML lo lee como booleano
+  base: ${DATA_DIR}/processed/test_split.json
+  # Los que entran y estaban en el dev/test del holdout previo (la entrega 1) vuelven a
+  # ese lado: ningún auto mirado en F2-F8 se suma al test.
+  keep_previous_sides: true
+  # El resto se sortea estratificado por evento × mercado × motor, como la base.
+  stratify: [event_observed, static_SalesCountry_cd, static_Engine]
+  min_stratum_size: 5
+
+# Con qué holdout se compara el nuevo: cuántos autos cambian de lado, y cuáles del
+# test nuevo estaban en el dev viejo (se miraron durante F3-F8). La lista queda en el
+# JSON para reportar el test final también sin ellos.
+previous_holdout: ${DATA_DIR}/processed-v1/test_split.json
+
+# Columnas cuyo balance se REPORTA entre dev y test (las dos primeras también estratifican).
+balance_columns: [static_Engine, static_SalesCountry_cd, static_ModelSeries]
+
+scan:
+  chunksize: 500000       # signals son 10M de filas: se leen por chunks
+
+output:
+  test_split: ${DATA_DIR}/processed/test_split_sinventana.json
+  vehicle_table: ${DATA_DIR}/processed/vehicles.parquet   # unión a nivel vehículo (insumo de F2)
+  quality: ${DATA_DIR}/processed/raw_quality.csv          # nulos y tipos por columna

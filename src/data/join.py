@@ -243,6 +243,7 @@ def load_vehicle_static(
     config_path: str | Path = DEFAULT_SOURCES_CONFIG,
     dedupe_config: str | Path = DEFAULT_DEDUPE_CONFIG,
     panel_config: str | Path = DEFAULT_PANEL_CONFIG,
+    extra_static_columns: list[str] | None = None,
 ) -> pd.DataFrame:
     """Tabla estática deduplicada: una fila por vehículo real, con `event_observed`.
 
@@ -254,11 +255,15 @@ def load_vehicle_static(
 
     `IdentificationDate` se conserva como `event_day_since_production` porque es la
     etiqueta —nunca una feature—: con ella se deriva `event_observed`.
+
+    `extra_static_columns` suma estáticas que el panel no declara (p. ej. `SalesCity`
+    de la entrega v2) para reportarlas o estratificar con ellas, sin tocar el panel.
     """
     vehicles = load_table("vehicles", config_path)
     deduped = dedupe_vehicles(vehicles, config_path=dedupe_config)
 
     static_columns = _declared_static_columns(panel_config)
+    static_columns += [c for c in (extra_static_columns or []) if c not in static_columns]
     out = deduped.rename(columns={VEHICLE_COL: ID_COL})
     out[EVENT_COLUMN] = out[EVENT_DAY_COL].notna().astype(int)
     out = out.rename(columns={EVENT_DAY_COL: "event_day_since_production"})
