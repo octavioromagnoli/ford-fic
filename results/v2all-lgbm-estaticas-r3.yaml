@@ -1,0 +1,96 @@
+run: v2all-lgbm-estaticas-r3
+logged_on: '2026-09-26'
+note: 'Re-medición completa v2 (26-09, exploratoria, no elige): LightGBM + motor/modelo.
+  Detección por auto con umbral exacto al 5 · 10 · 20% de falsas alarmas: 16 · 30
+  · 53% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor 18 · 33 · 62). AUC
+  por auto dentro de mercado × motor 0.59.  docs/memoria/f9-remedicion-completa-v2.md'
+source:
+  config_path: configs\exp_v2all_lgbm_estaticas_r3.yaml
+  config_versioned: false
+  branch: exp/v2-remedicion-completa
+  commit: cd01989
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: lgbm
+  pr_auc: 0.13012251051852017
+  cohort_ceiling: 0.1766839378238342
+  cohort_lift: 3.0318652849740935
+  within_failed: 0.2514375409066713
+  within_failed_lift: 1.4230922403222157
+  when_delta: -0.017717463935923106
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.5915314254793907
+  vehicle_lift: 1.8666102759571885
+  vehicle_base_rate: 0.31690140845070425
+  pr_auc_lo: 0.12748527561637557
+  pr_auc_hi: 0.1526642909526152
+  base_rate: 0.058275655814748355
+  lift: 2.23287938504141
+  roc_auc: 0.7254791195303589
+  brier: 0.157797352690524
+  detection_rate: 0.14814814814814814
+  median_lead_km: 5650.5
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_v2_estaticas.parquet
+  panel_generation: '2026-09-26'
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 682
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: v2all-lgbm-estaticas-r3
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_v2_estaticas.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+      extra_columns:
+      - static_SalesCountry_cd
+      - aux_static_Engine
+      min_stratum_size: 5
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: lgbm
+    params: {}
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f9-v2all
+    job_type: train
+    tags:
+    - f9
+    - v2
+    - v2all
+    - r3
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_v2all_lgbm_estaticas_r3.yaml

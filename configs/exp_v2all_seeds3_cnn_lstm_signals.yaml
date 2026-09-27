@@ -1,0 +1,42 @@
+# Re-medición completa sobre la ENTREGA v2 (26-09-2026): CNN-LSTM de la tutora (signals + país), promedio por rango de 3 semillas del modelo (42, 1, 2).
+# Es el mismo modelo con menos varianza de semilla, no un ensamble de modelos distintos. Mismas filas y folds.
+#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_v2all_seeds3_cnn_lstm_signals.yaml
+name: v2all-seeds3-cnn-lstm-signals
+seed: 42
+ensemble:
+  method: rank_mean
+  members:
+  - run: v2all-cnn-lstm-signals-r3
+    config: configs/exp_v2all_cnn_lstm_signals_r3.yaml
+    weight: 0.3333
+  - run: v2all-cnn-lstm-signals-s1-r3
+    config: configs/exp_v2all_cnn_lstm_signals_s1_r3.yaml
+    weight: 0.3333
+  - run: v2all-cnn-lstm-signals-s2-r3
+    config: configs/exp_v2all_cnn_lstm_signals_s2_r3.yaml
+    weight: 0.3333
+compare:
+  reference: f9-v2-ss-r3
+  against:
+  - f9-v2-lgbm-r3
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f9-v2all
+  job_type: ensemble
+  tags:
+  - f9
+  - v2
+  - v2all
+  - semillas
+  - r3
+  mode: online
+  log_artifacts: false
+output_dir: experiments

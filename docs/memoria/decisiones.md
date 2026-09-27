@@ -5,6 +5,43 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-26 · Re-medición completa sobre v2: los secuenciales con TripSummary pasan adelante; el finalista v2 sale de un preregistro contra la celda
+
+**Decidió:** nadie todavía; es una medición exploratoria pedida por el equipo ("volvé a correr todos
+los modelos con los nuevos datos"), no una elección. **Configs:** `configs/v2all_runs.yaml` →
+`configs/exp_v2all_*.yaml`, `configs/report_v2_models.yaml`, `configs/report_v2_leads.yaml`.
+Detalle: [f9-remedicion-completa-v2.md](f9-remedicion-completa-v2.md).
+
+**Qué se midió:** 42 modelos o variantes sobre dev v2, con los mismos folds R = 3. La detección por
+auto se mide con umbral exacto de 2% a 30% de falsas alarmas, con el nulo de bolsa, el umbral fuera de
+muestra y un bootstrap pareado por vehículo. Test sin tocar.
+
+**Lo que queda:**
+- **Los secuenciales con TripSummary le ganan a survival stacking con evidencia al 10–20%.**
+  CNN-LSTM + trips ×3 semillas detecta 25 · 36 · 56% al 5 · 10 · 20%; SS, 14 · 24 · 42%.
+  Con motor y modelo, la GRU + trips + estática ×3 llega a 27 · 42 · 61%.
+- **Ninguno le gana con evidencia a la tasa de fallas de la celda mercado × motor** (18 · 33 · 62%,
+  sin modelo). La ganancia del uso sobre la composición (~5–10 puntos al 5–10%) no se separa del
+  cero con 135 fallados.
+- **SS no empeoró respecto de la entrega 1**: sobre el nulo gana lo mismo al 5% (+8,9 → +8,7) y más
+  al 20% (+8,1 → +21,4). Lo que bajó es el nulo: en v1 las bolsas asimétricas (18 contra 9 cortes)
+  "detectaban" 10% al 5%.
+- **Las redes varían ±3–5 puntos por semilla**, y también con la cantidad de hilos de la CPU.
+
+**Consecuencias:**
+- **Todo número de un secuencial se reporta como promedio de 3 semillas.** La detección por auto se
+  reporta con umbral exacto y nulo, no con la grilla de `train.py`.
+- **El preregistro del finalista v2 tiene que incluir la celda mercado × motor como piso**, además de
+  SS y del nulo. Candidatos naturales: CNN-LSTM y GRU con trips ×3, con y sin estática.
+  Entre los dos sin estática se prefiere la CNN-LSTM: la GRU marca (b) +0,025 y su (a′) es +0,003.
+- **Si motor y modelo entran depende de un dato de Ford**, la tasa real de fallas del DPF en la
+  flota por mercado × motor. Si coincide con la de la muestra, entran sin reserva; si no, se
+  reponderan las celdas. Mientras tanto se reportan las dos versiones.
+- **La anticipación (~7.500 km, 2–3 meses de mediana) se cita como margen, no como pronóstico**:
+  el p25–p75 va de 3.300 a 12.000 km.
+
+---
+
 ## 2026-09-26 · Se probó sacar la ventana de producción y se volvió a ella
 
 **Decidió:** Santino, con el equipo (pedido original: "sacar la fecha así no tenemos que tirar

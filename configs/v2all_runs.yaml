@@ -1,0 +1,259 @@
+# Re-medición completa sobre la entrega v2 (26-09-2026, pedido del equipo: "correr todos los modelos
+# con los datos nuevos"). Exploratoria: no elige finalista (el presupuesto de comparaciones sigue
+# agotado; elegir sobre v2 es un preregistro nuevo). Solo dev, R = 3, test sin tocar.
+# Los hiperparámetros son los de cada modelo en F3; las variantes `-grande` son la única excepción
+# (más capacidad, porque el panel v2 tiene ~6× las filas del v1) y se leen como tal.
+#
+#   python scripts/make_v2all_configs.py     # escribe configs/exp_v2all_*.yaml
+base: configs/exp_v2_lgbm_r3.yaml
+
+runs:
+  # --- tabulares sobre el panel v2 (53 features) -------------------------------------------
+  - name: v2all-logistic-l2-r3
+    what: logística L2 sobre las 53 features
+    panel: ${DATA_DIR}/processed/panel.parquet
+    model: {name: logistic, params: {}}
+  - name: v2all-logistic-l1-r3
+    what: logística L1 sobre las 53 features
+    panel: ${DATA_DIR}/processed/panel.parquet
+    model: {name: logistic_l1, params: {}}
+  - name: v2all-lgbm-ordinal-r3
+    what: LightGBM ordinal por tramo de anticipación (F3)
+    panel: ${DATA_DIR}/processed/panel.parquet
+    target: {name: ordinal_horizon, params: {bins_km: [1250, 2000, 2750, 3500], score_max_tte_km: 3500}}
+    model: {name: lgbm_ordinal, params: {}}
+  - name: v2all-lgbm-bag10-r3
+    what: LightGBM embolsado por vehículo (10 bootstraps de autos)
+    panel: ${DATA_DIR}/processed/panel.parquet
+    target: {name: grouped_label, params: {}}
+    model: {name: vehicle_bagging, params: {base_model: lgbm, base_params: {}, n_bags: 10, random_state: 42}}
+  - name: v2all-lgbm-grande-r3
+    what: LightGBM con más capacidad (15 hojas, 600 árboles)
+    panel: ${DATA_DIR}/processed/panel.parquet
+    model: {name: lgbm, params: {num_leaves: 15, n_estimators: 600, min_child_samples: 60}}
+  - name: v2all-lgbm-estaticas-r3
+    what: LightGBM + motor y modelo como static_
+    panel: ${DATA_DIR}/processed/panel_v2_estaticas.parquet
+    model: {name: lgbm, params: {}}
+
+  # --- survival stacking -----------------------------------------------------------------
+  - name: v2all-ss-bag10-r3
+    what: survival stacking (F3) embolsado por vehículo
+    panel: ${DATA_DIR}/processed/panel_survival.parquet
+    target: {name: discrete_survival, params: {}}
+    model:
+      name: vehicle_bagging
+      params:
+        base_model: survival_stacking
+        base_params: {horizon_km: 3000, bin_km: 500, max_horizon_km: 6000, random_state: 42}
+        n_bags: 10
+        random_state: 42
+  - name: v2all-ss-grande-r3
+    what: survival stacking con más capacidad (15 hojas, 600 árboles)
+    panel: ${DATA_DIR}/processed/panel_survival.parquet
+    target: {name: discrete_survival, params: {}}
+    model:
+      name: survival_stacking
+      params:
+        horizon_km: 3000
+        bin_km: 500
+        max_horizon_km: 6000
+        random_state: 42
+        model_params: {num_leaves: 15, n_estimators: 600, min_child_samples: 100}
+  - name: v2all-ss-h12k-r3
+    what: survival stacking con horizonte de entrenamiento de 12.000 km (entre F3 y K2)
+    panel: ${DATA_DIR}/processed/panel_survival.parquet
+    target: {name: discrete_survival, params: {}}
+    model: {name: survival_stacking, params: {horizon_km: 3000, bin_km: 500, max_horizon_km: 12000, random_state: 42}}
+  - name: v2all-ss-estaticas-r3
+    what: survival stacking (F3) + motor y modelo como static_
+    panel: ${DATA_DIR}/processed/panel_survival_estaticas.parquet
+    target: {name: discrete_survival, params: {}}
+    model: {name: survival_stacking, params: {horizon_km: 3000, bin_km: 500, max_horizon_km: 6000, random_state: 42}}
+  - name: v2all-gpboost-ss-r3
+    what: survival stacking con intercepto aleatorio por vehículo (GPBoost)
+    panel: ${DATA_DIR}/processed/panel_survival.parquet
+    target: {name: discrete_survival, params: {}}
+    model: {name: gpboost_survival, params: {horizon_km: 3000, bin_km: 500, max_horizon_km: 6000, random_state: 42}}
+
+  # --- secuenciales (hiperparámetros de exp_cnn_lstm_r3.yaml / exp_gru_seq.yaml) ------------
+  - name: v2all-cnn-lstm-signals-r3
+    seeds: [1, 2]
+    what: CNN-LSTM de la tutora (signals + estática)
+    panel: ${DATA_DIR}/processed/panel_seq_v2.parquet
+    model:
+      name: cnn_lstm
+      params:
+        sequence_meta: ${DATA_DIR}/processed/panel_seq_v2_meta.json
+        conv_channels: 16
+        kernel_size: 3
+        lstm_hidden: 16
+        static_hidden: 4
+        head_hidden: 16
+        dropout: 0.3
+        epochs: 40
+        batch_size: 64
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        grad_clip: 1.0
+        class_weight: balanced
+        device: cpu
+        random_state: 42
+  - name: v2all-cnn-lstm-trips-r3
+    seeds: [1, 2]
+    what: CNN-LSTM de la tutora + TripSummary (signals + trips + estática)
+    panel: ${DATA_DIR}/processed/panel_seq_trips_v2.parquet
+    model:
+      name: cnn_lstm
+      params:
+        sequence_meta: ${DATA_DIR}/processed/panel_seq_trips_v2_meta.json
+        conv_channels: 16
+        kernel_size: 3
+        lstm_hidden: 16
+        static_hidden: 4
+        head_hidden: 16
+        dropout: 0.3
+        epochs: 40
+        batch_size: 64
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        grad_clip: 1.0
+        class_weight: balanced
+        device: cpu
+        random_state: 42
+  - name: v2all-cnn-lstm-trips-grande-r3
+    what: CNN-LSTM + TripSummary con más capacidad (32 filtros, LSTM 32)
+    panel: ${DATA_DIR}/processed/panel_seq_trips_v2.parquet
+    model:
+      name: cnn_lstm
+      params:
+        sequence_meta: ${DATA_DIR}/processed/panel_seq_trips_v2_meta.json
+        conv_channels: 32
+        kernel_size: 3
+        lstm_hidden: 32
+        static_hidden: 4
+        head_hidden: 32
+        dropout: 0.3
+        epochs: 40
+        batch_size: 64
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        grad_clip: 1.0
+        class_weight: balanced
+        device: cpu
+        random_state: 42
+  - name: v2all-gru-signals-r3
+    seeds: [1, 2]
+    what: GRU con atención (signals + estática)
+    panel: ${DATA_DIR}/processed/panel_seq_v2.parquet
+    model:
+      name: gru_seq
+      params:
+        sequence_meta: ${DATA_DIR}/processed/panel_seq_v2_meta.json
+        pooling: attention
+        hidden: 24
+        num_layers: 1
+        attention_hidden: 16
+        static_hidden: 4
+        head_hidden: 16
+        dropout: 0.3
+        epochs: 40
+        batch_size: 64
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        grad_clip: 1.0
+        class_weight: balanced
+        device: cpu
+        random_state: 42
+  - name: v2all-gru-trips-r3
+    seeds: [1, 2]
+    what: GRU con atención + TripSummary
+    panel: ${DATA_DIR}/processed/panel_seq_trips_v2.parquet
+    model:
+      name: gru_seq
+      params:
+        sequence_meta: ${DATA_DIR}/processed/panel_seq_trips_v2_meta.json
+        pooling: attention
+        hidden: 24
+        num_layers: 1
+        attention_hidden: 16
+        static_hidden: 4
+        head_hidden: 16
+        dropout: 0.3
+        epochs: 40
+        batch_size: 64
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        grad_clip: 1.0
+        class_weight: balanced
+        device: cpu
+        random_state: 42
+
+  # --- segunda tanda: estática completa (motor y modelo); `seeds` = dispersión por semilla ------------
+  - name: v2all-cnn-lstm-signals-estaticas-r3
+    seeds: [1, 2]
+    what: CNN-LSTM de la tutora con la estática completa (signals + país, motor y modelo)
+    panel: ${DATA_DIR}/processed/panel_seq_v2_estaticas.parquet
+    model:
+      name: cnn_lstm
+      params:
+        sequence_meta: ${DATA_DIR}/processed/panel_seq_v2_estaticas_meta.json
+        conv_channels: 16
+        kernel_size: 3
+        lstm_hidden: 16
+        static_hidden: 4
+        head_hidden: 16
+        dropout: 0.3
+        epochs: 40
+        batch_size: 64
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        grad_clip: 1.0
+        class_weight: balanced
+        device: cpu
+        random_state: 42
+  - name: v2all-cnn-lstm-trips-estaticas-r3
+    seeds: [1, 2]
+    what: CNN-LSTM + TripSummary con la estática completa (país, motor y modelo)
+    panel: ${DATA_DIR}/processed/panel_seq_trips_v2_estaticas.parquet
+    model:
+      name: cnn_lstm
+      params:
+        sequence_meta: ${DATA_DIR}/processed/panel_seq_trips_v2_estaticas_meta.json
+        conv_channels: 16
+        kernel_size: 3
+        lstm_hidden: 16
+        static_hidden: 4
+        head_hidden: 16
+        dropout: 0.3
+        epochs: 40
+        batch_size: 64
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        grad_clip: 1.0
+        class_weight: balanced
+        device: cpu
+        random_state: 42
+  - name: v2all-gru-trips-estaticas-r3
+    seeds: [1, 2]
+    what: GRU con atención + TripSummary con la estática completa (país, motor y modelo)
+    panel: ${DATA_DIR}/processed/panel_seq_trips_v2_estaticas.parquet
+    model:
+      name: gru_seq
+      params:
+        sequence_meta: ${DATA_DIR}/processed/panel_seq_trips_v2_estaticas_meta.json
+        pooling: attention
+        hidden: 24
+        num_layers: 1
+        attention_hidden: 16
+        static_hidden: 4
+        head_hidden: 16
+        dropout: 0.3
+        epochs: 40
+        batch_size: 64
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        grad_clip: 1.0
+        class_weight: balanced
+        device: cpu
+        random_state: 42
