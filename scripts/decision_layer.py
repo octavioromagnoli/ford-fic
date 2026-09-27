@@ -21,8 +21,9 @@ todo lo de acá es monótono en el score, así que no es un candidato y no consu
    detección que queda, más el IC de Clopper-Pearson de la tasa dentro de muestra.
 
 Un vehículo alerta a τ si y solo si `max_i min(s_i..s_{i+k−1}) ≥ τ` (`vehicle_levels` de
-`audit_detection_null.py`, verificado ahí contra `operating_point`). Deja
-`experiments/<name>/decision_layer.json` y `curve.csv`.
+`audit_detection_null.py`, verificado ahí contra `operating_point`). Deja `decision_layer.json` y
+`curve.csv` en `experiments/<output_name>/` (default `decision-k2`). Una corrida sin `window_eval`
+(entrega v2, sin ventana del registro) se mide solo con la etiqueta dura (`labels: [hard]`).
 """
 
 from __future__ import annotations
@@ -165,15 +166,20 @@ def main() -> int:
     cfg = load_config(args.config)
     run_cfg = load_config(cfg["run_config"])
     eval_cfg = run_cfg.get("eval", {})
-    evaluable = run_cfg["window_eval"]["evaluable_column"]
+    # Sin `window_eval` (la entrega v2 no tiene ventana del registro) solo existe la etiqueta dura.
+    evaluable = (run_cfg.get("window_eval") or {}).get("evaluable_column")
+    if evaluable is None and "corrected" in cfg["labels"]:
+        raise ValueError("La corrida no declara `window_eval.evaluable_column`: pedí solo `labels: [hard]`")
     experiments = resolve_path(run_cfg.get("output_dir", "experiments"))
     name = run_cfg["name"]
 
     preds = pd.read_parquet(experiments / name / "predictions.parquet")
     panel = select_dev(pd.read_parquet(resolve_path(run_cfg["data"]["panel"])), run_cfg)
-    preds = attach_panel_columns(preds, panel, [evaluable]).sort_values(KEY, kind="stable").reset_index(drop=True)
+    preds = attach_panel_columns(preds, panel, [evaluable] if evaluable else []).sort_values(KEY, kind="stable").reset_index(drop=True)
     n_repeats = n_repeats_of(preds)
-    masks = {"corrected": preds[evaluable].to_numpy(dtype=int) == 1, "hard": np.ones(len(preds), dtype=bool)}
+    masks = {"hard": np.ones(len(preds), dtype=bool)}
+    if evaluable:
+        masks["corrected"] = preds[evaluable].to_numpy(dtype=int) == 1
 
     result: dict[str, Any] = {"run": name, "n_repeats": n_repeats, "labels": {}}
     curves = []
@@ -209,7 +215,7 @@ def main() -> int:
         result["labels"][label]["holdout_summary"] = hs.to_dict(orient="records")
         result["labels"][label]["curve_summary"] = summary.to_dict(orient="records")
 
-    out_dir = ensure_dir(experiments / "decision-k2")
+    out_dir = ensure_dir(experiments / cfg.get("output_name", "decision-k2"))
     pd.concat(curves, ignore_index=True).to_csv(out_dir / "curve.csv", index=False)
     (out_dir / "decision_layer.json").write_text(json.dumps(result, indent=2, default=float), encoding="utf-8")
     print(f"\nescrito: {out_dir}")

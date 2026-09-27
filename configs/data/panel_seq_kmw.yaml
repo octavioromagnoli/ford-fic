@@ -1,0 +1,34 @@
+# Panel secuencial v1 + las aux_ de la ventana del registro en km (F9, demo de la GRU).
+#
+#   FORD_DATA_DIR=$PWD/data/rebuild-0921 python scripts/join_window_columns.py --config configs/data/panel_seq_kmw.yaml
+#
+# La GRU `last` de F3 lee `panel_seq_v1`, que no trae la etiqueta corregida por la ventana del registro (V). Este
+# panel es `panel_seq_v1` tal cual —mismas filas, y las mismas feat_seq_* y static_ en el mismo orden, así que el
+# modelo recibe la misma entrada— más las aux_ de la ventana que `build_km_window_panel.py` armó sobre el panel de
+# agregados. Solo aux_: nada de lo que se pega entra al modelo (`cv.py` selecciona por prefijo).
+
+base: ${DATA_DIR}/processed/panel_seq_v1.parquet
+source: ${DATA_DIR}/processed/panel_survival_kmw.parquet
+
+# Las que se copian: el odómetro al inicio y al fin de la ventana, el tramo en riesgo en km, la fila evaluable con
+# la etiqueta corregida y los días desde la venta en el corte (el piso de `window_eval`). `feat_cut_odo` no: entraría
+# al modelo.
+columns:
+  - aux_odo_window_start
+  - aux_odo_window_end
+  - aux_risk_entry_km
+  - aux_risk_exit_km
+  - aux_risk_event_km
+  - aux_eval_in_window
+  - aux_cut_dss
+
+# Lo que tiene que coincidir fila a fila entre los dos paneles (un NaN coincide con un NaN).
+same: [cut_date, window_km, horizon_km, gap_km, label, time_to_event_km, event_observed, static_SalesCountry_cd]
+
+# Las filas de dev tienen que ser las de los folds congelados que usan K2 y la GRU.
+test_split: ${DATA_DIR}/processed/test_split.json
+splits: ${DATA_DIR}/processed/splits_r3.json
+
+output:
+  panel: ${DATA_DIR}/processed/panel_seq_kmw.parquet
+  meta: ${DATA_DIR}/processed/panel_seq_kmw_meta.json
