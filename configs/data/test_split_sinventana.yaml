@@ -1,17 +1,13 @@
-# Holdout de la entrega v2 CON la ventana de producción (26-09-2026): los 557 vehículos
-# producidos entre el 20-01 y el 31-07-2025 (446 dev / 111 test). Es la BASE congelada que
-# extiende configs/data/test_split.yaml (el holdout vigente, sin la ventana): restringir el
-# vigente a este universo devuelve exactamente este archivo.
+# VARIANTE SIN LA VENTANA DE PRODUCCIÓN (26-09-2026): 990 vehículos (788 dev / 202 test).
+# No es el holdout vigente (ese es configs/data/test_split.yaml, la ventana, 557): se conserva
+# como evidencia de por qué no se usa para elegir ni medir modelos (f9-universo-v2.md §6).
 #
-#   python scripts/make_test_split.py --config configs/data/test_split_ventana.yaml --force
+#   python scripts/make_test_split.py --config configs/data/test_split.yaml --force              # la base (557)
+#   python scripts/make_test_split.py --config configs/data/test_split_sinventana.yaml --force   # este (990)
 #
-# El de la entrega 1 (290 dev / 74 test, sorteado el 16-09 y recortado el 17-09) está
-# congelado en data/processed-v1/test_split.json y se reproduce bit a bit con
-# configs/data/test_split_v1.yaml. El porqué de cada clave de abajo:
-# docs/memoria/f9-universo-v2.md.
-#
-# Congelado el archivo, no se regenera: cambiar la semilla, el test_size o los estratos
-# después de haber medido contra el test es elegir el test que mejor queda.
+# El holdout no se re-sortea: se EXTIENDE el de la ventana (nadie cambia de lado; la EDA
+# de ese dev ya se hizo) y, entre los que entran, los que estaban en el dev o el test de
+# la entrega 1 vuelven a ese lado. El resto se sortea una vez, con la misma semilla.
 seed: 42                  # la misma semilla de la entrega 1
 test_size: 0.2            # 1/5: un fold de StratifiedGroupKFold (ver src/eval/splits.py)
 
@@ -35,22 +31,21 @@ universe:
   # es un negativo en un mercado donde el evento se puede ver, así que entra.
   keep_markets: [ARG, BRA, CHL, COL, PER]
 
-  # Período de producción donde las DOS cohortes se muestrearon, en ProductionDay
-  # (origen 2025-01-19, IQR 0 d sobre los 1019 autos con viajes): día 1 = 2025-01-20,
-  # el primer sano; día 193 = 2025-07-31, el mes del último fallado (28-07). Afuera:
-  #   - 93 fallados producidos entre ago-2024 y el 19-01-2025, sin ningún sano de su época;
-  #   - 341 sanos producidos desde ago-2025, entre los que no figura ningún fallado aunque
-  #     el hazard de los producidos en ene-jun 2025 predice ~50 (28 en ago-sep, 22 en
-  #     oct-dic). Cero contra 50 no es exposición: sus fallas no están en la muestra.
-  production_day_window: [1, 193]
+  # Sin recorte por fecha de producción (lo que se probó el 26-09). Con la ventana son
+  # 557 vehículos: configs/data/test_split.yaml. Afuera de ella quedan 92 fallados
+  # producidos en 2024 sin ningún sano de su época y 341 sanos producidos desde agosto de
+  # 2025 sin ningún fallado (~50 esperados por exposición): leer f9-universo-v2.md §2
+  # antes de interpretar una diferencia entre cohortes.
+  production_day_window: null
 
-# Sorteo en UNA etapa sobre el universo (holdout_on_universe), estratificado.
+# Extensión del holdout de la ventana (src/eval/splits.py::extend_holdout).
 draw:
-  mode: universe      # `on:` no: YAML lo lee como booleano
-  # El estrato es evento × mercado × motor, fundiendo hacia arriba los de menos de
-  # 5 autos (src/eval/splits.py::composite_strata). En v2 el riesgo cambia 8× entre
-  # mercados y ENG_3 falla casi solo en Brasil (46 de 47 fallados ENG_3 del universo):
-  # estratificando solo por evento, un lado se puede quedar con los ENG_3 fallados.
+  mode: extend        # `on:` no: YAML lo lee como booleano
+  base: ${DATA_DIR}/processed/test_split.json
+  # Los que entran y estaban en el dev/test del holdout previo (la entrega 1) vuelven a
+  # ese lado: ningún auto mirado en F2-F8 se suma al test.
+  keep_previous_sides: true
+  # El resto se sortea estratificado por evento × mercado × motor, como la base.
   stratify: [event_observed, static_SalesCountry_cd, static_Engine]
   min_stratum_size: 5
 
@@ -66,6 +61,6 @@ scan:
   chunksize: 500000       # signals son 10M de filas: se leen por chunks
 
 output:
-  test_split: ${DATA_DIR}/processed/test_split_ventana.json
+  test_split: ${DATA_DIR}/processed/test_split_sinventana.json
   vehicle_table: ${DATA_DIR}/processed/vehicles.parquet   # unión a nivel vehículo (insumo de F2)
   quality: ${DATA_DIR}/processed/raw_quality.csv          # nulos y tipos por columna

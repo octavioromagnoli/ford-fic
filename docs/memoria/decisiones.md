@@ -5,6 +5,57 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-26 · Se probó sacar la ventana de producción y se volvió a ella
+
+**Decidió:** Santino, con el equipo (pedido original: "sacar la fecha así no tenemos que tirar
+tantos datos, si total hacemos los cortes por km"; después de ver la evidencia: "volvé a como
+estaba antes"). **Config vigente:** `configs/data/test_split.yaml` (557). **Variante medida:**
+`configs/data/test_split_sinventana.yaml` y los `*_sinventana*`. Detalle:
+[f9-universo-v2.md](f9-universo-v2.md) §6, [f9-eda-v2.md](f9-eda-v2.md) §J.
+
+**Qué:** el universo sigue siendo el de la ventana de producción (557; dev 446 / test 111). El
+de 990 queda como variante reproducible, con su holdout **extendido** desde el vigente (nadie
+cambia de lado), y no se usa para elegir ni medir modelos.
+
+**Por qué:** cortar por km no evita el problema, porque lo que está sesgado es quién entra en la
+muestra, no el eje. Afuera de la ventana cada período tiene una sola cohorte (antes: 71 fallados
+y 3 sanos en dev; después: 0 fallados y 268 sanos). Con los 433 autos de afuera:
+- la fecha de producción sola, sin modelo, separa fallados de sanos dentro del mercado con AUC 0,87 (0,63 con la ventana);
+- **los modelos ordenan peor a los autos del dev de la ventana**: dentro de mercado ×
+  motor, survival stacking baja de 0,571 a 0,471 y los demás de ~0,58–0,60 a ~0,49–0,52;
+- la auditoría (b) de calendario marca +0,023 (+0,008 con la ventana);
+- la suba de (a′) (+0,016 → +0,049) es posición: el odómetro solo da +0,046.
+
+**Cómo se usan los 433 autos:** como referencia de la flota sana o en análisis *dentro* de
+fallados, nunca mezclados en una comparación fallado/sano.
+
+---
+
+## 2026-09-26 · K2 sobre v2 no es el mejor modelo; survival stacking es el más sólido, y no hay finalista v2
+
+**Decidió:** nadie todavía; es una medición, no una elección. **Config:**
+`configs/exp_decision_v2_{k2,ss}.yaml` (`scripts/decision_layer.py`, ahora sin ventana con
+`labels: [hard]`). Detalle: [f9-remedicion-v2.md](f9-remedicion-v2.md) § K2 sobre v2.
+
+**Qué se midió:** la capa de decisión de F8 sobre dev v2, con el nulo de tamaño de bolsa y el umbral
+fuera de muestra. Test sin tocar.
+- **K2 sin ventana** (su única parte portable es el horizonte completo) falla (a′), y su 5%
+  oficial da 0: la grilla de umbrales salta de 0% a 7% de falsas alarmas. Con umbral exacto
+  detecta 11,6%.
+- **Survival stacking** aprueba (a0) y (a′) y detecta 11,4% fuera de muestra al 5% (a 4,2% de
+  falsas alarmas reales) y 23% al 10%, con ~8.500 km de anticipación. Pero su (a′) no le gana al
+  piso posicional (+0,016 contra +0,024).
+
+**Consecuencias:**
+- El "~15–17%" del pitch es de la entrega 1. Sobre v2 el número honesto hoy es **~11–14% al 5%**.
+- Al 10% la tasa de la celda mercado × motor sola ya detecta ~25%. El 5% es donde el uso agrega
+  algo que la celda no da.
+- El control LightGBM detecta más que los dos con (a′) negativo: la detección por auto premia
+  *qué auto*. Elegir un finalista v2 sigue pidiendo un preregistro que diga con qué criterio se
+  elige, antes de mirar.
+
+---
+
 ## 2026-09-26 · Entrega v2: qué decisiones de la entrega 1 se sostienen y cuáles se revierten
 
 **Decidió:** Santino (pedido: "revisar las decisiones que habíamos tomado para revertir las
@@ -35,7 +86,7 @@ siguientes son las que cambian algo; esta es la tabla completa.
 | El finalista se elige por (a′) y estabilidad (20-09) | se sostiene | survival stacking aprueba (a′) en v2 (+0,016) |
 | Ventana del registro y censura dentro de ella (22-09) | **se revierte para v2** | ver la entrada de la ventana |
 | Reloj en días post-venta (22-09) | se sostiene | sd(log) edad 0,38 contra odómetro 0,91 |
-| K2 como finalista (22-09) y sus números (15–17%) | **no vale para v2** | su corrección era la ventana, que no existe en v2; sin ventana no aprueba (a′). Elegir sobre v2 es un preregistro nuevo |
+| K2 como finalista (22-09) y sus números (15–17%) | **no vale para v2** | su corrección era la ventana, que no existe en v2; sin ventana no aprueba (a′) y detecta menos que survival stacking (entrada de arriba). Elegir sobre v2 es un preregistro nuevo |
 | Cure model, E1/E2, incidencia externa, SS post-venta, F7, F8 (22–24-09) | resultados de la entrega 1 | la incidencia externa usaba a los fallados con fecha por defecto, que ya no están |
 | Presupuesto de comparaciones agotado (20–24-09) | **se reabre para v2** | todos los números son de otra población: re-medir es comparable; elegir, no |
 

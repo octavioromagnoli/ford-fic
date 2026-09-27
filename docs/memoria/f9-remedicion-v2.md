@@ -109,6 +109,70 @@ Las mismas corridas sobre la entrega 1 (panel v1, dev, R = 3):
    - Antes de citarla hace falta el nulo que conserva el tamaño de bolsa
      (`scripts/audit_detection_null.py`, regla 6), o re-emparejar por vehículo.
 
+## K2 sobre v2: cómo da el mejor modelo hasta ahora (26-09)
+
+```bash
+python scripts/build_positional_panel.py --config configs/data/panel_positional_v2.yaml
+WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2_positional_r3.yaml    # piso posicional
+python scripts/decision_layer.py --config configs/exp_decision_v2_k2.yaml                 # -> experiments/decision-v2-k2/
+python scripts/decision_layer.py --config configs/exp_decision_v2_ss.yaml                 # -> experiments/decision-v2-ss/
+```
+
+K2 (F6) es survival stacking con horizonte completo **y** el conjunto en riesgo de la ventana
+del registro. En v2 no hay ventana, así que K2 queda en su única parte que se puede portar:
+`exp_v2_ss_hfull_r3`. Se mide igual que en F8 (`decision_layer.py`, con el nulo de tamaño de bolsa
+y el umbral fijado fuera de muestra), solo sobre dev y con la etiqueta dura (sin ventana no hay V).
+El test no se tocó. No es un candidato: todo es monótono en el score.
+
+| | K2, entrega 1 (V) | **K2 sobre v2** | survival stacking sobre v2 |
+|---|---|---|---|
+| fallados / sanos en dev (por auto) | 45 / 95 | 135 / 291 | 135 / 291 |
+| (a′) · auditoría | +0,020 · pasa | −0,004 · **falla** | +0,018 · pasa |
+| lift entre fallados | 1,10× | 1,26× | **1,44×** |
+| AUC por auto dentro de mercado × motor | — | **0,60** | 0,57 |
+| **5% FA, grilla de `train.py`** | 17,0% ± 3,8 (nulo 7,5) | **0% (la grilla salta de 0% a 7% FA)** | 9,4% ± 6,7 (17 / 0 / 21; nulo 3,9) |
+| 5% FA, umbral exacto (informativo) | — | 11,6% ± 1,8 (nulo 5,4) | **14,1% ± 3,2** (nulo 5,6) |
+| 5% FA, fuera de muestra (empírico) | 15,6% a 3,5% FA | 0% a 0% FA | **11,4% ± 4,6 a 4,2% FA** |
+| ≤ 10% garantizado (Neyman-Pearson) | 17,0% a 4,2% FA | 14,3% a 7,1% FA | **16,8% a 7,3% FA** |
+| 10% FA, grilla (nulo) | 26,7% (16,2) | 16,8% ± 4,9 (8,4) | **23,2% ± 2,4** (8,5) |
+| anticipación mediana al 5% | 7.438 km | — | 8.662 km |
+
+"Umbral exacto" es el mismo criterio de alerta (dos cortes seguidos), pero con el umbral puesto
+en el cuantil exacto de los sanos y no en la grilla de 50 cuantiles de filas. En v2, con ~27
+cortes por sano, un paso de la grilla mueve muchos autos juntos: eso le cuesta a K2 todo su 5%.
+Se reporta al lado, sin reemplazar al número oficial.
+
+**Lectura:**
+1. **Sin su ventana, K2 no es el mejor modelo sobre v2.** Ordena autos un poco mejor que survival
+   stacking (0,60 contra 0,57 dentro de la celda), pero falla (a′), detecta menos en todos los
+   puntos y su 5% oficial es 0.
+2. **Survival stacking (F3) es el más sólido sobre v2 con la regla del repo.** Aprueba (a0) y
+   (a′), tiene el mejor lift entre fallados y la mejor detección fuera de muestra: ~11–14% al 5%,
+   ~23% al 10%, con ~8.500 km de anticipación. Pero **su (a′) no le gana al piso posicional**
+   (+0,016 contra +0,024, abajo) y su 5% en la grilla tiene una repetición en 0.
+3. **Los números de detección de v2 no son los de la entrega 1.** Son otra etiqueta (dura, con la
+   referencia −21 d) y otra población (3× los fallados, cinco mercados), y en v2 **todos los
+   modelos detectan cerca del nulo más 6–12 puntos al 5%**. El "~15–17%" del pitch es de la
+   entrega 1; sobre v2 el rango honesto hoy es **~11–14% al 5%**.
+4. **Al 10% la detección es sobre todo composición.** La tasa de eventos de la celda mercado ×
+   motor sola, sin modelo, en la muestra y dejando al auto afuera, detecta 24,8% al 10% de
+   falsas alarmas. Al 5% no detecta nada, porque cada celda riesgosa tiene demasiados sanos. **El
+   5% es donde el uso agrega algo que la celda no da.**
+5. **El control LightGBM detecta más que los dos (umbral exacto: 17,5% ± 4,6 al 5%, 27,7% al
+   10%)** con (a′) negativo. Es la regla 6 en su versión por auto: la detección por vehículo
+   premia saber *qué auto*, no *cuándo*. Es una observación, no un candidato: el presupuesto de
+   comparaciones sigue agotado.
+
+**Pisos del *cuándo*** (`exp_v2_positional_r3`, solo `feat_cut_odo`):
+
+| | (a′) | lift entre fallados | 5% FA, umbral exacto |
+|---|---|---|---|
+| piso posicional | +0,024 | 1,24× | 3,2% (bajo el nulo) |
+| survival stacking | +0,016 | 1,44× | 14,1% |
+
+El odómetro solo explica todo el (a′) de survival stacking en v2, pero no su lift entre fallados
+ni su detección. El *cuándo* de v2 se lee en el lift entre fallados, no en (a′).
+
 ## Qué no decide esto
 
 - **Cuál es el finalista sobre v2.** K2 se eligió sobre la entrega 1, con su etiqueta corregida

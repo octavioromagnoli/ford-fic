@@ -148,3 +148,53 @@ test sin autos vistos, a costa de estratos desbalanceados.
 `min_stratum_size`. `panel_v2.yaml` estratifica los folds por `label × static_SalesCountry_cd ×
 aux_static_Engine`. Sin `extra_columns` el reparto es el de siempre, bit a bit (chequeado).
 Con R = 3, cada fold queda con 25–29 autos positivos y 127–144 filas positivas.
+
+## 6 · Se probó sacar la ventana (990 vehículos) y se volvió a ella
+
+El equipo propuso sacar el recorte por fecha de producción, para no tirar 433 autos, ya que los
+cortes del panel son por km. Se implementó como variante y se midió de punta a punta:
+
+```bash
+python scripts/make_test_split.py --config configs/data/test_split_sinventana.yaml --force
+python scripts/build_dataset.py --config configs/data/panel_v2_sinventana.yaml            # y _estaticas
+python scripts/build_survival_panel.py --config configs/data/panel_survival_v2_sinventana.yaml
+python scripts/make_splits.py --config configs/data/splits_panel_v2_sinventana_r3.yaml
+WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2_sinventana_<x>.yaml   # las mismas seis
+python scripts/audit_vehicle_strata.py --config configs/audit_vehicle_strata_v2.yaml
+```
+
+**El holdout sin la ventana se extiende, no se re-sortea** (`draw.mode: extend`,
+`src/eval/splits.py::extend_holdout`):
+- nadie del holdout vigente cambia de lado;
+- de los 433 que entran, los que estaban en dev o test de la entrega 1 vuelven a ese lado (118
+  y 35);
+- los otros 280 se sortean con el mismo estrato (56 a test).
+
+Queda en 990 vehículos (269 eventos): dev 788 (215) y test 202 (54). Los 36 autos del test que
+estaban en el dev viejo siguen siendo 36. Restringido a los 557, es exactamente el holdout
+vigente.
+
+**Por qué se volvió.** Cortar por km no evita el problema, porque el sesgo está en quién entra en
+la muestra, no en el eje. En el dev sin ventana hay 71 fallados y 3 sanos producidos antes y 0
+fallados y 268 sanos producidos después.
+
+| sobre **los autos del dev de la ventana** (426 con cortes en su panel, 419 en el panel sin ventana), AUC por auto dentro de mercado × motor | entrenado con la ventana | entrenado sin ella |
+|---|---|---|
+| LightGBM | 0,576 | 0,524 |
+| survival stacking | 0,571 | **0,471** |
+| SS con horizonte completo (K2 sin ventana) | 0,602 | 0,491 |
+| ídem + motor y modelo | 0,595 | 0,500 |
+| −`ProductionDay` sola, sin modelo, sobre todo el dev de cada panel | 0,608 (426 autos) | **0,811** (624 autos) |
+
+- **Entrenar con los 433 empeora el orden entre los autos comparables**, hasta debajo de 0,5
+  dentro de la celda. Lo que el modelo aprende de ellos es la fecha, y la fecha sola le gana a
+  todos los modelos.
+- La auditoría (b) de calendario marca un atajo: +0,023 contra +0,008.
+- El PR-AUC de survival stacking sube (0,125 → 0,156) y su (a′) también (+0,016 → +0,049). Pero
+  el piso posicional sube igual (+0,024 → +0,046): es la posición del corte, no anticipación.
+- La EDA recupera un efecto calendario y el rasgo temprano se diluye ([f9-eda-v2.md](f9-eda-v2.md)
+  §J).
+
+**Cómo usar los 433 sin sesgar nada:** como referencia de la flota sana (los 341 sanos tardíos)
+o en análisis dentro de los fallados (los 92 de 2024). Nunca en una comparación fallado/sano ni
+en la elección de modelo.

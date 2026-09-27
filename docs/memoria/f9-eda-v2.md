@@ -213,6 +213,35 @@ ciudad. Ajustando:
 altura entre países no se puede usar: la tasa por mercado está cruzada con el muestreo. Si
 entra, es como `aux_static_elevation_m` con ablación, y leída dentro del mercado.
 
+## J · La misma EDA sin la ventana de producción (variante, no vigente)
+
+El 26-09 se probó sacar la ventana (universo de 990, dev de 788; se volvió a la ventana, ver
+[f9-universo-v2.md](f9-universo-v2.md) §6). La misma EDA sobre ese dev:
+
+```bash
+python scripts/build_eda_cache.py --config configs/data/eda_cache_v2_sinventana.yaml
+python scripts/eda_v2.py --config configs/eda_v2_sinventana.yaml   # -> experiments/eda_v2_sinventana/dev/v2/
+```
+
+| | con la ventana (dev 446) | sin la ventana (dev 788) |
+|---|---|---|
+| mes calendario, LR | p = 0,16 | **p = 0,0003** |
+| trimestre de venta, LR | p = 0,005 | **p = 5·10⁻¹⁰** |
+| RR del tramo 450–720 d desde la venta | 24 | **51** |
+| AUC de −`ProductionDay` sola, dentro del mercado | 0,63 | **0,87** |
+| RR de ENG_1 | 0,25 | 0,71 |
+| idle a 60 d, AUC dentro del mercado | 0,636 | **0,563** |
+| ídem, dentro de mercado × trimestre de venta | 0,635 | 0,620 |
+
+Por período de producción, en eventos por 100 autos-mes: 7,55 antes de la ventana (71 fallados,
+3 sanos con el evento después del fin de extracción), 2,71 adentro y **0,00 después** (268 sanos).
+
+**Todo lo que aparece de nuevo es la selección de la lista, no física.** Vuelve un "efecto
+calendario" que dentro de la ventana no existe, porque los autos viejos son todos fallados y los
+nuevos todos sanos. El riesgo tardío se duplica por la misma razón. El rasgo temprano se diluye
+hasta que se compara dentro del trimestre de venta, o sea, hasta que se vuelve a poner la ventana
+a mano.
+
 ## Lo que queda abierto
 
 - **El "idle cerca del evento" es anticipación o síntoma.** Con la referencia −21 d sigue

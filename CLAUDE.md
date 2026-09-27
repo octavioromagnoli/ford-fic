@@ -28,9 +28,15 @@ cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del
   - survival stacking aprueba (a0) y (a′) como en v1;
   - la separación agrupada sube (ROC por fila 0,59 → 0,71), pero **dentro de mercado × motor el
     uso ordena autos con AUC ~0,58**, como en v1;
-  - K2 perdió su corrección (la ventana) y **no hay finalista elegido sobre v2**.
+  - K2 perdió su corrección (la ventana): sin ella falla (a′) y detecta menos que survival
+    stacking, que da **~11–14% al 5% de falsas alarmas sobre dev v2** (el 15–17% del pitch es de
+    la entrega 1). **No hay finalista elegido sobre v2.**
 
   Ver `docs/memoria/f9-remedicion-v2.md`.
+- **Se probó sacar la ventana de producción (990 autos) y se volvió a ella** (26-09): con los
+  autos de afuera la fecha de producción sola separa las cohortes (AUC 0,87 dentro del mercado) y los modelos ordenan
+  peor a los autos comparables. La variante queda como `*_sinventana*`, con el holdout extendido
+  (`test_split_sinventana.json`), y no se usa para elegir ni medir (`f9-universo-v2.md` §6).
 
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
@@ -111,7 +117,8 @@ paréntesis, lo que valía con la entrega 1):
   - el recorte por mercado de la entrega 1 ya no hace falta.
 
   El criterio vive en `src/data/usable.py` y se declara en `universe` de
-  `configs/data/test_split.yaml`. **El panel se construye con los 557.**
+  `configs/data/test_split.yaml`. **El panel se construye con los 557.** Los 433 de afuera no
+  entran en ninguna comparación fallado/sano (`f9-universo-v2.md` §6).
 - Hay **13 vehículos duplicados bajo dos códigos** (en v2 los 7 pares que siguen en
   fallados vuelven a traer los viajes repetidos): se colapsan con `src/data/dedupe.py` antes
   de cualquier split, o la regla 2 se viola en silencio.
@@ -316,7 +323,8 @@ src/training/targets.py  con qué se entrena (no con qué se mide) y cómo la sa
                          `window_km_survival` (el mismo tramo en km, con entrada tardía: el finalista de F6).
                          Lo que se evalúa sigue siendo `label`; cv.py no sabe qué modos hay
 src/eval/splits.py       splits antileakage + serialización a splits.json; estrato compuesto (`composite_strata`,
-                         `extra_columns`), holdout sobre el universo (`holdout_on_universe`) y `compare_holdouts`
+                         `extra_columns`), holdout sobre el universo (`holdout_on_universe`), `compare_holdouts` y
+                         `extend_holdout` (agranda un holdout congelado sin mover a nadie)
                          estratificación (columna/nivel), guarda de positivos por fold y CV repetida: todo del YAML;
                          extend_splits() conserva los folds de un split existente y reparte solo los vehículos nuevos
 src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate() + bootstrap
@@ -337,7 +345,10 @@ src/eval/explain.py      explicabilidad de K2, funciones puras: refit_folds() (e
                          física, message_factors()/render_vehicle_message() y dev_only_guard()
 scripts/make_dummy.py    panel dummy con el esquema del contrato
 scripts/make_test_split.py  auditoría del join + universo + holdout (`draw.mode: universe` en v2; `all` =
-                         sorteo + recorte de la entrega 1, con test_split_v1.yaml). Se corre una vez
+                         sorteo + recorte de la entrega 1, con test_split_v1.yaml; `extend` = la variante sin
+                         ventana, test_split_sinventana.yaml). Se corre una vez
+scripts/audit_vehicle_strata.py  AUC por vehículo agrupado / dentro de mercado / dentro de mercado × motor de varias
+                         corridas, sobre todos sus autos y sobre un subconjunto (p. ej. el dev de la ventana)
 scripts/compare_deliveries.py  entrega 1 contra v2: archivos, estática, anclaje, etiquetas, telemetría, corte de
                          producción y qué marca la fecha nueva (sin test) -> experiments/entregas/
 scripts/build_city_elevation.py  altura de cada ciudad de venta (Open-Meteo/GeoNames) -> configs/data/city_elevation.yaml
@@ -375,7 +386,8 @@ scripts/audit_event_dating.py  ¿una marca de intervención (aceite, días sin u
 scripts/cost_scenarios.py  punto de operación de K2 bajo escenarios de costo con fuente (configs/cost_scenarios_k2.yaml),
                          con el ahorro sobre el azar; reporte, nunca selección
 scripts/decision_layer.py  capa de decisión sobre una corrida: curva a varios presupuestos de falsas alarmas con
-                         su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson)
+                         su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson); sin
+                         `window_eval` (v2) solo con la etiqueta dura (configs/exp_decision_v2_{k2,ss}.yaml)
 scripts/explain_k2.py    explicabilidad de K2 de punta a punta (preregistro configs/explain_k2.yaml): reentrena y
                          verifica los folds, V1-V4, criterios, elección, mensajes al cliente (configs/explain_texts.yaml)
                          y casos → experiments/explain-k2/; scripts/explain_k2_report.py hace las figuras y cases.md
@@ -400,7 +412,7 @@ scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run script
                          con el waterfall y el mensaje al cliente, perfil de uso contra los sanos), Costos (punto de
                          operación y ahorro según costos y prevalencia real, con escenarios precargados) y Modelo
                          (contra la referencia y los pisos, límites); configs/dashboard_k2.yaml
-scripts/check_setup.py   smoke test del harness (209 chequeos)
+scripts/check_setup.py   smoke test del harness (206 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

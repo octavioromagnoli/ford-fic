@@ -1,11 +1,11 @@
-# VARIANTE CON LA VENTANA DE PRODUCCIÓN (universo de 557, holdout test_split_ventana.json).
-# Se conserva para comparar contra el universo vigente sin ventana (990): ver
-# docs/memoria/f9-universo-v2.md y f9-remedicion-v2.md.
+# VARIANTE SIN LA VENTANA DE PRODUCCIÓN (universo de 990, holdout test_split_sinventana.json).
+# No es el universo vigente (ese es el de la ventana, 557): se conserva como evidencia de por
+# qué no se usa para elegir ni medir modelos. Ver docs/memoria/f9-universo-v2.md §6.
 #
 # Cache del EDA sobre el DEV DE LA ENTREGA v2 (446 vehículos, holdout del 26-09-2026).
 # Mismo código que la EDA de la entrega 1 (configs/data/eda_cache.yaml), otra salida:
-#   python scripts/build_eda_cache.py --config configs/data/eda_cache_v2_ventana.yaml
-#   python scripts/eda_gaps.py --config configs/data/eda_cache_v2_ventana.yaml
+#   python scripts/build_eda_cache.py --config configs/data/eda_cache_v2_sinventana.yaml
+#   python scripts/eda_gaps.py --config configs/data/eda_cache_v2_sinventana.yaml
 #
 # Cache del EDA exhaustivo **sobre dev**. Se construye una vez y lo consumen el
 # notebook (`notebooks/eda-exhaustivo-dev.ipynb`) y el dashboard
@@ -37,7 +37,7 @@ panel: configs/data/panel_v1.yaml           # de acá salen las columnas static_
 
 # Holdout congelado. `dev_vehicles` es el universo del EDA; contra esa lista se
 # chequea cada tabla.
-test_split: ${DATA_DIR}/processed/test_split_ventana.json
+test_split: ${DATA_DIR}/processed/test_split_sinventana.json
 
 # Unión a nivel vehículo ya construida por `scripts/make_test_split.py`. Trae los
 # 1081 sin recortar —es el artefacto de auditoría—; acá se recorta a dev.
@@ -75,4 +75,4 @@ eda:
   hist_bins: 60
 
 output:
-  dir: ${REPO_ROOT}/experiments/eda_v2_ventana/dev
+  dir: ${REPO_ROOT}/experiments/eda_v2_sinventana/dev

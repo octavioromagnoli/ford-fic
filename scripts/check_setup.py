@@ -2010,6 +2010,7 @@ def delivery_v2_checks() -> None:
     from src.eval.splits import (
         compare_holdouts,
         composite_strata,
+        extend_holdout,
         holdout_on_universe,
         make_test_split,
         split_options,
@@ -2150,6 +2151,29 @@ def delivery_v2_checks() -> None:
         "compare_holdouts: cuenta las transiciones y lista los autos del test nuevo que estaban en el dev viejo",
         cmp_["n_test_vehicles_in_old_dev"] == 3 and cmp_["transitions"].get("dev->test") == 3
         and cmp_["transitions"].get("test->dev") == 2,
+    )
+
+    # --- extensión del holdout a un universo más grande (sin la ventana) ------------------
+    everyone = pd.Series(True, index=vehicles.index)
+    newcomers = sorted(set(vehicles["vehicle_id"]) - in_universe)
+    prev = {"dev_vehicles": newcomers[:2], "test_vehicles": newcomers[2:4]}
+    extended = extend_holdout(holdout, vehicles, everyone, seed=42,
+                              stratify_columns=["event_observed", "static_SalesCountry_cd", "static_Engine"],
+                              keep_sides_of=prev)
+    check(
+        "extend_holdout: nadie de la base cambia de lado, los del holdout previo vuelven a su lado y "
+        "restringir al universo de la base devuelve la base",
+        set(holdout["dev_vehicles"]) <= set(extended["dev_vehicles"])
+        and set(holdout["test_vehicles"]) <= set(extended["test_vehicles"])
+        and set(newcomers[:2]) <= set(extended["dev_vehicles"]) and set(newcomers[2:4]) <= set(extended["test_vehicles"])
+        and set(extended["dev_vehicles"]) | set(extended["test_vehicles"]) == set(vehicles["vehicle_id"])
+        and sorted(set(extended["test_vehicles"]) & in_universe) == sorted(holdout["test_vehicles"])
+        and extended["extended_from"]["n_forced_dev"] == 2 and extended["extended_from"]["n_forced_test"] == 2,
+    )
+    check(
+        "extend_holdout: un universo que deja afuera a un auto de la base falla (achicar es restringir)",
+        _raises(lambda: extend_holdout(holdout, vehicles, vehicles["vehicle_id"].ne(holdout["dev_vehicles"][0])),
+                ValueError),
     )
 
     # --- folds con estrato compuesto ----------------------------------------------------

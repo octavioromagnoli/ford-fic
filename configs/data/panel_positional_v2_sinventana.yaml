@@ -1,9 +1,9 @@
-# Piso posicional sobre el panel de la entrega v2 con la ventana de producción (26-09-2026).
+# Piso posicional sobre el panel de la entrega v2 SIN la ventana de producción (variante) (26-09-2026).
 #
 # Panel del piso posicional: las mismas filas del panel v1 con UNA sola feature,
 # `feat_cut_odo`. Todas las demás `feat_*`/`static_*` se descartan.
 #
-#   python scripts/build_positional_panel.py --config configs/data/panel_positional_v2_ventana.yaml
+#   python scripts/build_positional_panel.py --config configs/data/panel_positional_v2_sinventana.yaml
 #
 # Para qué: el eje "cuándo" ((a'), ROC intra-vehículo, PR-AUC entre fallados) se venía
 # leyendo contra cero, y cero no es el piso. Dentro de un vehículo fallado los positivos
@@ -13,11 +13,11 @@
 #
 # Es el mismo rol que `configs/exp_baserate.yaml` en el eje "qué auto": no es un
 # candidato, es una referencia. No gasta presupuesto de comparaciones.
-panel_config: configs/data/panel_v2_ventana.yaml
+panel_config: configs/data/panel_v2_sinventana.yaml
 
 # La única feature que sobrevive: el odómetro del corte, copiado tal cual.
 columns:
   feat_cut_odo: cut_odo
 
 output:
-  panel: ${DATA_DIR}/processed/panel_positional_ventana.parquet
+  panel: ${DATA_DIR}/processed/panel_positional_sinventana.parquet

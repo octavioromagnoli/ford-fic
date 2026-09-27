@@ -1,23 +1,13 @@
-# VARIANTE CON LA VENTANA DE PRODUCCIÓN (universo de 557, holdout test_split_ventana.json).
-# Se conserva para comparar contra el universo vigente sin ventana (990): ver
-# docs/memoria/f9-universo-v2.md y f9-remedicion-v2.md.
-#
-# Ablación de las estáticas de configuración sobre la entrega v2: el panel v2 con motor y
-# modelo como `static_` (en panel_v2.yaml quedan como `aux_static_*`). Las estáticas no tocan
-# qué filas entran ni el emparejado: mismas filas, misma huella, mismos folds que panel_v2.
-#
-#   python scripts/build_dataset.py --config configs/data/panel_v2_ventana_estaticas.yaml
-#
-# Por qué: la entrega 1 excluyó Engine porque ENG_3 era el 0% de los fallados (sesgo de
-# muestreo) y ModelSeries por ser casi la misma variable. En v2 ENG_3 tiene 35 fallados en
-# dev (34 en Brasil): el motivo de la exclusión ya no está, pero el aporte hay que medirlo.
+# VARIANTE SIN LA VENTANA DE PRODUCCIÓN (universo de 990, holdout test_split_sinventana.json).
+# No es el universo vigente (ese es el de la ventana, 557): se conserva como evidencia de por
+# qué no se usa para elegir ni medir modelos. Ver docs/memoria/f9-universo-v2.md §6.
 #
 # Panel sobre la ENTREGA v2 (26-09-2026) con el DISEÑO del panel v1: misma terna, mismo
 # emparejado, mismas features. Sirve para re-medir lo que ya existía sobre los datos
 # nuevos (no es un candidato: la regla del presupuesto de comparaciones lo permite
 # porque hace comparable una fila existente).
 #
-#   python scripts/build_dataset.py --config configs/data/panel_v2.yaml
+#   python scripts/build_dataset.py --config configs/data/panel_v2_sinventana.yaml
 #
 # Tres cosas cambian respecto de panel_v1.yaml, y ninguna es de modelado:
 #   1. el holdout es el de la entrega v2 (557 vehículos: 446 dev / 111 test);
@@ -37,7 +27,7 @@ dedupe: configs/data/vehicle_dedupe.yaml   # 13 vehículos duplicados bajo dos c
 # test); los 434 excluidos no entran. `dev_vehicles` es además la referencia para
 # estimar el origen del calendario y la distribución de cortes de los sanos: el test
 # no se mira ni en agregado.
-test_split: ${DATA_DIR}/processed/test_split_ventana.json
+test_split: ${DATA_DIR}/processed/test_split_sinventana.json
 
 axis: odometer            # eje por defecto (plan §0.3). El evento se traduce a km con el anclaje de F1.
 
@@ -79,7 +69,7 @@ features:
   # Estáticas que SÍ entran como `static_*`.
   #   - SalesCountry_cd: en v2 son cinco mercados con niveles de uso y tasas de falla muy
   #     distintos; el modelo necesita verlo para no confundir nivel con síntoma.
-  static_columns: [SalesCountry_cd, Engine, ModelSeries]
+  static_columns: [SalesCountry_cd]
 
   # Fuera del set base (quedan en el panel como `aux_static_*`, para ablaciones):
   #   - Engine: ENG_3 es el 0% de los fallados y el 20% de los sanos de dev (F1).
@@ -95,7 +85,7 @@ features:
   # En v2 se suma SalesCity (una ciudad no es una feature: su altura, si entra, va aparte).
   # Engine y ModelSeries siguen afuera SOLO para que la re-medición sea la del diseño v1;
   # su aporte se mide con configs/data/panel_survival_v2_estaticas.yaml.
-  static_excluded: [ProductionDay, daysUntilSale, SalesCity]
+  static_excluded: [Engine, ModelSeries, ProductionDay, daysUntilSale, SalesCity]
 
 splits:
   n_splits: 5
@@ -110,7 +100,7 @@ splits:
     level: vehicle
     # v2: el estrato es label × mercado × motor (los chicos se funden hacia arriba). El
     # riesgo cambia 8× entre mercados y ENG_3 falla casi solo en Brasil.
-    extra_columns: [static_SalesCountry_cd, static_Engine]
+    extra_columns: [static_SalesCountry_cd, aux_static_Engine]
     min_stratum_size: 5
   # Guarda dura: un fold con menos de estas filas label=1 en validación hace fallar
   # el armado. Con menos, el PR-AUC del fold es ruido; con cero, NaN.
@@ -121,9 +111,9 @@ splits:
   n_repeats: 1
 
 output:
-  panel: ${DATA_DIR}/processed/panel_ventana_estaticas.parquet
-  splits: ${DATA_DIR}/processed/splits_ventana_estaticas.json
-  meta: ${DATA_DIR}/processed/panel_ventana_estaticas_meta.json
+  panel: ${DATA_DIR}/processed/panel_sinventana.parquet
+  splits: ${DATA_DIR}/processed/splits_sinventana.json
+  meta: ${DATA_DIR}/processed/panel_sinventana_meta.json
 
 # Publicación como wandb Artifacts (plan §4): `python scripts/log_panel_artifact.py`.
 # Mismo team y proyecto que las corridas (regla 9); `WANDB_ENTITY`/`WANDB_MODE` lo pisan.

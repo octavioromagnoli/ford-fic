@@ -1,4 +1,4 @@
-# Piso posicional sobre el panel de la entrega v2 (universo vigente, sin ventana) (26-09-2026).
+# Piso posicional sobre el panel de la entrega v2 (universo vigente, con la ventana de producción) (26-09-2026).
 #
 # Panel del piso posicional: las mismas filas del panel v1 con UNA sola feature,
 # `feat_cut_odo`. Todas las demás `feat_*`/`static_*` se descartan.

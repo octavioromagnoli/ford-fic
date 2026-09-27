@@ -1,6 +1,6 @@
-# VARIANTE CON LA VENTANA DE PRODUCCIÓN (universo de 557, holdout test_split_ventana.json).
-# Se conserva para comparar contra el universo vigente sin ventana (990): ver
-# docs/memoria/f9-universo-v2.md y f9-remedicion-v2.md.
+# VARIANTE SIN LA VENTANA DE PRODUCCIÓN (universo de 990, holdout test_split_sinventana.json).
+# No es el universo vigente (ese es el de la ventana, 557): se conserva como evidencia de por
+# qué no se usa para elegir ni medir modelos. Ver docs/memoria/f9-universo-v2.md §6.
 #
 # Re-medición sobre la ENTREGA v2 (26-09-2026): survival stacking (finalista de F3), R=3.
 #
@@ -8,15 +8,15 @@
 # universo de 557, fecha de referencia − 21 d, folds por label × mercado × motor). No es
 # un candidato nuevo: hace comparable una fila que ya existía (presupuesto de comparaciones).
 #
-#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2_ventana_ss_r3.yaml
-name: f9-v2-ventana-ss-r3
+#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2_sinventana_ss_r3.yaml
+name: f9-v2-sinventana-ss-r3
 seed: 42
 
 data:
-  panel: ${DATA_DIR}/processed/panel_survival_ventana.parquet
+  panel: ${DATA_DIR}/processed/panel_survival_sinventana.parquet
 
 splits:
-  path: ${DATA_DIR}/processed/splits_ventana_r3.json
+  path: ${DATA_DIR}/processed/splits_sinventana_r3.json
   n_splits: 5
   seed: 42
   build_if_missing: false
@@ -28,7 +28,7 @@ splits:
     min_stratum_size: 5
   min_valid_positives: 5
   n_repeats: 3
-  test_split: ${DATA_DIR}/processed/test_split_ventana.json
+  test_split: ${DATA_DIR}/processed/test_split_sinventana.json
 
 target:
   name: discrete_survival
