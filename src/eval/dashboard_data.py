@@ -28,12 +28,14 @@ class RunData:
     predictions: pd.DataFrame      # filas de dev, con score_r*, fold_r* y las columnas del panel
     n_repeats: int
     eval_cfg: dict[str, Any]
-    evaluable_column: str
+    evaluable_column: str | None   # la columna de la etiqueta V; None si la corrida no tiene ventana (entrega v2)
     run_name: str
     window_eval: dict[str, Any] | None
     decision: dict[str, Any] | None
     metrics: dict[str, Any] | None
     audit: dict[str, Any] | None
+    panel_path: Path | None = None
+    test_split: str | None = None
 
 
 #: El dashboard de F4 la conoce con este nombre.
@@ -54,16 +56,26 @@ def _panel_or_raise(path: Path, what: str) -> pd.DataFrame:
     return pd.read_parquet(path)
 
 
+def source_config(run_cfg: dict[str, Any]) -> dict[str, Any]:
+    """La config que declara el panel, el holdout y la ventana de una corrida. Un ensamble (`ensemble.members`) no
+    los declara: son los de su primer miembro (`ensemble_rank.py` verificó que todos tienen las mismas filas, la misma
+    etiqueta y los mismos folds)."""
+    members = (run_cfg.get("ensemble") or {}).get("members")
+    return load_config(members[0]["config"]) if members and "data" not in run_cfg else run_cfg
+
+
 def load_run(run_config: str, *, decision_layer: str | Path | None = None, columns: Sequence[str] = (),
              columns_panel: str | Path | None = None) -> RunData:
-    """Predicciones fuera de fold de una corrida + las columnas del panel que se piden.
+    """Predicciones fuera de fold de una corrida (o de un ensamble) + las columnas del panel que se piden.
 
     Las columnas salen del panel de la corrida; las que ese panel no trae, de `columns_panel`, que tiene que tener
     las mismas filas (un panel secuencial no trae el perfil de uso: lo trae el panel de agregados). Cada merge es 1:1
-    y falla si alguna predicción no aparea.
+    y falla si alguna predicción no aparea. Sin `window_eval` (la entrega v2 no tiene ventana del registro) solo
+    existe la etiqueta dura.
     """
     run_cfg = load_config(run_config)
-    evaluable = run_cfg["window_eval"]["evaluable_column"]
+    src_cfg = source_config(run_cfg)
+    evaluable = (src_cfg.get("window_eval") or {}).get("evaluable_column")
     run_dir = resolve_path(run_cfg.get("output_dir", "experiments")) / run_cfg["name"]
     preds_path = run_dir / "predictions.parquet"
     if not preds_path.exists():
@@ -74,8 +86,9 @@ def load_run(run_config: str, *, decision_layer: str | Path | None = None, colum
 
     # Las predicciones ya son solo de dev (train.py recorta con `select_dev`); el merge es por
     # la izquierda, así que ninguna fila de test entra acá.
-    wanted = list(dict.fromkeys([evaluable, "static_SalesCountry_cd", *columns]))
-    sources = [(resolve_path(run_cfg["data"]["panel"]), "el panel de la corrida")]
+    wanted = [c for c in dict.fromkeys([evaluable, "static_SalesCountry_cd", *columns]) if c]
+    panel_path = resolve_path(src_cfg["data"]["panel"])
+    sources = [(panel_path, "el panel de la corrida")]
     if columns_panel is not None:
         sources.append((resolve_path(columns_panel), "el panel de las columnas del perfil"))
     for path, what in sources:
@@ -98,13 +111,15 @@ def load_run(run_config: str, *, decision_layer: str | Path | None = None, colum
     return RunData(
         predictions=out,
         n_repeats=n_repeats,
-        eval_cfg=run_cfg.get("eval", {}),
+        eval_cfg=run_cfg.get("eval") or src_cfg.get("eval", {}),
         evaluable_column=evaluable,
         run_name=run_cfg["name"],
         window_eval=_read_json(run_dir / "window_eval.json"),
         decision=_read_json(resolve_path(decision_layer)) if decision_layer else None,
         metrics=_read_json(run_dir / "metrics.json"),
         audit=_read_json(run_dir / "audit.json"),
+        panel_path=panel_path,
+        test_split=(src_cfg.get("splits") or {}).get("test_split"),
     )
 
 
@@ -119,6 +134,8 @@ def rows_for(data: K2Data, label: str) -> pd.DataFrame:
     p = data.predictions
     if label == "hard":
         return p
+    if data.evaluable_column is None:
+        raise ValueError(f"{data.run_name} no tiene etiqueta V (sin ventana del registro): usá `label: hard`")
     return p.loc[p[data.evaluable_column].eq(1)].reset_index(drop=True)
 
 

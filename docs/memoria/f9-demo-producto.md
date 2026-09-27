@@ -1,5 +1,9 @@
 # Demo de producto: Radar DPF, K2 con agentes de triage
 
+> **27-09: la demo ya no usa K2.** Pasó a la GRU + TripSummary + estática completa sobre la entrega
+> v2, con un porqué descriptivo (comparación con los sanos del mercado): [f9-demo-gru.md](f9-demo-gru.md).
+> Esta ficha queda como registro de la versión con K2 (`demo-bundle` en wandb, sin tocar).
+
 **Fecha:** 2026-09-26 · **Fase:** F9 (producto, para el pitch del 02-10) · **Rama:** `feat/demo-agentes`
 **Alcance:** K2 (`f6-ss-hw-r3`), solo dev, R1, etiqueta V, 5% de falsas alarmas. **Test sin tocar**: el
 bundle falla si trae un vehículo de test.

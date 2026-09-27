@@ -63,7 +63,7 @@ line = base.mark_line(color=MODEL_COLOR, strokeWidth=2).encode(y=alt.Y("score:Q"
 points = base.mark_point(filled=True, size=70, color=MODEL_COLOR).encode(
     y="score:Q",
     tooltip=[alt.Tooltip("cut_date:T", title="Fecha", format="%d-%m-%Y"), alt.Tooltip("km:N", title="Odómetro"),
-             alt.Tooltip("score:Q", title="Riesgo", format=".2f")])
+             alt.Tooltip("score:Q", title="Puntaje", format=".2f")])
 rules = pd.DataFrame({"y": [b.threshold], "t": [f"umbral ({b.meta['budget_per_1000'] / 10:g}% de falsas alarmas)"]})
 threshold = alt.Chart(rules).mark_rule(color=MUTED, strokeDash=[5, 3]).encode(y="y:Q", tooltip=alt.Tooltip("t:N", title=""))
 layers = [threshold, line, points]
@@ -73,10 +73,11 @@ layers.append(alt.Chart(pd.DataFrame([{"x": today - pd.Timedelta(days=1), "t": "
 with st.container(key="risk_chart"):
     horizon = (f"próximos {format_value(float(b.meta['gap_km']), 'int')} a "
                f"{format_value(float(b.meta['gap_km']) + float(b.meta['horizon_km']), 'int')} km")
-    st.altair_chart(chart_style(alt.layer(*layers).properties(height=300, title=f"Riesgo de {name} ({horizon})")),
+    st.altair_chart(chart_style(alt.layer(*layers).properties(height=300,
+                                                              title=f"Puntaje de riesgo de {name} ({horizon})")),
                     width="stretch", theme=None)
     st.caption(f"Semana del {week_label(week)}. La alerta se confirma cuando {b.k} revisiones seguidas quedan sobre "
-               "el umbral.")
+               f"el umbral. {b.model.get('score_note', '')}".strip())
 
 # --- por qué ----------------------------------------------------------------------------------
 # No es lo que usó el modelo: es en qué hábitos se aparta el auto de los sanos de su mercado (src/eval/fleet_profile.py).

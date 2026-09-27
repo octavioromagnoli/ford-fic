@@ -2033,7 +2033,8 @@ def _demo_bundle():
     meta = {"model": {"name": "Modelo de prueba", "family": "familia de prueba", "run": "stub"},
             "explanation": {"type": "fleet_profile", "min_healthy_share": 0.75, "max_factors": 3},
             "threshold": 0.5, "k_consecutive": 2, "gap_km": 500.0, "horizon_km": 3000.0, "budget_per_1000": 50.0,
-            "replay": {"start": "2025-09-01", "end": "2026-03-11", "first_week": "2025-09-29"},
+            "replay": {"start": "2025-09-01", "end": "2026-03-11", "first_week": "2025-09-29",
+                       "description": "el período de prueba"},
             "texts": {"recommendations": {"ruta": "Sumá tramos de ruta o autopista."}, "disclaimer": "No es una causa."},
             "official": {"curve": [{"budget_per_1000": 50, "detection": 0.17, "lead_km": 7438.0}]}}
     return Bundle(cuts=cuts, vehicles=vehicles, deviations=pd.DataFrame(), meta=meta, root=Path("."))
@@ -2370,6 +2371,43 @@ def demo_gru_checks() -> None:
         and any("se parece" in p for p in similar) and any("marcó tu auto por tu" in p for p in attributed)
         and any("falta decirlo" in p for p in no_healthy) and set(_VERIFIER_FLOOR) <= current,
         f"{similar[:1]} · {attributed[:1]} · {no_healthy[:1]}",
+    )
+
+    # -- el modelo de la demo es un ensamble sin ventana del registro, con el umbral exacto del reporte v2 ------
+    from scripts.audit_detection_null import vehicle_levels
+    from scripts.report_v2_models import exact_tau, measure
+    from src.eval.dashboard_data import RunData, rows_for, source_config, vehicle_alerts
+
+    ensemble = load_config("configs/exp_v2all_seeds3_gru_trips_estaticas.yaml")
+    member = source_config(ensemble)
+    no_window = RunData(predictions=pd.DataFrame(), n_repeats=1, eval_cfg={}, evaluable_column=None, run_name="x",
+                        window_eval=None, decision=None, metrics=None, audit=None)
+    rng = np.random.default_rng(11)
+    rows_ = []
+    for i in range(40):
+        failed = i < 12
+        for j in range(8):
+            rows_.append({"vehicle_id": f"V{i:02d}", "cut_odo": 500.0 * (j + 1), "event_observed": int(failed),
+                          "time_to_event_km": (8 - j) * 500.0 + 1000.0 if failed else np.nan,
+                          "fold_r0": i % 5, "score_r0": float(rng.random() + (0.35 if failed and j > 3 else 0.0)),
+                          "static_SalesCountry_cd": "M"})
+    synth = pd.DataFrame(rows_).sort_values(["vehicle_id", "cut_odo"], ignore_index=True)
+    synth["event_odo_km"] = synth["cut_odo"] + synth["time_to_event_km"]
+    levels, event, _ = vehicle_levels(synth, synth["score_r0"].to_numpy(), 2)
+    tau = exact_tau(levels[event == 0], 0.10)
+    alerts = vehicle_alerts(synth, 0, tau, 2)
+    cfg_m = {"k_consecutive": 2, "budgets": [0.10], "n_thresholds": 50, "null_permutations": 2, "bag_diag": {"healthy_cuts": 9}}
+    strata = {"market": pd.Series("M", index=synth["vehicle_id"].unique()), "cell": pd.Series("M×E", index=synth["vehicle_id"].unique())}
+    _, curve_m, _ = measure("x", synth, 1, cfg_m, strata, np.random.default_rng(0))
+    check(
+        "demo GRU · un ensamble toma panel y holdout de su primer miembro, sin ventana del registro no hay etiqueta V, y "
+        "el umbral exacto del replay da los mismos detectados y falsas alarmas que la cuenta del reporte v2",
+        member["data"]["panel"].endswith("panel_seq_trips_v2_estaticas.parquet") and "window_eval" not in member
+        and _raises(lambda: rows_for(no_window, "corrected"), ValueError)
+        and int((alerts["failed"] & alerts["alerted"]).sum()) == curve_m[0]["n_detected"]
+        and int((~alerts["failed"] & alerts["alerted"]).sum()) == round(curve_m[0]["fa_realized"] * curve_m[0]["n_healthy"])
+        and int((~alerts["failed"] & alerts["alerted"]).sum()) <= 0.10 * 28,
+        f"{int((alerts['failed'] & alerts['alerted']).sum())} vs {curve_m[0]['n_detected']}",
     )
 
     # -- el panel de la GRU con las aux_ de la ventana ---------------------------------------------------------

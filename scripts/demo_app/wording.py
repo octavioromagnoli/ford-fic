@@ -74,12 +74,24 @@ def chance_line(meta: dict[str, Any]) -> str:
     return f"Por debajo del {op / 10:g}%, {name} no le gana al azar." if below else ""
 
 
+def composition_line(meta: dict[str, Any]) -> str:
+    """Cuánto detecta la composición sola (la tasa de fallas de la celda mercado × motor, sin mirar un viaje)."""
+    floor = {int(p["budget_per_1000"]): p["detection"] for p in meta["official"].get("cell_floor", [])}
+    op = int(meta["budget_per_1000"])
+    if op not in floor:
+        return ""
+    return (f"- **Parte de lo que detecta es la composición de la muestra.** La tasa de fallas de la celda mercado × "
+            f"motor, sin mirar un viaje, detecta {_pct(floor[op])} al {op / 10:g}%. {model_name(meta)} lee mercado y "
+            "motor; lo que agrega es el orden dentro de cada celda.\n")
+
+
 def promises(meta: dict[str, Any]) -> str:
     """«Qué no promete esta demo», con todo número sacado del bundle."""
     gap, end = format_value(float(meta["gap_km"]), "int"), format_value(float(meta["gap_km"]) + float(meta["horizon_km"]), "int")
     share = format_value(float(meta["explanation"]["min_healthy_share"]), "pct")
     return (
         f"- **Detecta una fracción, no todas las fallas.** {detection_line(meta)} {chance_line(meta)}\n"
+        f"{composition_line(meta)}"
         "- **El porqué es una comparación con la flota, no lo que usó el modelo.** «Comparado con autos sanos de tu "
         "mercado, tu auto…», nunca «falla porque…» ni «el sistema lo marcó por…». Se nombra un hábito solo si el auto "
         f"supera al {share} de los sanos de su mercado hacia el lado que perjudica al filtro. Los agentes no pueden "
@@ -89,5 +101,5 @@ def promises(meta: dict[str, Any]) -> str:
         "- **La muestra está enriquecida en fallas.** En una flota real la prevalencia es mucho menor: los conteos "
         "absolutos de la bandeja no se trasladan tal cual.\n"
         "- **La referencia de los sanos es descriptiva:** la mediana de los autos sanos de desarrollo del mismo mercado "
-        "en toda la ventana, no una referencia de producción."
+        "en todo el período, no una referencia de producción."
     )

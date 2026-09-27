@@ -24,7 +24,9 @@ function build(data) {
   const weeks = data.weeks;
   const max = Math.max(1, ...weeks.map(w => w.new + w.esc));
   const root = document.createElement('div');
-  root.className = 'tl';
+  // A replay of more than ~10 months packs its columns tighter (theme.css `.tl-dense`): the count per week moves to
+  // the tooltip and the accessible label, and the bars keep their height.
+  root.className = weeks.length > 40 ? 'tl tl-dense' : 'tl';
   root.style.setProperty('--n', weeks.length);
   root.innerHTML = `
     <div class="tl-head">
@@ -61,6 +63,7 @@ function build(data) {
     col.className = 'tl-col' + (total ? ' has-events' : '');
     col.dataset.i = i;
     col.setAttribute('aria-label', `${w.range}: ${summary(w)}`);
+    col.title = `${w.range}: ${summary(w)}`;
     const stack = total
       ? `<span class="tl-n">${total}</span><span class="tl-stack" style="--h:${total / max}">` +
         (w.esc ? `<i class="tl-esc" style="flex-grow:${w.esc}"></i>` : '') +

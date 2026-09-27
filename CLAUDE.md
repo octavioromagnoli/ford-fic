@@ -467,7 +467,7 @@ scripts/demo_app/        la demo de producto: `streamlit run scripts/demo_app/ap
                          tarjetas con mensaje al conductor, resumen del taller, hechos y verificador), Vehículo y
                          Qué pasó después; fetch_bundle.py baja el bundle en el contenedor. Deploy: Dockerfile,
                          requirements-demo.txt, railway.json; configs/agents.yaml (modelo, política, prompts, reglas)
-scripts/check_setup.py   smoke test del harness (216 chequeos)
+scripts/check_setup.py   smoke test del harness (217 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

@@ -32,8 +32,8 @@ def tour_steps(page: str) -> list[dict]:
         "aprobar. Este recorrido te muestra cada parte.")
     calendar = _step(
         "El calendario de la flota",
-        f"La demo reproduce la flota de desarrollo semana a semana, del {start} al {end}: la ventana en que el "
-        "registro de eventos de Ford estaba activo. Cada columna es una semana y su barra, las alertas que llegaron. "
+        f"La demo reproduce la flota de desarrollo semana a semana, del {start} al {end}: "
+        f"{meta['replay']['description']}. Cada columna es una semana y su barra, las alertas que llegaron. "
         "<b>Elegí una columna para abrir esa semana.</b>",
         ".st-key-weekbar")
     moving = _step(
@@ -101,7 +101,7 @@ def tour_steps(page: str) -> list[dict]:
                   ".st-key-season_metrics"),
             _step("De la alerta a la falla",
                   "Una fila por auto alertado: de la alerta a la falla registrada, o punteada si el auto no falló "
-                  "dentro de la ventana.",
+                  "en el período del replay.",
                   ".st-key-season_timeline"),
             _step("Los números medidos",
                   f"Los oficiales: el promedio de las {meta['official']['n_repeats']} repeticiones de la validación, "

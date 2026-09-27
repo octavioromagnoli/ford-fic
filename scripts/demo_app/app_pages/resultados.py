@@ -21,8 +21,8 @@ lead_weeks = ((detected["event_date"] - detected["alert_confirm_date"]).dt.days 
 lead_km = detected["alert_confirm_km_to_event"]
 
 heading("Qué pasó después.", "Las alertas frente a las fallas registradas.")
-st.caption(f"Del {short_date(meta['replay']['start'])} al {short_date(meta['replay']['end'])}: la ventana en que el "
-           "registro de eventos de Ford estaba activo. Cada auto lo puntúa un modelo que no lo vio al entrenar.")
+st.caption(f"Del {short_date(meta['replay']['start'])} al {short_date(meta['replay']['end'])}: "
+           f"{meta['replay']['description']}. Cada auto lo puntúa un modelo que no lo vio al entrenar.")
 
 with st.container(horizontal=True, key="season_metrics"):
     st.metric("Fallas anticipadas", f"{len(detected)} de {len(failed)}", border=True,
@@ -41,7 +41,7 @@ for vid, r in alerted.sort_values("alert_confirm_date").iterrows():
                  "hasta": r["event_date"] if r["failed"] else pd.Timestamp(meta["replay"]["end"]),
                  "tipo": "Alerta → falla" if r["failed"] else "Alerta sin falla (falsa alarma)",
                  "detalle": (f"falló {((r['event_date'] - r['alert_confirm_date']).days / 7):.0f} semanas después"
-                             if r["failed"] else "no falló dentro de la ventana")})
+                             if r["failed"] else "no falló en el período del replay")})
 tl = pd.DataFrame(rows)
 colors = alt.Scale(domain=["Alerta → falla", "Alerta sin falla (falsa alarma)"], range=[MODEL_COLOR, EVENT_COLOR])
 order = tl["auto"].tolist()
@@ -62,7 +62,7 @@ with st.container(key="season_timeline"):
     st.altair_chart(chart_style(alt.layer(segments, starts, ends).properties(height=34 * len(tl) + 60)),
                     width="stretch", theme=None)
     st.caption("Círculo: la alerta confirmada. Cruz: la falla registrada. Línea punteada: una alerta a un auto que no "
-               "falló dentro de la ventana.")
+               "falló en el período del replay.")
 
 # --- los números oficiales -------------------------------------------------------------------
 official = st.container(key="official")

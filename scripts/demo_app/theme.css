@@ -114,6 +114,9 @@ iframe[data-testid="stIFrame"]{background:transparent;color-scheme:dark}
 .tl-btn:disabled{opacity:.4;cursor:default}
 .tl-plot{position:relative}
 .tl-cols,.tl-axis{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));column-gap:4px}
+.tl-dense .tl-cols,.tl-dense .tl-axis{column-gap:1px}
+.tl-dense .tl-n{display:none}
+.tl-dense .tl-stack{width:min(80%,14px)}
 .tl-col{position:relative;display:flex;flex-direction:column;gap:6px;height:88px;margin:0;padding:6px 0 0;background:transparent;border:0;border-radius:8px;color:inherit;font:inherit;cursor:pointer;transition:background .18s}
 .tl-bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-height:0}
 .tl-n{font-size:11px;font-weight:800;line-height:1;color:#c6d6ec;font-variant-numeric:tabular-nums}

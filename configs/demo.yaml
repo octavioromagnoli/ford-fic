@@ -1,26 +1,30 @@
 # Demo de producto (MVP para el pitch del 02-10-2026): la flota de dev reproducida en el calendario con la GRU,
 # una bandeja semanal de triage y dos agentes (redactor + verificador, triage). docs/memoria/f9-demo-gru.md.
 #
-#   FORD_DATA_DIR=$PWD/data/rebuild-0921 python scripts/build_demo_bundle.py --config configs/demo.yaml
+#   FORD_DATA_DIR=$PWD/data/v2 python scripts/build_demo_bundle.py --config configs/demo.yaml
 #   python scripts/warm_demo_cache.py --config configs/demo.yaml --prune   # agentes, todas las semanas
 #   python scripts/build_demo_bundle.py --config configs/demo.yaml --publish-only
 #   streamlit run scripts/demo_app/app.py
 #
-# Necesita la corrida de la GRU con la etiqueta V (su window_eval.json) y su capa de decisión. **No es un candidato
-# ni cambia ninguna métrica**: el score, el umbral y la alerta son los de la GRU en una repetición, tal cual. K2 sigue
-# siendo el finalista del proyecto; la demo no lo usa. Solo dev: el builder falla si aparece un vehículo de test.
+# Necesita la entrega v2 (FORD_DATA_DIR con los paneles v2) y las tres semillas de la GRU con su ensamble:
+#   python scripts/train.py --config configs/exp_v2all_gru_trips_estaticas_{r3,s1_r3,s2_r3}.yaml
+#   python scripts/ensemble_rank.py --config configs/exp_v2all_seeds3_gru_trips_estaticas.yaml
+# **No cambia ninguna métrica**: el score, el umbral y la alerta son los del ensamble en una repetición, tal cual.
+# Solo dev: el builder falla si aparece un vehículo de test.
 
 product_name: Ford DPF
 
-# El modelo que puntúa la flota. Nombre y familia viajan en la meta del bundle: la app no los escribe a mano.
+# El modelo que puntúa la flota: la GRU + TripSummary + estática completa sobre la entrega v2, en ensamble por rango
+# de las semillas 42, 1 y 2 (la configuración que dejó el sweep, docs/memoria/f10-sweep-gru.md). Nombre y familia
+# viajan en la meta del bundle: la app no los escribe a mano.
 model:
   name: GRU
-  family: red recurrente
-  run_config: configs/exp_gru_seq_last_kmw.yaml
-  decision_layer: experiments/decision-gru-f3/decision_layer.json
-  # La GRU lee la ventana en bins (panel_seq_kmw). El perfil de uso y las señales del filtro salen del panel de
-  # agregados, que tiene las mismas filas (scripts/join_window_columns.py lo verificó).
-  profile_panel: ${DATA_DIR}/processed/panel_survival_kmw.parquet
+  family: red recurrente, ensamble de 3 semillas
+  run_config: configs/exp_v2all_seeds3_gru_trips_estaticas.yaml
+  # La GRU lee la ventana en bins (panel_seq_trips_v2_estaticas). El perfil de uso y las señales del filtro salen
+  # del panel de agregados del que se armó, con las mismas filas (load_run verifica el merge 1:1).
+  profile_panel: ${DATA_DIR}/processed/panel_v2_estaticas.parquet
+  score_note: "El puntaje es el rango medio de tres semillas de la GRU: ordena autos, no es una probabilidad."
 
 # El "por qué". La GRU no tiene atribución: es una comparación descriptiva con los autos sanos de dev del mismo
 # mercado (src/eval/fleet_profile.py), no lo que el modelo usó. Fijado antes de construir el bundle.
@@ -34,7 +38,7 @@ explanation:
   # Se nombra un hábito del lado riesgoso si el auto es más extremo que esta parte de los sanos de su mercado.
   min_healthy_share: 0.75
   max_factors: 3
-  # Un mercado con menos autos sanos no alcanza como referencia (el builder falla).
+  # Un mercado con menos autos sanos no alcanza como referencia (el builder falla). En dev v2 el mínimo es PER, 20.
   min_healthy_vehicles: 10
   # Lo que cambia del mensaje de explain_texts.yaml: el marco es la flota sana, no el parecido con autos que fallaron.
   message:
@@ -42,21 +46,32 @@ explanation:
     no_factors: "Comparado con autos sanos de tu mercado, ninguno de los hábitos que este análisis puede señalar se aparta hacia el lado que perjudica al filtro."
     disclaimer: "Esto compara tu uso con el de autos sanos de tu mercado: no dice qué miró el sistema para marcar tu auto ni es una causa."
 
-# Una sola repetición, la misma para el score, el umbral, la alerta y el mensaje, con V al 5% de falsas alarmas.
-# V deja solo los cortes cuyo horizonte cae entero dentro de la ventana del registro: son los únicos en los que se
-# puede saber si una alerta acertó.
-label: corrected
+# Una sola repetición, la misma para el score, el umbral, la alerta y el mensaje, al 5% de falsas alarmas. La
+# entrega v2 no tiene ventana del registro: la etiqueta es la dura (D), con todas las filas de dev.
+label: hard
 repeat: 0
 budget_per_1000: 50
 
+# Los números oficiales: la cuenta de scripts/report_v2_models.py (la del reporte v2 y el sweep), sobre las 3
+# repeticiones. Umbral exacto por presupuesto, nulo de bolsa y fuera de muestra.
+official:
+  budgets: [0.02, 0.05, 0.10, 0.15, 0.20]
+  null_permutations: 200
+  n_thresholds: 50
+  bag_diag_healthy_cuts: 9
+  seed: 0
+  # Mercado y motor por auto: el AUC dentro de la celda (la composición que la tasa de la celda ya explica).
+  cell_columns: [static_SalesCountry_cd, static_Engine]
+
 replay:
-  # La ventana del registro de eventos (configs/data/event_clock.yaml). Semanas de lunes a domingo.
-  start: "2025-09-01"
-  end: "2026-03-11"
-  # La semana en que abre la demo. Con la GRU ninguna semana junta 2 alertas nuevas (son 6 en la temporada, una
-  # por semana): esta es la única con dos eventos, VEH_0513 alerta y VEH_0451 se escala al concesionario, y los
-  # dos fallan después. Alternativa: "2025-09-01", la primera alerta (VEH_0451).
-  first_week: "2025-09-08"
+  # Semanas de lunes a domingo, de la primera revisión de dev (05-03-2025) al fin de la extracción de los fallados
+  # (24-09-2026): la telemetría se corta el 14-09 para todos, pero hay eventos registrados hasta el 21-09.
+  start: "2025-03-03"
+  end: "2026-09-24"
+  # La semana en que abre la demo: la primera con al menos 3 alertas nuevas. Son 4, las 4 de autos que fallaron
+  # después: dos avisos al conductor (VEH_0563, VEH_0566) y dos contactos del concesionario (VEH_0451, VEH_0583).
+  first_week: "2025-09-29"
+  description: "de la primera revisión de la flota de desarrollo al fin de la extracción de datos de Ford"
 
 # Perfil de uso que se grafica en la ficha del vehículo. Los hábitos que el "por qué" puede nombrar salen de acá
 # (los accionables de la lista cerrada; km por día es contexto: convierte el horizonte a semanas).
@@ -88,7 +103,7 @@ technician_signals:
 event_dates:
   sources: configs/data/raw_sources.yaml
   dedupe: configs/data/vehicle_dedupe.yaml
-  panel_config: configs/data/panel_v1.yaml
+  panel_config: configs/data/panel_v2.yaml
   anchor_meta: ${DATA_DIR}/processed/panel_meta.json
 
 bundle:
