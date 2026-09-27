@@ -129,7 +129,10 @@ class LLM:
     def respond(self, *, instructions: str, items: list[dict[str, Any]],
                 tools: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
         """Un paso de un loop de herramientas. Devuelve {"text", "tool_calls": [{name, arguments, call_id}]}."""
-        request = {"kind": "respond", "instructions": instructions, "input": items, "tools": tools}
+        # `parallel_tool_calls: false` obliga a una herramienta por paso: el agente ve la acción de la política
+        # antes de redactar, en vez de adivinarla en el mismo paso.
+        extra = {} if self.cfg.get("parallel_tool_calls", True) else {"parallel_tool_calls": False}
+        request = {"kind": "respond", "instructions": instructions, "input": items, "tools": tools, **extra}
         key = self._key(request)
         cached = self._get(key)
         if cached is not None:
@@ -137,7 +140,7 @@ class LLM:
             return cached["output"], {"cached": True, "model": cached.get("model"), "usage": cached.get("usage")}
         client = self._client_or_raise()
         resp = client.responses.create(model=self.model, instructions=instructions, input=items, tools=tools,
-                                       **self._params())
+                                       **extra, **self._params())
         calls = [{"name": o.name, "arguments": o.arguments, "call_id": o.call_id}
                  for o in resp.output if getattr(o, "type", None) == "function_call"]
         out = {"text": resp.output_text or "", "tool_calls": calls}

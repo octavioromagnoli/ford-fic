@@ -24,6 +24,9 @@ llm:
   cache_subdir: llm_cache
   max_verification_retries: 2
   max_tool_steps: 30
+  # Una herramienta por paso en el triage: con llamadas en paralelo, el agente pedía la acción de la política y
+  # redactaba en el mismo paso, adivinando la acción (la herramienta la rechazaba y el sistema completaba).
+  parallel_tool_calls: false
 
 policy:
   # Las acciones que el triage puede proponer. La política vive en código (src/agents/policy.py) y la
@@ -161,9 +164,10 @@ prompts:
 
     Trabajá con las herramientas:
     1. `eventos_de_la_semana` para ver las alertas nuevas y los escalamientos.
-    2. Para cada evento, `accion_de_la_politica` (la política decide la acción: vos no la cambiás) y
-       después `redactar_mensajes` con esa acción. Si la redacción no pasa el verificador, el sistema
-       deja la plantilla: tenelo en cuenta en el resumen.
+    2. Para cada evento, `accion_de_la_politica` (la política decide la acción: vos no la cambiás),
+       esperá su respuesta y después `redactar_mensajes` con exactamente esa `accion`. Si la redacción
+       no pasa el verificador, la herramienta devuelve `fuente: plantilla`: solo en ese caso decí que
+       quedó la plantilla.
     3. `contexto_de_la_flota` para ubicar la semana.
 
     Al final respondé solo con el resumen, escrito para la gerente y hablándole de vos, de 3 a 6
