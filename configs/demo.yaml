@@ -44,7 +44,7 @@ explanation:
   message:
     factors_intro: "Comparado con autos sanos de tu mercado, en tu auto:"
     no_factors: "Comparado con autos sanos de tu mercado, ninguno de los hábitos que este análisis puede señalar se aparta hacia el lado que perjudica al filtro."
-    disclaimer: "Esto compara tu uso con el de autos sanos de tu mercado: no dice qué miró el sistema para marcar tu auto ni es una causa."
+    disclaimer: "Esto no es un diagnóstico: el sistema marca autos para revisarlos a tiempo. Si nombramos hábitos, es en comparación con autos sanos de tu mercado, no una causa ni lo que miró el sistema."
 
 # Una sola repetición, la misma para el score, el umbral, la alerta y el mensaje, al 5% de falsas alarmas. La
 # entrega v2 no tiene ventana del registro: la etiqueta es la dura (D), con todas las filas de dev.

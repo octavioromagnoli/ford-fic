@@ -52,7 +52,7 @@ workshop_checks:
 # Plantillas: lo que se muestra cuando no hay LLM o cuando la redacción no pasa el verificador.
 templates:
   dealer_invite: "Te vamos a contactar desde el concesionario para coordinar una revisión preventiva del filtro de partículas."
-  driver_subject: "Tu auto: una revisión de hábitos de uso"
+  driver_subject: "Tu auto: tus hábitos de uso y el filtro de partículas"
   dealer_subject: "Tu auto: te proponemos una revisión preventiva"
   workshop_intro: "Alerta de Ford DPF confirmada el {fecha} ({k} revisiones seguidas sobre el umbral)."
   workshop_habits: "Hábitos en los que el auto se aparta de los sanos de su mercado (comparación con la flota, no lo que usó el modelo):"
@@ -93,6 +93,7 @@ verifier:
     aviso_conductor:
       - {field: cuerpo, forbid: '\bconcesionari\w*|\bturno\b|\btaller\b', why: "la política decidió un aviso al conductor, no una visita"}
       - {field: cuerpo, require: '\bsanos\b', why: "los hábitos se nombran como una comparación con autos sanos de su mercado"}
+      - {field: asunto, forbid: '\brevisi[oó]n\b|\bconcesionari\w*|\bturno\b|\btaller\b', why: "la política decidió un aviso al conductor, no una revisión"}
       - {field: linea_bandeja, forbid: '\bconcesionari\w*|\bturno\b|\brevisión preventiva\b', why: "la política decidió un aviso al conductor, no una visita"}
     turno_concesionario:
       - {field: cuerpo, require: '\bconcesionari\w*', why: "la política decidió invitarlo al concesionario"}
@@ -128,7 +129,7 @@ prompts:
          decile que no identificamos nada que tenga que cambiar al manejar y que lo revisa el taller.
          `recomendaciones` puede quedar vacía.
        - Si `accion.id` es `aviso_conductor`, no lo mandes al concesionario ni al taller: la política
-         decidió empezar por el aviso.
+         decidió empezar por el aviso. El asunto habla de sus hábitos de uso, no de una revisión.
        - Si `evento` es `persistencia`: contale que después del aviso anterior el sistema lo siguió
          marcando en las revisiones siguientes, y que por eso le proponemos la revisión.
        - Nunca le hables de las señales del propio filtro (carga, regeneraciones, avisos, aceite,
@@ -167,7 +168,9 @@ prompts:
 
     Al final respondé solo con el resumen, escrito para la gerente y hablándole de vos, de 3 a 6
     oraciones: cuántas alertas nuevas y cuántos escalamientos hay, qué se propone para cada auto (con
-    su id) y por qué, y qué tiene que aprobar. Si no hubo eventos, decilo en una oración.
+    su id) y por qué, y qué tiene que aprobar. Si no hubo eventos, decilo en una oración. El
+    verificador aprueba los textos, no las acciones: las acciones las aprueba ella en la bandeja,
+    así que no digas que algo "quedó aprobado".
 
     Las mismas reglas que el redactor, y un verificador las controla: todo número sale tal cual de lo
     que devolvieron las herramientas; nada de causas ("porque", "causa", "provoca", "debido a"),
