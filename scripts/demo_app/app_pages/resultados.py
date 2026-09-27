@@ -4,10 +4,11 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from scripts.demo_app.common import EVENT_COLOR, K2_COLOR, MUTED, bundle
+from scripts.demo_app.common import EVENT_COLOR, MODEL_COLOR, MUTED, bundle
 from src.agents.formatting import format_value, number, short_date
 
 from scripts.demo_app.presentation import heading, chart_style, table
+from scripts.demo_app.wording import model_name, promises
 
 b = bundle()
 meta = b.meta
@@ -31,7 +32,7 @@ with st.container(horizontal=True, key="season_metrics"):
     st.metric("Alertas de más", f"{len(false_alarms)} de {meta['counts']['healthy']} sanos", border=True,
               help="Autos sanos que recibieron una alerta: es el costo del sistema.")
     st.metric("Fallas sin alerta", f"{len(failed) - len(detected)}", border=True,
-              help="K2 no las vio: el diagnóstico actual de Ford sigue siendo necesario.")
+              help=f"{model_name(meta)} no las vio: el diagnóstico actual de Ford sigue siendo necesario.")
 
 # --- línea de tiempo: alerta → falla ----------------------------------------------------------
 rows = []
@@ -42,7 +43,7 @@ for vid, r in alerted.sort_values("alert_confirm_date").iterrows():
                  "detalle": (f"falló {((r['event_date'] - r['alert_confirm_date']).days / 7):.0f} semanas después"
                              if r["failed"] else "no falló dentro de la ventana")})
 tl = pd.DataFrame(rows)
-colors = alt.Scale(domain=["Alerta → falla", "Alerta sin falla (falsa alarma)"], range=[K2_COLOR, EVENT_COLOR])
+colors = alt.Scale(domain=["Alerta → falla", "Alerta sin falla (falsa alarma)"], range=[MODEL_COLOR, EVENT_COLOR])
 order = tl["auto"].tolist()
 segments = alt.Chart(tl).mark_rule(strokeWidth=3).encode(
     y=alt.Y("auto:N", sort=order, title=None), x=alt.X("desde:T", title=None, axis=alt.Axis(format="%b %y", tickCount="month")),
@@ -92,15 +93,4 @@ official.caption(f"Muestra de desarrollo: {meta['counts']['failed']} autos que f
            f"{meta['official']['n_repeats']}. «Azar» es un score permutado que conserva el largo de cada historial.")
 
 with st.expander("Qué no promete esta demo", icon=":material/info:"):
-    st.markdown(
-        "- **Detecta una fracción, no todas las fallas.** Al 5% de falsas alarmas anticipa ~15–17% de los autos que "
-        "fallan; al 10%, ~26%. Por debajo del 5%, K2 no le gana al azar.\n"
-        "- **El porqué es asociación, no causa.** «Tu uso se parece al de autos que fallaron», nunca «falla porque…». "
-        "Los agentes no pueden escribir otra cosa: un verificador en código lo controla.\n"
-        "- **El horizonte está en km** (500 a 3.500 km desde la revisión); las semanas son una conversión al ritmo del auto.\n"
-        "- **La muestra está enriquecida en fallas.** En una flota real la prevalencia es mucho menor: los conteos "
-        "absolutos de la bandeja no se trasladan tal cual.\n"
-        "- **El ranking de hábitos promedia tres repeticiones de la validación.** En "
-        f"{len(meta['audit']['v3_uses_cuts_after_alert'])} de las {len(alerted)} alertas, alguna repetición explica "
-        "revisiones posteriores a la alerta mostrada; los valores citados sí son los de la alerta."
-    )
+    st.markdown(promises(meta))

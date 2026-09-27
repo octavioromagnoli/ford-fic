@@ -10,6 +10,7 @@ from __future__ import annotations
 from src.agents.formatting import long_date
 
 from scripts.demo_app.common import bundle
+from scripts.demo_app.wording import model_name
 
 
 def _step(title: str, body: str, *targets: str) -> dict:
@@ -21,11 +22,12 @@ def tour_steps(page: str) -> list[dict]:
     b = bundle()
     meta = b.meta
     pct = f"{meta['budget_per_1000'] / 10:g}%"
+    name = model_name(meta)
     start, end = long_date(meta["replay"]["start"]), long_date(meta["replay"]["end"])
 
     intro = _step(
         "Así se usa Ford DPF",
-        "Estás en el lugar de quien gestiona la posventa. K2 revisa cada auto cada 500 km y, cuando el riesgo del "
+        f"Estás en el lugar de quien gestiona la posventa. {name} revisa cada auto cada 500 km y, cuando el riesgo del "
         "filtro de partículas se sostiene, lo alerta. Los agentes convierten cada alerta en una acción lista para "
         "aprobar. Este recorrido te muestra cada parte.")
     calendar = _step(
@@ -52,8 +54,8 @@ def tour_steps(page: str) -> list[dict]:
     by_page = {
         "bandeja": [
             _step("La semana en números",
-                  "Cuántos autos revisó K2 hasta hoy, las alertas nuevas y los escalamientos al concesionario de esta "
-                  "semana, y las alertas acumuladas en la temporada.",
+                  f"Cuántos autos revisó {name} hasta hoy, las alertas nuevas y los escalamientos al concesionario de "
+                  "esta semana, y las alertas acumuladas en la temporada.",
                   ".st-key-week_metrics"),
             _step("El resumen del agente",
                   "El agente de triage ordena la semana y la resume. <b>«Verificado»</b> quiere decir que el texto "
@@ -69,8 +71,8 @@ def tour_steps(page: str) -> list[dict]:
                   "revisión y por qué alertó.",
                   ".st-key-cardactions_0"),
             _step("Una semana sin alertas",
-                  "K2 siguió revisando la flota, pero ningún auto confirmó una alerta. Saltá a la próxima semana con "
-                  "alertas para ver una tarjeta.",
+                  f"{name} siguió revisando la flota, pero ningún auto confirmó una alerta. Saltá a la próxima semana "
+                  "con alertas para ver una tarjeta.",
                   ".st-key-empty_week"),
         ],
         "vehiculo": [
@@ -85,8 +87,8 @@ def tour_steps(page: str) -> list[dict]:
                   f"falsas alarmas: la alerta se confirma cuando {b.k} revisiones seguidas quedan por encima.",
                   ".st-key-risk_chart"),
             _step("Por qué",
-                  "Qué hábitos de uso, si los hay, se parecen a los de autos que fallaron, contra la mediana de los "
-                  "autos sanos comparables, y cuánto suma cada factor al riesgo. Es asociación, no causa.",
+                  "En qué hábitos de uso, si los hay, este auto se aparta de los autos sanos de su mercado. Es una "
+                  "comparación con la flota, no lo que usó el modelo.",
                   ".st-key-why"),
             _step("Lo que se le comunicó",
                   "Los textos de cada alerta, tal como los recibieron el conductor y el taller.",
@@ -95,7 +97,7 @@ def tour_steps(page: str) -> list[dict]:
         "resultados": [
             _step("La temporada completa",
                   "Cuántas fallas se anticiparon y con cuánto margen, cuántas alertas fueron de más y cuántas fallas "
-                  "K2 no vio.",
+                  f"{name} no vio.",
                   ".st-key-season_metrics"),
             _step("De la alerta a la falla",
                   "Una fila por auto alertado: de la alerta a la falla registrada, o punteada si el auto no falló "

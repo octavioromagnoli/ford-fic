@@ -1,9 +1,9 @@
 """Los hechos que ven los agentes: un JSON por evento, armado solo con lo que se sabía ese día.
 
 El agente no ve el desenlace (si el auto falló después): los hechos se arman con la alerta, los
-factores de la explicabilidad y las señales del filtro de los cortes que la dispararon. Cada número
-va ya formateado, igual que lo tiene que escribir el texto: el verificador compara contra estos
-strings.
+hábitos en los que el auto se aparta de los sanos de su mercado (una comparación con la flota, no lo
+que usó el modelo) y las señales del filtro de los cortes que la dispararon. Cada número va ya
+formateado, igual que lo tiene que escribir el texto: el verificador compara contra estos strings.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from src.agents.formatting import format_value, long_date
 from src.agents.policy import DRIVER, Event, all_events, week_end
 
 #: Claves que el conductor no ve (señales del propio filtro y la lista del taller).
-WORKSHOP_ONLY = ("senales_filtro", "senales_filtro_suman_riesgo", "chequeos_permitidos")
+WORKSHOP_ONLY = ("senales_filtro", "chequeos_permitidos")
 
 
 def vehicle_facts(bundle: Bundle, event: Event, agents_cfg: dict[str, Any]) -> dict[str, Any]:
@@ -43,7 +43,6 @@ def vehicle_facts(bundle: Bundle, event: Event, agents_cfg: dict[str, Any]) -> d
         "horizonte": horizonte,
         "habitos": habits,
         "recomendaciones_permitidas": recs,
-        "senales_filtro_suman_riesgo": bool(v["symptoms_up"]),
         "senales_filtro": [{"nombre": s["label"], "valor": s["value_text"], "flota_sana_del_mercado": s["reference_text"]}
                            for s in v["technician_signals"]],
         "chequeos_permitidos": dict(agents_cfg["workshop_checks"]),

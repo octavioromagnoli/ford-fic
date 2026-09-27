@@ -1,10 +1,11 @@
-"""Demo de producto: la flota de dev reproducida en el calendario con K2 y los agentes de triage.
+"""Demo de producto: la flota de dev reproducida en el calendario con el modelo del bundle y los agentes de triage.
 
     streamlit run scripts/demo_app/app.py
 
 Lee solo el bundle (`scripts/build_demo_bundle.py`, o `scripts/demo_app/fetch_bundle.py` en el
 contenedor). Variables: `DEMO_PASSWORD` (si está, pide clave), `OPENAI_API_KEY` (para correr los
-agentes en vivo), `DEMO_LLM_MODE` (cache_first | cache_only | live), `DEMO_BUNDLE_DIR`.
+agentes en vivo), `DEMO_LLM_MODE` (cache_first | cache_only | live), `DEMO_BUNDLE_DIR`, `DEMO_CONFIG`. El modelo
+que se muestra (nombre y familia) sale de la meta del bundle.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import streamlit as st  # noqa: E402
 from scripts.demo_app.common import (all_weeks, bundle, cfg, check_password, current_week, events,  # noqa: E402
                                      llm, set_week, timeline_data, week_label_short)
 from scripts.demo_app.guide import tour_steps  # noqa: E402
+from scripts.demo_app.wording import model_note  # noqa: E402
 
 from scripts.demo_app.presentation import brand_block, brand_html, inject_theme, timeline, tour  # noqa: E402
 
@@ -74,8 +76,7 @@ c = b.meta["counts"]
 FLEET_NOTE = (f"Flota de la muestra de desarrollo: {c['vehicles']} autos diésel conectados, {c['failed']} con falla "
               "registrada (la muestra está enriquecida en fallas; en una flota real son muchos menos). El test "
               "no se muestra.")
-MODEL_NOTE = (f"Modelo: K2 (survival stacking) · umbral al {b.meta['budget_per_1000'] / 10:g}% de falsas alarmas · "
-              f"agentes: {llm().model} ({llm().mode})")
+MODEL_NOTE = model_note(b.meta, llm().model, llm().mode)
 
 with st.sidebar:
     st.markdown(brand_block(cfg()["product_name"]), unsafe_allow_html=True)

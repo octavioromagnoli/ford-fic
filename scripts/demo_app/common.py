@@ -22,13 +22,15 @@ from scripts.demo_app.presentation import brand_block
 DEMO_CONFIG = os.environ.get("DEMO_CONFIG", "configs/demo.yaml")
 AGENTS_CONFIG = os.environ.get("AGENTS_CONFIG", "configs/agents.yaml")
 
-# Paleta de presentación: azul para K2, ámbar para eventos y rojo para riesgo creciente.
-K2_COLOR = "#4da3ff"
+# Paleta de presentación: azul para el riesgo del modelo, ámbar para eventos y rojo para riesgo creciente.
+MODEL_COLOR = "#4da3ff"
 EVENT_COLOR = "#ffc16b"
 MUTED = "#a3b8d2"
 OUTCOME_COLORS = {"Detectado": "#4da3ff", "No detectado": "#a3b8d2", "Falsa alarma": "#ffc16b",
                   "Sano sin alerta": "#b7c5d9"}
-EFFECT_COLORS = {"sube el riesgo": "#ff8585", "baja el riesgo": "#4da3ff", "no accionable": "#b7c5d9"}
+# El gráfico del "por qué": lo que se nombra, lo que queda del lado riesgoso sin nombrarse y el lado de los sanos.
+DEVIATION_COLORS = {"se nombra": "#ff8585", "del lado riesgoso, sin nombrar": "#ffc16b",
+                    "del lado de los sanos": "#b7c5d9"}
 KIND_LABELS = {"alerta_nueva": "Alerta nueva", "persistencia": "Escalamiento"}
 # El canal de cada acción de la política: la app del vehículo o el concesionario.
 ACTION_ICONS = {"aviso_conductor": ":material/notifications:", "turno_concesionario": ":material/car_repair:"}

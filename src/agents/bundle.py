@@ -12,14 +12,16 @@ import pandas as pd
 
 from src.config import resolve_path
 
-REQUIRED = ("cuts.parquet", "vehicles.parquet", "waterfall.parquet", "meta.json")
+#: El único "por qué" de la demo: comparación descriptiva con los autos sanos del mercado (no es atribución).
+FLEET_PROFILE = "fleet_profile"
+REQUIRED = ("cuts.parquet", "vehicles.parquet", "deviations.parquet", "meta.json")
 
 
 @dataclass
 class Bundle:
     cuts: pd.DataFrame        # un corte de dev por fila: score de la repetición, fecha, perfil de uso
     vehicles: pd.DataFrame    # un auto por fila, indexado por vehicle_id
-    waterfall: pd.DataFrame   # escalones del "por qué" por auto
+    deviations: pd.DataFrame  # auto × hábito: dónde se aparta de los sanos de su mercado (el "por qué")
     meta: dict[str, Any]
     root: Path
 
@@ -31,6 +33,11 @@ class Bundle:
     def k(self) -> int:
         return int(self.meta["k_consecutive"])
 
+    @property
+    def model(self) -> dict[str, Any]:
+        """Nombre, familia y corrida del modelo que puntúa la flota: lo que la app muestra sale de acá."""
+        return self.meta["model"]
+
     def vehicle_cuts(self, vehicle_id: str) -> pd.DataFrame:
         return self.cuts.loc[self.cuts["vehicle_id"].eq(vehicle_id)].sort_values("cut_odo", kind="stable")
 
@@ -41,6 +48,17 @@ def bundle_dir(cfg: dict[str, Any]) -> Path:
     return Path(env).expanduser().resolve() if env else resolve_path(cfg["bundle"]["dir"])
 
 
+def check_meta(meta: dict[str, Any]) -> None:
+    """El bundle tiene que decir qué modelo lleva y que su "por qué" es la comparación con la flota."""
+    model, explanation = meta.get("model") or {}, (meta.get("explanation") or {}).get("type")
+    if not model.get("name") or explanation != FLEET_PROFILE:
+        raise ValueError(
+            "El bundle no declara el modelo o su porqué no es la comparación con la flota sana "
+            f"(`explanation.type` = {explanation!r}): es de una versión anterior de la demo. Reconstruilo con "
+            "`python scripts/build_demo_bundle.py --config configs/demo.yaml`."
+        )
+
+
 def load_bundle(root: Path) -> Bundle:
     missing = [f for f in REQUIRED if not (root / f).exists()]
     if missing:
@@ -49,6 +67,8 @@ def load_bundle(root: Path) -> Bundle:
             "`python scripts/build_demo_bundle.py --config configs/demo.yaml` o bajalo con "
             "`python scripts/demo_app/fetch_bundle.py`."
         )
+    meta = json.loads((root / "meta.json").read_text(encoding="utf-8"))
+    check_meta(meta)
     cuts = pd.read_parquet(root / "cuts.parquet")
     cuts["cut_date"] = pd.to_datetime(cuts["cut_date"])
     vehicles = pd.read_parquet(root / "vehicles.parquet")
@@ -56,6 +76,5 @@ def load_bundle(root: Path) -> Bundle:
         vehicles[col] = pd.to_datetime(vehicles[col])
     vehicles["factors"] = vehicles["factors"].map(json.loads)
     vehicles["technician_signals"] = vehicles["technician_signals"].map(json.loads)
-    meta = json.loads((root / "meta.json").read_text(encoding="utf-8"))
-    return Bundle(cuts=cuts, vehicles=vehicles.set_index("vehicle_id", drop=False), waterfall=pd.read_parquet(root / "waterfall.parquet"),
-                  meta=meta, root=root)
+    return Bundle(cuts=cuts, vehicles=vehicles.set_index("vehicle_id", drop=False),
+                  deviations=pd.read_parquet(root / "deviations.parquet"), meta=meta, root=root)

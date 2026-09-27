@@ -1,25 +1,50 @@
-# Demo de producto (MVP para el pitch del 02-10-2026): la flota de dev reproducida en el calendario
-# con K2, una bandeja semanal de triage y dos agentes (redactor + verificador, triage).
+# Demo de producto (MVP para el pitch del 02-10-2026): la flota de dev reproducida en el calendario con la GRU,
+# una bandeja semanal de triage y dos agentes (redactor + verificador, triage). docs/memoria/f9-demo-gru.md.
 #
 #   FORD_DATA_DIR=$PWD/data/rebuild-0921 python scripts/build_demo_bundle.py --config configs/demo.yaml
-#   python scripts/warm_demo_cache.py --config configs/demo.yaml          # agentes, todas las semanas
+#   python scripts/warm_demo_cache.py --config configs/demo.yaml --prune   # agentes, todas las semanas
 #   python scripts/build_demo_bundle.py --config configs/demo.yaml --publish-only
 #   streamlit run scripts/demo_app/app.py
 #
-# Necesita K2 entrenado, su window_eval.json, la capa de decisión y la explicabilidad
-# (docs/memoria/f4-explicabilidad-k2.md). **No es un candidato ni cambia ninguna métrica**: el score,
-# el umbral y la alerta son los de K2 en una repetición, tal cual. Solo dev: el builder falla si
-# aparece un vehículo de test.
+# Necesita la corrida de la GRU con la etiqueta V (su window_eval.json) y su capa de decisión. **No es un candidato
+# ni cambia ninguna métrica**: el score, el umbral y la alerta son los de la GRU en una repetición, tal cual. K2 sigue
+# siendo el finalista del proyecto; la demo no lo usa. Solo dev: el builder falla si aparece un vehículo de test.
 
 product_name: Ford DPF
 
-# La corrida de K2, la capa de decisión y la explicabilidad salen de la config del dashboard de F4.
-dashboard_config: configs/dashboard_k2.yaml
+# El modelo que puntúa la flota. Nombre y familia viajan en la meta del bundle: la app no los escribe a mano.
+model:
+  name: GRU
+  family: red recurrente
+  run_config: configs/exp_gru_seq_last_kmw.yaml
+  decision_layer: experiments/decision-gru-f3/decision_layer.json
+  # La GRU lee la ventana en bins (panel_seq_kmw). El perfil de uso y las señales del filtro salen del panel de
+  # agregados, que tiene las mismas filas (scripts/join_window_columns.py lo verificó).
+  profile_panel: ${DATA_DIR}/processed/panel_survival_kmw.parquet
 
-# Una sola repetición, la misma para el score, el umbral, la alerta y el mensaje. R1 con V al 5% es
-# el punto preregistrado de la explicabilidad: detecta 7 de 45 fallados y alerta a 2 de 95 sanos.
-# V deja solo los cortes cuyo horizonte cae entero dentro de la ventana del registro: son los únicos
-# en los que se puede saber si una alerta acertó.
+# El "por qué". La GRU no tiene atribución: es una comparación descriptiva con los autos sanos de dev del mismo
+# mercado (src/eval/fleet_profile.py), no lo que el modelo usó. Fijado antes de construir el bundle.
+explanation:
+  type: fleet_profile
+  # Clase (accionable / síntoma / contexto) y signo físico de cada hábito: la clasificación preregistrada de F4. Es
+  # física del DPF, no depende del modelo.
+  classification: configs/explain_k2.yaml
+  # Etiquetas, frases y recomendaciones: la lista cerrada del mensaje al conductor.
+  texts: configs/explain_texts.yaml
+  # Se nombra un hábito del lado riesgoso si el auto es más extremo que esta parte de los sanos de su mercado.
+  min_healthy_share: 0.75
+  max_factors: 3
+  # Un mercado con menos autos sanos no alcanza como referencia (el builder falla).
+  min_healthy_vehicles: 10
+  # Lo que cambia del mensaje de explain_texts.yaml: el marco es la flota sana, no el parecido con autos que fallaron.
+  message:
+    factors_intro: "Comparado con autos sanos de tu mercado, en tu auto:"
+    no_factors: "Comparado con autos sanos de tu mercado, ninguno de los hábitos que este análisis puede señalar se aparta hacia el lado que perjudica al filtro."
+    disclaimer: "Esto compara tu uso con el de autos sanos de tu mercado: no dice qué miró el sistema para marcar tu auto ni es una causa."
+
+# Una sola repetición, la misma para el score, el umbral, la alerta y el mensaje, con V al 5% de falsas alarmas.
+# V deja solo los cortes cuyo horizonte cae entero dentro de la ventana del registro: son los únicos en los que se
+# puede saber si una alerta acertó.
 label: corrected
 repeat: 0
 budget_per_1000: 50
@@ -28,10 +53,13 @@ replay:
   # La ventana del registro de eventos (configs/data/event_clock.yaml). Semanas de lunes a domingo.
   start: "2025-09-01"
   end: "2026-03-11"
-  # La semana en que abre la demo: VEH_0535, VEH_0513 y VEH_0451 alertan entre el 30-09 y el 03-10.
-  first_week: "2025-09-29"
+  # La semana en que abre la demo. Con la GRU ninguna semana junta 2 alertas nuevas (son 6 en la temporada, una
+  # por semana): esta es la única con dos eventos, VEH_0513 alerta y VEH_0451 se escala al concesionario, y los
+  # dos fallan después. Alternativa: "2025-09-01", la primera alerta (VEH_0451).
+  first_week: "2025-09-08"
 
-# Perfil de uso que se grafica en la ficha del vehículo (accionables del mensaje + ritmo).
+# Perfil de uso que se grafica en la ficha del vehículo. Los hábitos que el "por qué" puede nombrar salen de acá
+# (los accionables de la lista cerrada; km por día es contexto: convierte el horizonte a semanas).
 profile_features:
   - feat_speed_kmh_mean
   - feat_trips_below_regime_temp_frac
@@ -55,9 +83,6 @@ technician_signals:
   feat_msgs_per_1000km:                {label: Avisos del filtro cada 1.000 km, format: int}
   feat_oil_life_mean:                  {label: Vida de aceite restante, format: pct, scale: 0.01}
 
-# Cuántas accionables abre el waterfall del "por qué" (igual que el dashboard de K2).
-waterfall_top: 6
-
 # Fecha del evento de cada fallado: el origen del calendario congelado en el build del panel y la
 # tabla estática (src/data/anchor.py::event_dates). La app no la recalcula: viaja en el bundle.
 event_dates:
@@ -67,10 +92,10 @@ event_dates:
   anchor_meta: ${DATA_DIR}/processed/panel_meta.json
 
 bundle:
-  dir: experiments/demo-bundle
-  # wandb Artifact que baja la app desplegada. Después de la primera publicación la versión se fija
-  # acá (`v0`, `v1`…) para que la demo no cambie sola: publicar y cambiar el pin es una decisión.
-  artifact: demo-bundle
+  dir: experiments/demo-bundle-gru
+  # wandb Artifact que baja la app desplegada. La versión se fija acá (`v0`, `v1`…) para que la demo no cambie
+  # sola: publicar y cambiar el pin es una decisión. `demo-bundle` es la demo anterior, con K2: no se toca.
+  artifact: demo-bundle-gru
   version: v0
   entity: oromagnoli-
   project: ford-fic

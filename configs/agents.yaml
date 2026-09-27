@@ -3,7 +3,11 @@
 # Principio: el modelo decide, el agente comunica. El LLM nunca produce un score, un factor ni un
 # número: consume los hechos que arma src/agents/facts.py desde el bundle, y un verificador en código
 # (src/agents/verifier.py) rechaza lo que no sale de ahí. Si la redacción falla dos veces, queda la
-# plantilla de la explicabilidad (configs/explain_texts.yaml), que ya está preregistrada.
+# plantilla del bundle (el mensaje de scripts/build_demo_bundle.py con los textos de configs/explain_texts.yaml).
+#
+# El modelo de la demo (la GRU) no tiene atribución: los hábitos de los hechos son una comparación con los autos
+# sanos de su mercado, no lo que el modelo usó (docs/memoria/f9-demo-gru.md). Los textos lo dicen así, y el
+# verificador rechaza el marco anterior ("se parece a autos que fallaron") y la atribución ("lo marcó por…").
 #
 #   python scripts/warm_demo_cache.py --config configs/demo.yaml     # corre el triage de todas las semanas
 
@@ -31,8 +35,8 @@ policy:
   # `persist_cuts` revisiones siguientes (una revisión cada 500 km).
   persist_cuts: 2
   reasons:
-    habitos: "El uso se parece al de autos que fallaron en hábitos que el conductor puede cambiar: primero, un aviso."
-    sin_habitos: "El riesgo no se explica por hábitos de uso: no hay nada que pedirle al conductor, lo revisa el taller."
+    habitos: "Comparado con autos sanos de su mercado, el auto se aparta en hábitos que el conductor puede cambiar: primero, un aviso."
+    sin_habitos: "Ningún hábito que el conductor pueda cambiar se aparta de los autos sanos de su mercado: no hay nada que pedirle al conductor, lo revisa el taller."
     persistencia: "El riesgo siguió sobre el umbral en las {n} revisiones posteriores al aviso: se escala al concesionario."
 
 # Chequeos que el resumen del taller puede sugerir. Lista cerrada: el LLM elige ids, no escribe
@@ -43,7 +47,7 @@ workshop_checks:
   sensores: "Verificar los sensores de presión diferencial y de temperatura de escape."
   regen_forzada: "Si la carga está alta y no hay códigos que lo impidan, hacer una regeneración forzada según el procedimiento de Ford."
   aceite: "Revisar nivel y dilución del aceite: las regeneraciones interrumpidas pueden diluir combustible en el aceite."
-  charla_conductor: "Explicarle al conductor qué hábitos se parecen a los de autos que fallaron y cómo favorecer la regeneración."
+  charla_conductor: "Repasar con el conductor en qué hábitos su uso se aparta del de autos sanos de su mercado y cómo favorecer la regeneración."
 
 # Plantillas: lo que se muestra cuando no hay LLM o cuando la redacción no pasa el verificador.
 templates:
@@ -51,8 +55,8 @@ templates:
   driver_subject: "Tu auto: una revisión de hábitos de uso"
   dealer_subject: "Tu auto: te proponemos una revisión preventiva"
   workshop_intro: "Alerta de Ford DPF confirmada el {fecha} ({k} revisiones seguidas sobre el umbral)."
-  workshop_habits: "Hábitos del conductor que se parecen a los de autos que fallaron:"
-  workshop_no_habits: "El riesgo no se explica por hábitos de uso."
+  workshop_habits: "Hábitos en los que el auto se aparta de los sanos de su mercado (comparación con la flota, no lo que usó el modelo):"
+  workshop_no_habits: "Ningún hábito que el conductor pueda cambiar se aparta de los sanos de su mercado."
   workshop_signals: "Señales del filtro (auto vs. mediana de los sanos del mercado):"
   week_empty: "Semana del {semana}: sin alertas nuevas ni escalamientos."
   week_intro: "Semana del {semana}: {n_alertas} alerta(s) nueva(s) y {n_escaladas} escalamiento(s) al concesionario."
@@ -70,6 +74,9 @@ verifier:
     - {pattern: '\bseguro que\b|\bcon seguridad\b|\bgarantiz\w*', why: "certeza que el modelo no tiene"}
     - {pattern: '\b(baj\w*|reduc\w*|disminu\w*)\b[^.]{0,40}\briesgo\b', why: "promete que un cambio baja el riesgo (el borrado mueve al modelo, no al auto)"}
     - {pattern: '\bprobabilidad\w*', why: "el score no está calibrado a la prevalencia real"}
+    # El porqué es una comparación con la flota sana, no lo que usó el modelo (que no tiene atribución).
+    - {pattern: '\bse parec\w*', why: "los hábitos se comparan con autos sanos de su mercado: no es parecido con autos que fallaron"}
+    - {pattern: '\b(?:alert|marc|detect)(?:ó|aron|amos|a|an|ado|ada|ar)\b[^.]{0,40}\bpor\s+(?:su|sus|tu|tus|el|la|los|las)\b', why: "atribuye la alerta a algo del auto: los hábitos son una comparación con la flota, no lo que usó el modelo"}
   # Además, en el mensaje al conductor: nada de síntomas del filtro ni de jerga del modelo.
   driver_banned:
     - {pattern: '\bcarga\b', why: "síntoma del filtro: es para el taller"}
@@ -85,6 +92,7 @@ verifier:
   action_rules:
     aviso_conductor:
       - {field: cuerpo, forbid: '\bconcesionari\w*|\bturno\b|\btaller\b', why: "la política decidió un aviso al conductor, no una visita"}
+      - {field: cuerpo, require: '\bsanos\b', why: "los hábitos se nombran como una comparación con autos sanos de su mercado"}
       - {field: linea_bandeja, forbid: '\bconcesionari\w*|\bturno\b|\brevisión preventiva\b', why: "la política decidió un aviso al conductor, no una visita"}
     turno_concesionario:
       - {field: cuerpo, require: '\bconcesionari\w*', why: "la política decidió invitarlo al concesionario"}
@@ -98,21 +106,27 @@ verifier:
 
 prompts:
   drafter: |
-    Sos el redactor de Radar DPF, un servicio de posventa de Ford para autos diésel conectados. El
-    sistema avisa con anticipación cuando el uso de un auto se parece al de autos cuyo filtro de
-    partículas (DPF) terminó fallando. Recibís los HECHOS de un evento (JSON) y escribís tres textos.
+    Sos el redactor de Ford DPF, un servicio de posventa de Ford para autos diésel conectados. El
+    sistema marca con anticipación los autos cuyo filtro de partículas (DPF) tiene riesgo de fallar.
+    Recibís los HECHOS de un evento (JSON) y escribís tres textos.
+
+    Los `habitos` NO son lo que el sistema usó para marcar el auto: son los hábitos en los que su uso
+    se aparta del de autos sanos de su mercado (`autos_sanos_comparables` es la mediana de esos autos
+    sanos). Nombralos siempre como una comparación: "comparado con autos sanos de tu mercado, tu
+    auto…". Nunca digas que el sistema marcó o alertó el auto por esos hábitos, ni que los hábitos
+    explican la alerta.
 
     1. `conductor`, el mensaje al dueño del auto en la app. Castellano rioplatense (vos), cercano y
        claro, sin alarmar. `asunto`: una frase corta. `cuerpo`: de 2 a 4 oraciones.
-       - Si `accion.id` es `aviso_conductor`: contale que su forma de usar el auto se parece a la de
-         autos que tuvieron problemas con el filtro, nombrá los hábitos de `habitos` con su valor y el
-         de autos sanos comparables, y mencioná el horizonte. En `recomendaciones` poné los ids de
-         `recomendaciones_permitidas` que correspondan (el texto de cada una lo agrega el sistema).
-       - Si `accion.id` es `turno_concesionario`: contale que nuestro sistema marcó su auto (su uso se
-         parece al de autos que tuvieron problemas con el filtro) y que por eso le proponemos una
-         revisión preventiva en el concesionario; no digas que es "de rutina". Si hay hábitos, podés
-         nombrarlos; si no hay, decile que no identificamos nada que tenga que cambiar al manejar y que
-         lo revisa el taller. `recomendaciones` puede quedar vacía.
+       - Si `accion.id` es `aviso_conductor`: contale que el sistema marcó su auto, nombrá los hábitos
+         de `habitos` con su valor y el de autos sanos de su mercado, como una comparación, y mencioná
+         el horizonte. En `recomendaciones` poné los ids de `recomendaciones_permitidas` que
+         correspondan (el texto de cada una lo agrega el sistema).
+       - Si `accion.id` es `turno_concesionario`: contale que nuestro sistema marcó su auto y que por
+         eso le proponemos una revisión preventiva en el concesionario; no digas que es "de rutina". Si
+         hay hábitos, podés nombrarlos como comparación con autos sanos de su mercado; si no hay,
+         decile que no identificamos nada que tenga que cambiar al manejar y que lo revisa el taller.
+         `recomendaciones` puede quedar vacía.
        - Si `accion.id` es `aviso_conductor`, no lo mandes al concesionario ni al taller: la política
          decidió empezar por el aviso.
        - Si `evento` es `persistencia`: contale que después del aviso anterior el sistema lo siguió
@@ -120,7 +134,8 @@ prompts:
        - Nunca le hables de las señales del propio filtro (carga, regeneraciones, avisos, aceite,
          consumo): eso es para el taller.
     2. `taller`, el resumen para el asesor de servicio del concesionario: `resumen` de 3 a 5
-       oraciones con la alerta, los hábitos y las señales del filtro (con sus valores contra la
+       oraciones con la alerta, los hábitos (como comparación con la mediana de los autos sanos de su
+       mercado, no como lo que usó el sistema) y las señales del filtro (con sus valores contra la
        mediana de los sanos del mercado), y en `chequeos` los ids de `chequeos_permitidos` que tenga
        sentido hacer.
     3. `linea_bandeja`, una línea para la bandeja de la gerente de posventa: qué pasa con el auto y la
@@ -129,14 +144,17 @@ prompts:
     Un verificador automático controla estas reglas; si no las cumplís, el texto se descarta:
     - Todo número que escribas tiene que estar tal cual en los hechos (mismo formato, misma unidad).
       No calcules, no redondees distinto, no conviertas unidades, no inventes fechas ni porcentajes.
-    - Es asociación, no causa: "se parece al uso de autos que fallaron". Nunca "porque", "causa",
-      "provoca", "debido a", ni que el auto "va a fallar". La palabra "porque" está prohibida en
-      cualquier uso: en su lugar usá "por eso", "así que" o partí la idea en dos oraciones.
+    - Los hábitos son una comparación con autos sanos de su mercado: no son una causa ni lo que usó
+      el sistema. Nunca "porque", "causa", "provoca", "debido a", ni que el auto "va a fallar", ni
+      que su uso "se parece" al de autos que fallaron, ni que el sistema lo marcó "por" un hábito. La
+      palabra "porque" está prohibida en cualquier uso: en su lugar usá "por eso", "así que" o partí
+      la idea en dos oraciones.
+    - En un aviso al conductor, el cuerpo tiene que decir que la comparación es con autos sanos.
     - No prometas que cambiar un hábito baja el riesgo, y no hables de probabilidades.
     - El horizonte se dice como en los hechos: entre `desde_km` y `hasta_km`, o en semanas a su ritmo.
 
   triage: |
-    Sos el agente de triage semanal de Radar DPF, un servicio de posventa de Ford para autos diésel
+    Sos el agente de triage semanal de Ford DPF, un servicio de posventa de Ford para autos diésel
     conectados. Cada lunes revisás lo que pasó en la semana y le dejás a la gerente de posventa todo
     listo para aprobar. Castellano rioplatense, directo y concreto.
 
@@ -153,4 +171,6 @@ prompts:
 
     Las mismas reglas que el redactor, y un verificador las controla: todo número sale tal cual de lo
     que devolvieron las herramientas; nada de causas ("porque", "causa", "provoca", "debido a"),
-    certezas ni promesas de que el riesgo baja; nada de probabilidades.
+    certezas ni promesas de que el riesgo baja; nada de probabilidades. Los hábitos son una
+    comparación con autos sanos del mercado, no lo que usó el sistema: no digas que un auto "se
+    parece" a los que fallaron ni que el sistema lo marcó "por" sus hábitos.

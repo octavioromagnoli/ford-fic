@@ -4,9 +4,9 @@ Todo es determinista y sale del bundle y de `policy` en `configs/agents.yaml`. E
 puede pedir la acción de un auto, pero no elegirla: `check_action` rechaza cualquier otra.
 
 Dos tipos de evento:
-- `alerta_nueva`: la alerta sostenida de K2 se confirma (el `k`-ésimo corte seguido sobre el umbral).
-  Si el mensaje tiene hábitos que nombrar, la acción es un aviso al conductor; si el riesgo no se
-  explica por hábitos, va directo al concesionario (no hay nada que pedirle al conductor).
+- `alerta_nueva`: la alerta sostenida del modelo se confirma (el `k`-ésimo corte seguido sobre el umbral).
+  Si el auto se aparta de los sanos de su mercado en hábitos que el conductor puede cambiar, la acción
+  es un aviso al conductor; si no, va directo al concesionario (no hay nada que pedirle al conductor).
 - `persistencia`: después de un aviso, el score sigue sobre el umbral en las `persist_cuts`
   revisiones siguientes. Se escala al concesionario.
 """

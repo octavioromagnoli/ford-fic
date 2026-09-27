@@ -47,6 +47,11 @@ fallan, invalidan todo lo que venga después:
     verificador rechaza números inventados, causas, síntomas al conductor y textos que contradicen la
     acción, el redactor reintenta y cae a la plantilla, el triage completa lo que el agente no hizo y la
     caché del LLM reproduce un pedido sin red. Con un LLM de mentira: no necesita key ni datos.
+17. La demo con la GRU (F9): el bundle funciona sin la explicabilidad del modelo y rechaza uno viejo, la app
+    lee el modelo y los números de la meta (ningún string suyo nombra un modelo), el "por qué" descriptivo
+    solo nombra hábitos accionables del lado riesgoso y nunca síntomas ni causas, el verificador rechaza el
+    marco viejo y la atribución sin perder ninguna regla, y el panel con las aux_ de la ventana verifica sus
+    filas.
 """
 
 from __future__ import annotations
@@ -2008,9 +2013,9 @@ def _demo_bundle():
                          "cut_date": day + pd.Timedelta(days=i - 1 + (2 if vid == "VEH_B" else 0) + 7 * max(0, i - 2))})
     cuts = pd.DataFrame(rows)
     habit = {"feature": "feat_speed_kmh_mean", "label": "Velocidad media en viaje", "value_text": "16 km/h",
-             "reference_text": "19 km/h", "recommendation": "ruta"}
+             "reference_text": "19 km/h", "recommendation": "ruta", "share": 0.9}
     signal = {"label": "Carga del DPF al final del viaje", "value_text": "52%", "reference_text": "41%"}
-    base = {"market": "CNTRY_4", "horizon_weeks_lo": 1, "horizon_weeks_hi": 4, "km_per_day": 118.0, "symptoms_up": True,
+    base = {"market": "CNTRY_4", "horizon_weeks_lo": 1, "horizon_weeks_hi": 4, "km_per_day": 118.0,
             "technician_signals": [signal], "template_message": "Riesgo ALTO: plantilla.", "event_date": pd.NaT}
     vehicles = pd.DataFrame([
         {**base, "vehicle_id": "VEH_A", "alerted": True, "failed": True, "n_factors": 1, "factors": [habit],
@@ -2020,11 +2025,13 @@ def _demo_bundle():
         {**base, "vehicle_id": "VEH_C", "alerted": False, "failed": False, "n_factors": 0, "factors": [],
          "alert_confirm_date": pd.NaT},
     ]).set_index("vehicle_id", drop=False)
-    meta = {"threshold": 0.5, "k_consecutive": 2, "gap_km": 500.0, "horizon_km": 3000.0, "budget_per_1000": 50.0,
+    meta = {"model": {"name": "Modelo de prueba", "family": "familia de prueba", "run": "stub"},
+            "explanation": {"type": "fleet_profile", "min_healthy_share": 0.75, "max_factors": 3},
+            "threshold": 0.5, "k_consecutive": 2, "gap_km": 500.0, "horizon_km": 3000.0, "budget_per_1000": 50.0,
             "replay": {"start": "2025-09-01", "end": "2026-03-11", "first_week": "2025-09-29"},
             "texts": {"recommendations": {"ruta": "Sumá tramos de ruta o autopista."}, "disclaimer": "No es una causa."},
             "official": {"curve": [{"budget_per_1000": 50, "detection": 0.17, "lead_km": 7438.0}]}}
-    return Bundle(cuts=cuts, vehicles=vehicles, waterfall=pd.DataFrame(), meta=meta, root=Path("."))
+    return Bundle(cuts=cuts, vehicles=vehicles, deviations=pd.DataFrame(), meta=meta, root=Path("."))
 
 
 class _ScriptedLLM:
@@ -2074,13 +2081,13 @@ def demo_agents_checks() -> None:
     facts = vehicle_facts(bundle, alert_a, acfg)
     dview = driver_view(facts)
     good = {"conductor": {"asunto": "Tu auto y el filtro de partículas",
-                          "cuerpo": "Tu velocidad media en viaje es de 16 km/h, contra 19 km/h en autos sanos "
-                                    "comparables: se parece al uso de autos que tuvieron problemas en los próximos "
-                                    "500 a 3.500 km.",
+                          "cuerpo": "Comparado con autos sanos de tu mercado, tu velocidad media en viaje es de "
+                                    "16 km/h, contra 19 km/h. El sistema marcó tu auto para los próximos 500 a "
+                                    "3.500 km.",
                           "recomendaciones": ["ruta"]},
             "taller": {"resumen": "Alerta de VEH_A. Carga del DPF al final del viaje: 52% contra 41% en sanos.",
                        "chequeos": ["leer_dpf"]},
-            "linea_bandeja": "VEH_A: aviso al conductor por velocidad media baja."}
+            "linea_bandeja": "VEH_A: aviso al conductor, con la velocidad media como hábito a revisar."}
     bad_numbers = json.loads(json.dumps(good))
     bad_numbers["conductor"]["cuerpo"] = good["conductor"]["cuerpo"].replace("3.500", "3.600")
     causal = json.loads(json.dumps(good))
@@ -2171,6 +2178,214 @@ def demo_agents_checks() -> None:
         "demo · caché del LLM: el mismo pedido se sirve del disco sin red, y en cache_only un pedido nuevo no "
         "llama a la API",
         out == good and meta["cached"] and miss,
+    )
+
+
+#: Las reglas del verificador que ya existían antes de la GRU: la demo nueva solo puede sumar, nunca sacar.
+_VERIFIER_FLOOR = [r"\bporque\b", r"\bcaus\w*", r"\bprovoc\w*", r"\bdebido a\b", r"\bpor culpa\b",
+                   r"\bprobabilidad\w*", r"\bcarga\b", r"\bregeneraciones\b", r"\baceite\b", r"\bconsumo\b"]
+
+
+def _fleet_rows() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """12 autos sanos de un mercado y dos fallados: A se aparta mucho en idle y en viajes cortos (del lado riesgoso),
+    va más rápido que todos (del lado sano) y tiene el síntoma y el contexto más extremos; B apenas pasa la mediana."""
+    grid = np.linspace(0.0, 1.0, 12)
+    healthy = {"feat_idle_frac": 0.15 + 0.15 * grid, "feat_speed_kmh_mean": 15 + 11 * grid,
+               "feat_short_trip_frac_5km": 0.30 + 0.22 * grid, "feat_dpf_end_mean": 40 + 10 * grid,
+               "feat_km_per_day": 30 + 30 * grid, "feat_idle_frac_trend": 0.01 * grid}
+    cars = {"A": {"feat_idle_frac": 0.60, "feat_speed_kmh_mean": 35.0, "feat_short_trip_frac_5km": 0.49,
+                  "feat_dpf_end_mean": 95.0, "feat_km_per_day": 400.0, "feat_idle_frac_trend": 0.5},
+            "B": {"feat_idle_frac": 0.23, "feat_speed_kmh_mean": 20.0, "feat_short_trip_frac_5km": 0.40,
+                  "feat_dpf_end_mean": 45.0, "feat_km_per_day": 45.0, "feat_idle_frac_trend": 0.0}}
+    rows = []
+    for i in range(12):
+        for cut in (1000.0, 1500.0):
+            rows.append({"vehicle_id": f"H{i:02d}", "cut_odo": cut, "event_observed": 0,
+                         "static_SalesCountry_cd": "M", **{f: v[i] for f, v in healthy.items()}})
+    for vid, values in cars.items():
+        for cut in (1000.0, 1500.0):
+            rows.append({"vehicle_id": vid, "cut_odo": cut, "event_observed": 1, "static_SalesCountry_cd": "M", **values})
+    frame = pd.DataFrame(rows)
+    return frame, frame.loc[frame["vehicle_id"].isin(list(cars)), ["vehicle_id", "cut_odo"]]
+
+
+def demo_gru_checks() -> None:
+    """19 · Demo con la GRU: sin explicabilidad del modelo, el modelo sale de la meta y el porqué es descriptivo."""
+    import ast
+    import json
+    import re
+    import tempfile
+
+    from scripts.demo_app.wording import (HABITS_CAPTION, WHY_CAPTION, WHY_CHART_CAPTION, WHY_CHART_TITLE, WHY_INTRO,
+                                          WHY_NONE, chance_line, detection_line, model_note, promises)
+    from scripts.join_window_columns import join_by_key
+    from src.agents.bundle import load_bundle
+    from src.agents.facts import driver_view, vehicle_facts
+    from src.agents.policy import all_events
+    from src.agents.verifier import banned_problems, verify_drafts
+    from src.config import repo_root
+    from src.eval import fleet_profile as fp
+    from src.eval.explain import MessageFactor, feature_specs, render_vehicle_message
+
+    acfg = load_config("configs/agents.yaml")
+    demo = load_config("configs/demo.yaml")
+    classification = load_config(demo["explanation"]["classification"])
+    texts = load_config(demo["explanation"]["texts"])
+    bundle = _demo_bundle()
+
+    # -- un bundle sin la explicabilidad del modelo ---------------------------------------------------------
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        bundle.cuts.to_parquet(root / "cuts.parquet", index=False)
+        bundle.vehicles.reset_index(drop=True).assign(
+            factors=lambda f: f["factors"].map(json.dumps),
+            technician_signals=lambda f: f["technician_signals"].map(json.dumps),
+            alert_first_date=lambda f: f["alert_confirm_date"]).to_parquet(root / "vehicles.parquet", index=False)
+        pd.DataFrame({"vehicle_id": ["VEH_A"], "feature": ["feat_speed_kmh_mean"], "share": [0.9], "risky": [True],
+                      "named": [True]}).to_parquet(root / "deviations.parquet", index=False)
+        (root / "meta.json").write_text(json.dumps(bundle.meta, default=str), encoding="utf-8")
+        loaded = load_bundle(root)
+        loads = loaded.model["name"] == "Modelo de prueba" and len(loaded.deviations) == 1
+        old = {k: v for k, v in bundle.meta.items() if k not in ("model", "explanation")} | {"explain_variant": "V3"}
+        (root / "meta.json").write_text(json.dumps(old, default=str), encoding="utf-8")
+        old_rejected = _raises(lambda: load_bundle(root), ValueError)
+        (root / "meta.json").write_text(json.dumps(bundle.meta, default=str), encoding="utf-8")
+        (root / "deviations.parquet").unlink()
+        incomplete = _raises(lambda: load_bundle(root), FileNotFoundError)
+    events = all_events(bundle, acfg["policy"])
+    facts = vehicle_facts(bundle, events[0], acfg)
+    check(
+        "demo GRU · bundle sin la explicabilidad del modelo: carga sin waterfall ni SHAP, exige deviations.parquet, "
+        "rechaza un bundle viejo (sin modelo ni `fleet_profile` en la meta) y los hechos no traen nada que venga de SHAP",
+        loads and old_rejected and incomplete and "senales_filtro_suman_riesgo" not in facts
+        and [h["nombre"] for h in facts["habitos"]] == ["Velocidad media en viaje"],
+        f"{loads} / {old_rejected} / {incomplete}",
+    )
+
+    # -- la app lee el modelo y los números de la meta --------------------------------------------------------
+    meta = dict(bundle.meta, model={"name": "Modelo X", "family": "familia Y", "run": "stub"})
+    hold = [{"alpha": 0.05, "method": "empirical", "detection": 0.096},
+            {"alpha": 0.10, "method": "empirical", "detection": 0.215}]
+    loses = dict(meta, official={"n_repeats": 3, "holdout": hold, "curve": [
+        {"budget_per_1000": 20, "detection": 0.030, "null": 0.028}, {"budget_per_1000": 50, "detection": 0.074, "null": 0.077},
+        {"budget_per_1000": 100, "detection": 0.230, "null": 0.166}]})
+    wins = dict(meta, official={"n_repeats": 3, "holdout": hold, "curve": [
+        {"budget_per_1000": 20, "detection": 0.022, "null": 0.027}, {"budget_per_1000": 50, "detection": 0.170, "null": 0.075}]})
+    named_models = []
+    for path in sorted((repo_root() / "scripts" / "demo_app").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        named_models += [(path.name, n.value[:40]) for n in ast.walk(tree)
+                         if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                         and re.search(r"\b(K2|GRU)\b|survival stacking|red recurrente", n.value)]
+    check(
+        "demo GRU · la app lee el modelo de la meta del bundle: la nota del modelo y los números del pitch salen de ahí "
+        "(también cuando el punto de la demo no le gana al azar) y ningún string de scripts/demo_app nombra un modelo",
+        model_note(meta, "llm", "cache_only").startswith("Modelo: Modelo X (familia Y) · umbral al 5%")
+        and "7,4%" in detection_line(loses) and "9,6%" in detection_line(loses) and "23,0%" in detection_line(loses)
+        and "Modelo X detecta 7,4%" in chance_line(loses) and "no le gana al azar" in chance_line(loses)
+        and chance_line(wins) == "Por debajo del 5%, Modelo X no le gana al azar."
+        and "Modelo X" in promises(loses) and not named_models,
+        f"{named_models[:3]}",
+    )
+
+    # -- el porqué descriptivo: solo hábitos accionables, del lado riesgoso, sin síntomas ni causas ----------
+    rows, cuts = _fleet_rows()
+    profile = ["feat_idle_frac", "feat_speed_kmh_mean", "feat_short_trip_frac_5km", "feat_dpf_end_mean",
+               "feat_km_per_day", "feat_idle_frac_trend"]
+    habits = fp.nameable_habits(profile, classification["features"], texts)
+    per_vehicle, reference = fp.healthy_market_reference(rows, list(habits))
+    values = fp.window_values(rows, cuts, list(habits))
+    deviations = fp.fleet_deviations(values, per_vehicle, reference, habits)
+    top3 = fp.fleet_factors(deviations, min_share=0.75, max_factors=3)
+    top1 = fp.fleet_factors(deviations, min_share=0.75, max_factors=1)
+
+    def named(frame, vid):
+        return list(frame.loc[frame["vehicle_id"].eq(vid) & frame["named"]].sort_values("rank")["feature"])
+
+    speed_a = deviations.loc[deviations["vehicle_id"].eq("A") & deviations["feature"].eq("feat_speed_kmh_mean")].iloc[0]
+    specs = feature_specs(classification, {})
+    message_texts = {**texts, **demo["explanation"]["message"]}
+    rendered = [render_vehicle_message(
+        risk_level="alto", specs=specs, texts=message_texts, k=2, gap_km=500.0, horizon_km=3000.0, km_per_day=100.0,
+        symptom_contribution=None, factors=[MessageFactor(r.feature, r.share, r.value, r.reference) for r in
+                                            top3.loc[top3["vehicle_id"].eq(vid) & top3["named"]].itertuples()])
+        for vid in ("A", "B")]
+    # Al conductor: las reglas de todo texto más las suyas (síntomas, jerga). El aviso final lo agrega el código y
+    # niega la causa ("ni es una causa"): no pasa por el verificador, igual que las recomendaciones fijas.
+    banned, driver_rules = list(acfg["verifier"]["banned"]), list(acfg["verifier"]["driver_banned"])
+    disclaimer = message_texts["disclaimer"]
+    to_driver = {"mensaje con hábitos": rendered[0].replace(disclaimer, ""),
+                 "mensaje sin hábitos": rendered[1].replace(disclaimer, "")}
+    # A la gerente y al taller: las reglas de todo texto (causas, certezas, el marco viejo, la atribución).
+    to_staff = {**{f"motivo {k}": v for k, v in acfg["policy"]["reasons"].items()},
+                "plantilla hábitos": acfg["templates"]["workshop_habits"],
+                "plantilla sin hábitos": acfg["templates"]["workshop_no_habits"],
+                "chequeo charla": acfg["workshop_checks"]["charla_conductor"],
+                "app": " ".join([WHY_INTRO, WHY_NONE, WHY_CAPTION, WHY_CHART_TITLE,
+                                 WHY_CHART_CAPTION.format(share="75%"), HABITS_CAPTION])}
+    fixed_problems = ([p for name, text in to_driver.items() for p in banned_problems(text, banned + driver_rules, name)]
+                      + [p for name, text in to_staff.items() for p in banned_problems(text, banned, name)])
+    check(
+        "demo GRU · el porqué descriptivo solo nombra hábitos accionables de la lista cerrada, del lado riesgoso y "
+        "sobre el 75% de los sanos del mercado; nunca síntomas, contexto ni un hábito del lado sano, y su mensaje, los "
+        "motivos, las plantillas y los textos de la app pasan las reglas del verificador (causas y síntomas)",
+        habits == {"feat_idle_frac": 1, "feat_speed_kmh_mean": -1, "feat_short_trip_frac_5km": 1}
+        and named(top3, "A") == ["feat_idle_frac", "feat_short_trip_frac_5km"] and named(top1, "A") == ["feat_idle_frac"]
+        and named(top3, "B") == [] and not bool(speed_a["risky"]) and float(speed_a["share"]) == 0.0
+        and _raises(lambda: fp.fleet_deviations(values, per_vehicle, reference, habits, min_healthy=20), ValueError)
+        and "Arranques sin moverse" in rendered[0] and demo["explanation"]["message"]["no_factors"] in rendered[1]
+        and not fixed_problems,
+        f"{named(top3, 'A')} · {fixed_problems[:2]}",
+    )
+
+    dview = driver_view(facts)
+    good = {"conductor": {"asunto": "Tu auto y el filtro de partículas",
+                          "cuerpo": "Comparado con autos sanos de tu mercado, tu velocidad media en viaje es de 16 km/h, "
+                                    "contra 19 km/h. El sistema marcó tu auto para los próximos 500 a 3.500 km.",
+                          "recomendaciones": ["ruta"]},
+            "taller": {"resumen": "Alerta de VEH_A. Carga del DPF al final del viaje: 52% contra 41% en sanos.",
+                       "chequeos": ["leer_dpf"]},
+            "linea_bandeja": "VEH_A: aviso al conductor, con la velocidad media como hábito a revisar."}
+
+    def with_body(body):
+        out = json.loads(json.dumps(good))
+        out["conductor"]["cuerpo"] = body
+        return out
+
+    similar = verify_drafts(with_body("Tu uso se parece al de autos que fallaron: tu velocidad media en viaje es de "
+                                      "16 km/h, contra 19 km/h en autos sanos."), facts, dview, acfg)
+    attributed = verify_drafts(with_body("El sistema marcó tu auto por tu velocidad media en viaje: 16 km/h, contra "
+                                         "19 km/h en autos sanos."), facts, dview, acfg)
+    no_healthy = verify_drafts(with_body("Tu velocidad media en viaje es de 16 km/h, contra 19 km/h."), facts, dview, acfg)
+    current = {r["pattern"] for r in acfg["verifier"]["banned"]} | {r["pattern"] for r in acfg["verifier"]["driver_banned"]}
+    check(
+        "demo GRU · el verificador rechaza el marco viejo («se parece a autos que fallaron»), la atribución («lo marcó por "
+        "tu…») y un aviso que no dice que la comparación es con autos sanos, sin perder ninguna regla anterior",
+        verify_drafts(good, facts, dview, acfg) == []
+        and any("se parece" in p for p in similar) and any("marcó tu auto por tu" in p for p in attributed)
+        and any("falta decirlo" in p for p in no_healthy) and set(_VERIFIER_FLOOR) <= current,
+        f"{similar[:1]} · {attributed[:1]} · {no_healthy[:1]}",
+    )
+
+    # -- el panel de la GRU con las aux_ de la ventana ---------------------------------------------------------
+    base = pd.DataFrame({"vehicle_id": ["A", "A", "B"], "cut_odo": [500.0, 1000.0, 500.0], "label": [0, 1, 0],
+                         "feat_seq_t00_c0": [0.1, 0.2, 0.3], "static_SalesCountry_cd": ["M", "M", "N"]})
+    source = base[["vehicle_id", "cut_odo", "label", "static_SalesCountry_cd"]].assign(
+        aux_eval_in_window=[1, 0, 1], feat_cut_odo=[500.0, 1000.0, 500.0]).iloc[::-1]
+    joined = join_by_key(base, source, ["aux_eval_in_window"], ["label", "static_SalesCountry_cd"])
+    failures = [
+        _raises(lambda: join_by_key(base, source.assign(cut_odo=lambda f: f["cut_odo"] + 1), ["aux_eval_in_window"],
+                                    ["label"]), ValueError),
+        _raises(lambda: join_by_key(base, source.assign(label=[1, 1, 0]), ["aux_eval_in_window"], ["label"]), ValueError),
+        _raises(lambda: join_by_key(base, source, ["feat_cut_odo"], ["label"]), ValueError),
+        _raises(lambda: join_by_key(base, source.iloc[:2], ["aux_eval_in_window"], []), ValueError),
+    ]
+    check(
+        "demo GRU · el panel con las aux_ de la ventana pega por clave sin tocar las columnas del modelo, y falla si las "
+        "filas no son las mismas, si una columna de control difiere o si se pide algo que no es aux_",
+        list(joined.columns) == [*base.columns, "aux_eval_in_window"]
+        and joined["aux_eval_in_window"].tolist() == [1, 0, 1] and all(failures),
+        f"{failures}",
     )
 
 
@@ -2725,6 +2940,7 @@ def main() -> int:
     dashboard_checks()
     explain_checks()
     demo_agents_checks()
+    demo_gru_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()

@@ -11,6 +11,7 @@ from src.agents.policy import events_in_week
 from src.agents.triage import run_triage, save_triage
 
 from scripts.demo_app.presentation import agent_trace, heading, metrics, message
+from scripts.demo_app.wording import HABITS_CAPTION, model_name
 
 b, acfg = bundle(), agents_cfg()
 
@@ -110,7 +111,7 @@ with st.container(border=True, key="summary"):
             store_triage(result)
             st.rerun()
     elif result["mode"] != "agente" and week_events:
-        st.caption("Los agentes no están disponibles en este entorno: se muestran las plantillas preregistradas.")
+        st.caption("Los agentes no están disponibles en este entorno: se muestran las plantillas del bundle.")
     elif result["mode"] == "agente" and can_run:
         if st.button("Regenerar en vivo", icon=":material/refresh:", type="tertiary",
                      help="Vuelve a correr el agente contra la API en lugar de mostrar la versión guardada. "
@@ -137,8 +138,8 @@ with st.container(border=True, key="summary"):
 if not week_events:
     later = [e.week for e in events() if e.week > week]
     with st.container(key="empty_week"):
-        st.info("Sin alertas nuevas ni escalamientos esta semana: K2 sigue revisando la flota cada 500 km.",
-                icon=":material/check_circle:")
+        st.info(f"Sin alertas nuevas ni escalamientos esta semana: {model_name(b.meta)} sigue revisando la flota cada "
+                "500 km.", icon=":material/check_circle:")
         if later:
             st.button("Ir a la próxima semana con alertas", icon=":material/skip_next:", on_click=set_week,
                       args=(later[0],))
@@ -162,7 +163,7 @@ for card_index, rec in enumerate(result["events"]):
             st.caption(f"{facts['mercado']} · {facts['fecha']}")
         st.markdown(f'<p class="card-lead">{escape(draft["drafts"]["linea_bandeja"])}</p>', unsafe_allow_html=True)
         if facts["habitos"]:
-            st.caption("Hábitos que se parecen a los de autos que fallaron: " + " · ".join(
+            st.caption(HABITS_CAPTION + " · ".join(
                 f"{h['nombre']} {h['tu_valor']} (sanos {h['autos_sanos_comparables']})" for h in facts["habitos"]))
         tab_driver, tab_shop, tab_check = st.tabs(["Al conductor", "Al taller", "Hechos y verificador"])
         with tab_driver:
@@ -174,7 +175,7 @@ for card_index, rec in enumerate(result["events"]):
                 st.success(f"Redactado por el agente y aprobado por el verificador (intento {draft['attempts']}).",
                            icon=":material/verified:")
             else:
-                st.info(draft["note"] or "Plantilla preregistrada de la explicabilidad.", icon=":material/description:")
+                st.info(draft["note"] or "Plantilla del bundle.", icon=":material/description:")
             for i, probs in enumerate(draft["problems"], start=1):
                 if probs:
                     st.warning(f"Intento {i}, rechazado:\n\n" + "\n".join(f"- {p}" for p in probs))

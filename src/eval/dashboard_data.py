@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import pandas as pd
@@ -24,7 +24,7 @@ LABEL_NAMES = {"corrected": "Corregida (V)", "hard": "Dura (D)"}
 
 
 @dataclass
-class K2Data:
+class RunData:
     predictions: pd.DataFrame      # filas de dev, con score_r*, fold_r* y las columnas del panel
     n_repeats: int
     eval_cfg: dict[str, Any]
@@ -36,54 +36,82 @@ class K2Data:
     audit: dict[str, Any] | None
 
 
+#: El dashboard de F4 la conoce con este nombre.
+K2Data = RunData
+
+
 def _read_json(path: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def load_k2(config_path: str) -> K2Data:
-    """Predicciones fuera de fold de K2 + las columnas del panel que el dashboard usa."""
-    cfg = load_config(config_path)
-    run_cfg = load_config(cfg["run_config"])
+def _panel_or_raise(path: Path, what: str) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No existe {what} en {path}. ¿Está definida FORD_DATA_DIR en la terminal? En PowerShell: "
+            "$env:FORD_DATA_DIR = \"$PWD\\data\\rebuild-0921\" · en bash: export FORD_DATA_DIR=$PWD/data/rebuild-0921. "
+            "Si es Streamlit, cortá el servidor (Ctrl+C) y relanzalo en esa misma terminal."
+        )
+    return pd.read_parquet(path)
+
+
+def load_run(run_config: str, *, decision_layer: str | Path | None = None, columns: Sequence[str] = (),
+             columns_panel: str | Path | None = None) -> RunData:
+    """Predicciones fuera de fold de una corrida + las columnas del panel que se piden.
+
+    Las columnas salen del panel de la corrida; las que ese panel no trae, de `columns_panel`, que tiene que tener
+    las mismas filas (un panel secuencial no trae el perfil de uso: lo trae el panel de agregados). Cada merge es 1:1
+    y falla si alguna predicción no aparea.
+    """
+    run_cfg = load_config(run_config)
     evaluable = run_cfg["window_eval"]["evaluable_column"]
     run_dir = resolve_path(run_cfg.get("output_dir", "experiments")) / run_cfg["name"]
     preds_path = run_dir / "predictions.parquet"
     if not preds_path.exists():
         raise FileNotFoundError(
-            f"No hay predicciones de K2 en {preds_path}. Corré `python scripts/train.py --config {cfg['run_config']}`."
+            f"No hay predicciones de {run_cfg['name']} en {preds_path}. Corré `python scripts/train.py --config {run_config}`."
         )
-    preds = pd.read_parquet(preds_path)
+    out = pd.read_parquet(preds_path)
 
     # Las predicciones ya son solo de dev (train.py recorta con `select_dev`); el merge es por
     # la izquierda, así que ninguna fila de test entra acá.
-    panel_path = resolve_path(run_cfg["data"]["panel"])
-    if not panel_path.exists():
-        raise FileNotFoundError(
-            f"No existe el panel de K2 en {panel_path}. ¿Está definida FORD_DATA_DIR en la terminal que lanzó "
-            "Streamlit? En PowerShell: $env:FORD_DATA_DIR = \"$PWD\\data\\rebuild-0921\" · en bash: "
-            "export FORD_DATA_DIR=$PWD/data/rebuild-0921. Después, cortá el servidor (Ctrl+C) y relanzá "
-            "`streamlit run scripts/dashboard_k2/app.py` en esa misma terminal."
-        )
-    panel = pd.read_parquet(panel_path)
-    columns = [evaluable, "static_SalesCountry_cd", *cfg["profile_features"]]
-    right = panel[KEY + [c for c in columns if c not in preds]]
-    out = preds.merge(right, on=KEY, how="left", validate="one_to_one", indicator=True)
-    if out["_merge"].ne("both").any():
-        raise ValueError("Hay predicciones de K2 sin fila en el panel: el panel no es el de la corrida")
-    out = out.drop(columns="_merge").sort_values(KEY, kind="stable", ignore_index=True)
+    wanted = list(dict.fromkeys([evaluable, "static_SalesCountry_cd", *columns]))
+    sources = [(resolve_path(run_cfg["data"]["panel"]), "el panel de la corrida")]
+    if columns_panel is not None:
+        sources.append((resolve_path(columns_panel), "el panel de las columnas del perfil"))
+    for path, what in sources:
+        missing = [c for c in wanted if c not in out]
+        if not missing:
+            break
+        panel = _panel_or_raise(path, what)
+        right = panel[KEY + [c for c in missing if c in panel]]
+        out = out.merge(right, on=KEY, how="left", validate="one_to_one", indicator=True)
+        if out["_merge"].ne("both").any():
+            raise ValueError(f"Hay predicciones de {run_cfg['name']} sin fila en {path.name}: no tiene las filas de la corrida")
+        out = out.drop(columns="_merge")
+    missing = [c for c in wanted if c not in out]
+    if missing:
+        raise KeyError(f"Ningún panel trae {missing}")
+    out = out.sort_values(KEY, kind="stable", ignore_index=True)
     out["event_odo_km"] = out["cut_odo"] + out["time_to_event_km"]
     n_repeats = sum(c.startswith("score_r") for c in out.columns) or 1
 
-    return K2Data(
+    return RunData(
         predictions=out,
         n_repeats=n_repeats,
         eval_cfg=run_cfg.get("eval", {}),
         evaluable_column=evaluable,
         run_name=run_cfg["name"],
         window_eval=_read_json(run_dir / "window_eval.json"),
-        decision=_read_json(resolve_path(cfg["decision_layer"])),
+        decision=_read_json(resolve_path(decision_layer)) if decision_layer else None,
         metrics=_read_json(run_dir / "metrics.json"),
         audit=_read_json(run_dir / "audit.json"),
     )
+
+
+def load_k2(config_path: str) -> RunData:
+    """Predicciones fuera de fold de K2 + las columnas del panel que el dashboard usa."""
+    cfg = load_config(config_path)
+    return load_run(cfg["run_config"], decision_layer=cfg["decision_layer"], columns=cfg["profile_features"])
 
 
 def rows_for(data: K2Data, label: str) -> pd.DataFrame:
