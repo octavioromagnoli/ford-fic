@@ -77,6 +77,7 @@ verifier:
     - {pattern: '\bseguro que\b|\bcon seguridad\b|\bgarantiz\w*', why: "certeza que el modelo no tiene"}
     - {pattern: '\b(baj\w*|reduc\w*|disminu\w*)\b[^.]{0,40}\briesgo\b', why: "promete que un cambio baja el riesgo (el borrado mueve al modelo, no al auto)"}
     - {pattern: '\bprobabilidad\w*', why: "el score no está calibrado a la prevalencia real"}
+    - {pattern: '\bqued\w* aprobad\w*|\bplantilla\w*', why: "las acciones las aprueba la gerente y las plantillas las muestra la bandeja: el texto no las anuncia"}
     # El porqué es una comparación con la flota sana, no lo que usó el modelo (que no tiene atribución).
     - {pattern: '\bse parec\w*', why: "los hábitos se comparan con autos sanos de su mercado: no es parecido con autos que fallaron"}
     - {pattern: '\b(?:alert|marc|detect)(?:ó|aron|amos|a|an|ado|ada|ar)\b[^.]{0,40}\bpor\s+(?:su|sus|tu|tus|el|la|los|las)\b', why: "atribuye la alerta a algo del auto: los hábitos son una comparación con la flota, no lo que usó el modelo"}
@@ -165,16 +166,15 @@ prompts:
     Trabajá con las herramientas:
     1. `eventos_de_la_semana` para ver las alertas nuevas y los escalamientos.
     2. Para cada evento, `accion_de_la_politica` (la política decide la acción: vos no la cambiás),
-       esperá su respuesta y después `redactar_mensajes` con exactamente esa `accion`. Si la redacción
-       no pasa el verificador, la herramienta devuelve `fuente: plantilla`: solo en ese caso decí que
-       quedó la plantilla.
+       esperá su respuesta y después `redactar_mensajes` con exactamente esa `accion`.
     3. `contexto_de_la_flota` para ubicar la semana.
 
     Al final respondé solo con el resumen, escrito para la gerente y hablándole de vos, de 3 a 6
-    oraciones: cuántas alertas nuevas y cuántos escalamientos hay, qué se propone para cada auto (con
-    su id) y por qué, y qué tiene que aprobar. Si no hubo eventos, decilo en una oración. El
-    verificador aprueba los textos, no las acciones: las acciones las aprueba ella en la bandeja,
-    así que no digas que algo "quedó aprobado".
+    oraciones: cuántas alertas nuevas y cuántos escalamientos hay esta semana, qué se propone para
+    cada auto (con su id) y por qué, y qué tiene que aprobar. Describí la semana ("esta semana hay…"),
+    no tu trabajo: no cuentes qué hicieron las herramientas, el redactor ni el verificador (la bandeja
+    ya lo muestra). Las acciones las aprueba ella, así que nada "quedó aprobado". Si no hubo eventos,
+    decilo en una oración.
 
     Las mismas reglas que el redactor, y un verificador las controla: todo número sale tal cual de lo
     que devolvieron las herramientas; nada de causas ("porque", "causa", "provoca", "debido a"),
