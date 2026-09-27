@@ -108,14 +108,17 @@ siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha 
 repeticiones), y al cliente solo llegan hábitos cuyo efecto coincide con la física del DPF; síntomas y contexto
 nunca se nombran (`docs/memoria/f4-explicabilidad-k2.md`).
 
-**F9 (26-09) es la demo de producto para el pitch (Radar DPF, no es candidato).** Reproduce la flota de dev en el
-calendario con K2 (R1, V, 5%) y agrega una bandeja semanal de posventa con dos agentes de OpenAI:
+**F9 (26-09) es la demo de producto para el pitch (Ford DPF, no es candidato).** Desde el 27-09 usa la GRU final
+de v2 (ensamble por rango de las semillas 42, 1 y 2) y ya no K2. Reproduce la flota de dev v2 en el calendario
+(etiqueta dura, 5%, umbral exacto) y agrega una bandeja semanal de posventa con dos agentes de OpenAI:
 - **el redactor**, con un verificador en código: todo número sale de los hechos, nada de causas, y los síntomas
   no llegan al conductor;
 - **el triage**, con herramientas: la política de acción es determinista y el agente no la cambia.
 
-La app lee solo un bundle precalculado (`demo-bundle` en wandb) y se despliega en Railway. Cómo se reproduce,
-las decisiones y los límites están en `docs/memoria/f9-demo-producto.md`.
+**El porqué de la demo es una comparación con la flota, no lo que usó el modelo:** en qué hábitos se aparta el
+auto de los sanos de su mercado (`src/eval/fleet_profile.py`). La app lee solo un bundle precalculado
+(`demo-bundle-gru` en wandb) y se despliega en Railway. Cómo se reproduce, las decisiones y los límites están en
+`docs/memoria/f9-demo-gru.md` (la versión con K2, en `f9-demo-producto.md`).
 
 **El presupuesto de comparaciones está agotado** (§0, punto 2 de ese doc): con ~12
 eventos por fold, agregar candidatos sobre la marcha garantiza que "el mejor" sea ruido.
@@ -366,12 +369,17 @@ src/eval/metrics.py      PR-AUC/ROC/Brier + lead_time_curve() + false_alarm_rate
 src/eval/plots.py        figuras compartidas entre dashboard e informe
 src/eval/dashboard_data.py  datos del dashboard de K2: carga, alerta por vehículo (misma regla que la curva) y
                          perfil de la flota sana; los números oficiales salen de window_eval.json y decision_layer.json;
-                         load_explanations()/vehicle_why() leen la explicabilidad (sin recalcular SHAP)
+                         load_explanations()/vehicle_why() leen la explicabilidad (sin recalcular SHAP); load_run()
+                         carga cualquier corrida (un ensamble toma panel y holdout de su primer miembro; sin ventana,
+                         solo etiqueta D) y es lo que usa la demo
 src/eval/explain.py      explicabilidad de K2, funciones puras: refit_folds() (el loop de run_cv, devuelve los modelos),
                          V1 tree_shap_hazard (TreeSHAP del hazard sobre los 6 tramos de H, aditivo), V2
                          permutation_shap_score, V4 family_sums; explained_cuts() (la alerta de la curva), la mediana
                          sana comparable (FleetReferenceNormalizer, train del fold), borrado, estabilidad, plausibilidad
                          física, message_factors()/render_vehicle_message() y dev_only_guard()
+src/eval/fleet_profile.py  el porqué descriptivo de la demo: referencia de los sanos por mercado, desvíos del auto en
+                         los cortes de la alerta y los hábitos que se nombran (lista cerrada, lado riesgoso, sobre el
+                         75% de los sanos). No es atribución
 src/agents/              capa de producto de la demo (F9), liviana: solo pandas, yaml y openai, nunca src/eval ni
                          modelos. bundle.py (lee el bundle), policy.py (calendario del replay, eventos y acción de
                          la política; check_action), facts.py (los hechos de un evento, sin el desenlace),
@@ -458,9 +466,12 @@ scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run script
                          con el waterfall y el mensaje al cliente, perfil de uso contra los sanos), Costos (punto de
                          operación y ahorro según costos y prevalencia real, con escenarios precargados) y Modelo
                          (contra la referencia y los pisos, límites); configs/dashboard_k2.yaml
-scripts/build_demo_bundle.py  bundle de la demo (F9, solo dev): cortes, alerta de la repetición, factores, mensaje,
-                         waterfall, señales del filtro y números oficiales → experiments/demo-bundle/;
-                         `--publish-only` lo sube como wandb Artifact `demo-bundle` (configs/demo.yaml)
+scripts/build_demo_bundle.py  bundle de la demo (F9, solo dev): la corrida de `model` (hoy el ensamble de la GRU v2),
+                         umbral exacto y números oficiales con la cuenta del reporte v2, cortes, alerta de la
+                         repetición, hábitos que se apartan de los sanos del mercado, mensaje y señales del filtro →
+                         experiments/demo-bundle-gru/; `--publish-only` lo sube como wandb Artifact (configs/demo.yaml)
+scripts/join_window_columns.py  pega a un panel las aux_ de otro con las mismas filas y lo verifica (clave,
+                         cabecera, dev, huella de los folds, entrada del modelo intacta)
 scripts/warm_demo_cache.py  corre el triage en todas las semanas con eventos y guarda triage/ y llm_cache/ en el
                          bundle (`--prune` borra lo que no usó); necesita OPENAI_API_KEY (entorno o .env)
 scripts/demo_app/        la demo de producto: `streamlit run scripts/demo_app/app.py`. Bandeja (resumen del agente,

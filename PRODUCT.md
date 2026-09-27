@@ -12,7 +12,7 @@ web
 ## Users
 
 **Usuario principal: el jurado del Ford Innovation Challenge III** (gerentes de Ford). Entra solo,
-con la URL y la clave, **después de haber visto el pitch del 02-10-2026**. Ya sabe qué es K2, qué es
+con la URL y la clave, **después de haber visto el pitch del 02-10-2026**. Ya sabe qué es el modelo (la GRU), qué es
 el filtro de partículas (DPF) y que la flota se reproduce en un replay. Recorre la demo a su ritmo,
 sin nadie del equipo al lado, en una notebook o en el **celular** (el link llega por WhatsApp o por
 mail). Lo que viene a comprobar: que lo que se contó en el pitch existe, se puede usar y es creíble.
@@ -27,12 +27,13 @@ en el lugar de esa persona.
 
 ## Product Purpose
 
-Ford DPF convierte una alerta temprana de K2 sobre la degradación del filtro de partículas diésel
-en una acción de posventa: quién se entera, con qué texto y qué revisa el taller.
+Ford DPF convierte una alerta temprana de la GRU (el modelo final sobre la entrega v2) sobre la
+degradación del filtro de partículas diésel en una acción de posventa: quién se entera, con qué texto
+y qué revisa el taller.
 
-La flota de desarrollo se reproduce semana a semana en el calendario del registro de eventos
-(01-09-2025 → 11-03-2026). Cada alerta de K2 llega a la bandeja ya priorizada y redactada por dos
-agentes:
+La flota de desarrollo se reproduce semana a semana, de la primera revisión al fin de la extracción
+de datos de Ford (03-03-2025 → 24-09-2026). Cada alerta de la GRU llega a la bandeja ya priorizada y
+redactada por dos agentes:
 - el **redactor**, con un verificador en código;
 - el **triage**, con herramientas.
 
@@ -53,9 +54,9 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
 - Un verificador en código rechaza los números que no están en los hechos, el lenguaje causal, las
   certezas, las promesas de que el riesgo baja y los síntomas del filtro que le llegarían al conductor.
 
-**Anticipa, no reacciona.** Ford ya tiene detección reactiva. Radar DPF alerta con una mediana de
-15 semanas entre la alerta confirmada y la falla, a partir de datos que terminan antes del evento
-(el gap de blanking).
+**Anticipa, no reacciona.** Ford ya tiene detección reactiva. Ford DPF alerta con una mediana de
+15 semanas (~7.000 km) entre la alerta confirmada y la falla, a partir de datos que terminan antes
+del evento (el gap de blanking).
 
 ## Operating Context
 
@@ -66,8 +67,8 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
 - **Pantallas:**
   - **Bandeja:** el resumen del agente, una tarjeta por evento con el mensaje al conductor, el
     resumen del taller y los hechos con el verificador, y los botones aprobar, descartar y ver ficha.
-  - **Vehículo:** el score contra el umbral, la alerta, el porqué y el perfil de uso comparado con
-    los autos sanos.
+  - **Vehículo:** el puntaje contra el umbral, la alerta y el porqué: en qué hábitos se aparta el auto
+    de los autos sanos de su mercado (una comparación con la flota, no lo que usó el modelo).
   - **Qué pasó después:** el replay al lado de los números oficiales.
 - **El ritual es semanal.** Se elige la semana en el calendario de la flota, arriba de la Bandeja y
   del Vehículo: una columna por semana con sus alertas. Se salta a la próxima con alertas y la demo
@@ -83,7 +84,7 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
 
   Se escala si el score sigue sobre el umbral 2 revisiones después del aviso. Una revisión es un
   corte cada 500 km.
-- **Agentes:** `cache_first` por defecto. Las 8 semanas del replay están precalentadas: 46
+- **Agentes:** `cache_first` por defecto. Las 36 semanas con eventos del replay están precalentadas: 298
   respuestas en la caché, con `gpt-5.4-mini-2026-03-17`. «Regenerar en vivo» llama a la API y no
   pisa la versión guardada. `cache_only` sirve para ensayar sin red.
 
@@ -96,20 +97,21 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
 - **Deploy:**
   - Dockerfile y `railway.json`.
   - La imagen lleva solo `src/`, `scripts/demo_app/` y dos configs.
-  - La app baja el bundle `demo-bundle` en la versión fijada en `configs/demo.yaml` y no importa
-    LightGBM, SHAP ni sklearn.
+  - La app baja el bundle `demo-bundle-gru` en la versión fijada en `configs/demo.yaml` y no importa
+    torch, LightGBM ni sklearn.
 - **Dispositivos:** tiene que funcionar bien **en celular** y en notebook o desktop (1366–1920 px).
-- **Datos:** solo dev. Son 140 autos: 45 con falla registrada y 95 sanos. El test no se muestra
+- **Datos:** solo dev de la entrega v2. Son 426 autos: 135 con falla registrada y 291 sanos. El test no se muestra
   nunca, y el bundle falla si aparece un vehículo de test. La muestra está enriquecida en fallas,
   así que los conteos de la bandeja no se trasladan a una flota real.
 - **Números que no se pueden contradecir:**
-  - **Replay** (R1, etiqueta V, 5%): 9 alertas y 2 escalamientos entre el 29-09 y el 21-12-2025.
-    De los 45 autos que fallan, 7 reciben la alerta antes y 38 no se ven. 2 de los 95 sanos reciben
-    una alerta de más.
-  - **Oficiales:** 17,0% ± 3,8 de detección al 5% de falsas alarmas (15,6% fuera de muestra) y
-    26,7% al 10%. El pitch cita ~15–17%.
+  - **Replay** (R1, etiqueta dura, 5%, umbral exacto): 53 alertas y 7 escalamientos, entre las
+    semanas del 30-06-2025 y del 27-07-2026. De los 135 autos que fallan, 39 reciben la alerta antes
+    y 96 no se ven. 14 de los 291 sanos reciben una alerta de más.
+  - **Oficiales:** 28,1% ± 2,8 de detección al 5% de falsas alarmas (27,9% fuera de muestra) y
+    42,5% al 10%. La tabla del equipo da 27,4% y 42,5%, y el pitch cita ~27–29% al 5%. La celda
+    mercado × motor sola, sin mirar un viaje, detecta 18,0% al 5%.
 
-  Las fuentes son `docs/memoria/f9-demo-producto.md` y `docs/memoria/f8-capa-decision-k2.md`.
+  Las fuentes son `docs/memoria/f9-demo-gru.md` y `docs/memoria/f10-sweep-gru.md`.
 - **Terminología:**
   - **alerta:** confirmada en el `k`-ésimo corte seguido sobre el umbral;
   - **escalamiento:** el paso al concesionario;
@@ -123,7 +125,9 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
   - nada de certezas ni promesas de falla;
   - ni «probabilidad» (el score no está calibrado a la prevalencia real) ni «de rutina»;
   - al conductor no le llegan síntomas del filtro: carga, regeneraciones, aceite, consumo, avisos
-    del filtro.
+    del filtro;
+  - los hábitos son una comparación con autos sanos de su mercado: ni «se parece a autos que
+    fallaron» ni «el sistema lo marcó por…».
 
   Los textos al conductor tutean. Toda la interfaz está en español.
 - **Decisiones que no son nuestras:** la política de acción y los chequeos del taller son de
@@ -134,8 +138,8 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
 ## Brand Commitments
 
 - **Nombre:** Ford DPF (`product_name` en `configs/demo.yaml`). Hasta el 26-09-2026 se llamó
-  Radar DPF, y ese nombre sigue en los prompts de los agentes (`configs/agents.yaml`). No aparece en
-  ningún texto mostrado, y cambiarlo invalida la caché del LLM.
+  Radar DPF. Los prompts de los agentes (`configs/agents.yaml`) dicen Ford DPF desde el 27-09;
+  cambiarlos invalida la caché del LLM.
 - **Ford:** la palabra «Ford» de la marca es el **script de Ford** (el logo escrito), en blanco sobre
   el fondo oscuro. «DPF» va en tipografía. Lo autorizó el usuario el 26-09-2026 y reemplaza la regla
   anterior de no usar el logo.
@@ -147,18 +151,19 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
 - **Tipografía:** la corporativa de Ford (Ford Antenna) es propietaria y no está en el repo. Si el
   challenge entrega los archivos, puede reemplazar a Manrope; hasta entonces «DPF» y la interfaz van
   en Manrope.
-- **Voz:** operativa y honesta. Asociación, no causa. Ninguna certeza que el modelo no tenga.
+- **Voz:** operativa y honesta. Comparación, no causa. Ninguna certeza que el modelo no tenga.
 
 ## Evidence on Hand
 
-- **Bundle:** `oromagnoli-/ford-fic/demo-bundle:v0` en wandb, con la copia local en
-  `experiments/demo-bundle/`. Trae los cortes, las alertas, los factores, los mensajes, los
-  waterfalls, las señales del filtro, los números oficiales, el triage de las 8 semanas y la caché
-  del LLM.
-- **Textos reales:** los agentes redactaron las 11 piezas de las 8 semanas y todos los resúmenes
-  pasaron el verificador. El registro de lo que el verificador atajó durante el desarrollo está en
-  `docs/memoria/f9-demo-producto.md`.
-- **Explicabilidad:** V3, TreeSHAP del hazard (`docs/memoria/f4-explicabilidad-k2.md`).
+- **Bundle:** `oromagnoli-/ford-fic/demo-bundle-gru` en wandb (la versión fijada en `configs/demo.yaml`),
+  con la copia local en `experiments/demo-bundle-gru/`. Trae los cortes, las alertas, los hábitos que
+  se apartan de la flota sana, los mensajes, las señales del filtro, los números oficiales, el triage
+  de las semanas con eventos y la caché del LLM. La demo anterior, con K2, sigue en `demo-bundle:v0`.
+- **Textos reales:** los agentes redactaron los 60 textos y los 36 resúmenes, todos aprobados por
+  el verificador (10 reintentos en el camino). Lo que se corrigió después de revisar a mano la primera
+  semana está en `docs/memoria/f9-demo-gru.md`.
+- **El porqué:** una comparación con los autos sanos de dev del mismo mercado (`src/eval/fleet_profile.py`).
+  No es atribución: la GRU no la tiene.
 - **Revisión visual previa:** capturas a 1440×900 y 1920×1080 en `experiments/demo-ui-review/`
   (no versionado), con consola, accesibilidad e interacciones en `review.json`.
 - **Lo que no existe y no se inventa:** clientes, testimonios, un despliegue real en Ford, la
@@ -171,7 +176,8 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
 1. **El modelo decide, el agente comunica.** Todo número, score o factor que se muestra sale del
    bundle, y ningún texto generado llega a la pantalla sin pasar el verificador.
 2. **Honestidad antes que impacto.** Los aciertos se muestran al lado de las fallas que no se ven y
-   de las falsas alarmas, y el replay al lado de los números oficiales. El porqué es asociación.
+   de las falsas alarmas, y el replay al lado de los números oficiales. El porqué es una comparación
+   con la flota, no lo que usó el modelo.
 3. **Anticipar, no reaccionar.** El valor está en la ventana entre la alerta y la falla. Lo que
    Ford ya tiene es detección reactiva.
 4. **A cada uno, lo suyo.** El conductor ve hábitos que puede cambiar, el taller ve las señales del
