@@ -1,0 +1,106 @@
+run: f9-v2-sinventana-ss-hfull-r3-estaticas
+logged_on: '2026-09-26'
+note: 'Entrega v2 SIN la ventana de producción (990 autos, variante no vigente): la
+  misma corrida que f9-v2-ss-hfull-r3-estaticas sobre el universo de 990. Evidencia
+  de por qué se volvió a la ventana: los modelos ordenan peor a los autos del dev
+  de la ventana (SS 0,571->0,471 dentro de mercado x motor), (b) +0,023, y la suba
+  de (a'') es posicional. f9-universo-v2.md §6.'
+source:
+  config_path: configs\exp_v2_sinventana_ss_hfull_r3_estaticas.yaml
+  config_versioned: true
+  branch: feat/datos-v2-completos
+  commit: 78a9859
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: survival_stacking
+  pr_auc: 0.14931203049801364
+  cohort_ceiling: 0.1355259790120297
+  cohort_lift: 2.0461991297670847
+  within_failed: 0.2155656617465054
+  within_failed_lift: 1.5905855343599558
+  when_delta: 0.03326430464729552
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.5597673350665183
+  vehicle_lift: 1.7122294954975856
+  vehicle_base_rate: 0.3269230769230769
+  pr_auc_lo: 0.1519797253627266
+  pr_auc_hi: 0.16254817668302357
+  base_rate: 0.06623303521170805
+  lift: 2.254343773024306
+  roc_auc: 0.7133620098071769
+  brier: 0.059431442394974165
+  detection_rate: 0.18137254901960784
+  median_lead_km: 7855.505822467756
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel_survival_sinventana_estaticas.parquet
+  panel_generation: '2026-09-26'
+  splits: ${DATA_DIR}/processed/splits_sinventana_r3.json
+  n_positive: 1059
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: f9-v2-sinventana-ss-hfull-r3-estaticas
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel_survival_sinventana_estaticas.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_sinventana_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+      extra_columns:
+      - static_SalesCountry_cd
+      - aux_static_Engine
+      min_stratum_size: 5
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split_sinventana.json
+  target:
+    name: discrete_survival
+    params: {}
+  model:
+    name: survival_stacking
+    params:
+      horizon_km: 3000
+      bin_km: 500
+      max_horizon_km: 55000
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f9-v2
+    job_type: train
+    tags:
+    - f9
+    - v2
+    - survival
+    - horizonte-completo
+    - estaticas
+    - r3
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_v2_sinventana_ss_hfull_r3_estaticas.yaml
