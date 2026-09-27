@@ -60,6 +60,39 @@ def _build_random(params: dict[str, Any]) -> BaseEstimator:
     return DummyClassifier(**params)
 
 
+@register("logistic")
+def _build_logistic(params: dict[str, Any]) -> BaseEstimator:
+    """Logística con L2 sobre features ya escaladas (el `Pipeline` de `cv.py` escala e imputa por fold).
+
+    Traída de `feat/f3-features-regeneracion` para la re-medición completa sobre v2.
+    `class_weight="balanced"` se calcula dentro del fold; `C` bajo porque hay más features
+    que vehículos con evento por fold.
+    """
+    from sklearn.linear_model import LogisticRegression
+
+    params.setdefault("C", 0.1)
+    # sklearn 1.8+ declara la mezcla con `l1_ratio` (0 = L2, 1 = L1).
+    params.setdefault("l1_ratio", 0.0)
+    params.setdefault("class_weight", "balanced")
+    params.setdefault("max_iter", 2000)
+    params.setdefault("random_state", 42)
+    return LogisticRegression(**params)
+
+
+@register("logistic_l1")
+def _build_logistic_l1(params: dict[str, Any]) -> BaseEstimator:
+    """La misma logística con L1: además elige features. `saga` es el solver que soporta L1."""
+    from sklearn.linear_model import LogisticRegression
+
+    params.setdefault("C", 0.05)
+    params.setdefault("l1_ratio", 1.0)
+    params.setdefault("solver", "saga")
+    params.setdefault("class_weight", "balanced")
+    params.setdefault("max_iter", 5000)
+    params.setdefault("random_state", 42)
+    return LogisticRegression(**params)
+
+
 @register("lgbm")
 def _build_lgbm(params: dict[str, Any]) -> BaseEstimator:
     """GBM chico de referencia de F3 (docs/f3-modelos-candidatos.md §1.3, sin restricciones).

@@ -1,0 +1,24 @@
+# El mismo reporte que configs/report_v2_models.yaml, sobre las corridas de la ENTREGA 1 (dev v1, etiqueta dura):
+# la comparación v1 contra v2 con la misma cuenta (umbral exacto, nulo de bolsa, diagnóstico de bolsa).
+#
+#   python scripts/report_v2_models.py --config configs/report_v1_models.yaml
+seed: 0
+output_name: report-v1-models
+experiments_dir: experiments
+strata_panel: data/processed-v1/panel.parquet
+
+k_consecutive: 2
+n_thresholds: 50
+budgets: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+null_permutations: 200
+n_boot: 1000
+reference: f3-survival-stacking-r3-rebuild
+
+bag_diag:
+  healthy_cuts: 9
+
+runs:
+  - {run: f3-survival-stacking-r3-rebuild, label: "Survival stacking (F3), entrega 1", family: supervivencia}
+  - {run: f3-lgbm-panel-v1-r3-regen15, label: "LightGBM (control F3), entrega 1", family: tabular}
+  - {run: f3-cnn-lstm-r3-regen15, label: "CNN-LSTM tutora, entrega 1", family: secuencial}
+  - {run: f6-ss-hw-r3, label: "K2 (etiqueta dura), entrega 1", family: supervivencia}

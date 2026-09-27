@@ -37,6 +37,18 @@ cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del
   autos de afuera la fecha de producción sola separa las cohortes (AUC 0,87 dentro del mercado) y los modelos ordenan
   peor a los autos comparables. La variante queda como `*_sinventana*`, con el holdout extendido
   (`test_split_sinventana.json`), y no se usa para elegir ni medir (`f9-universo-v2.md` §6).
+- **Re-medición completa sobre v2** (26-09, exploratoria, no elige finalista): 42 modelos con la
+  misma cuenta: detección por auto con umbral exacto de 2% a 30%, nulo de bolsa, fuera de muestra y
+  bootstrap pareado (`scripts/report_v2_models.py`).
+  - **Los secuenciales con TripSummary le ganan a survival stacking:** CNN-LSTM + trips ×3 semillas
+    detecta 25 · 36 · 56% al 5 · 10 · 20%, contra 14 · 24 · 42% de SS. Con motor y modelo, la GRU
+    llega a 27 · 42 · 61%.
+  - **Ninguno le gana con evidencia a la tasa de la celda mercado × motor** (18 · 33 · 62%, sin
+    modelo). El preregistro del finalista v2 la tiene que llevar como piso.
+  - **SS no empeoró respecto de la entrega 1: bajó el nulo** (10% → 5% al 5%). Los secuenciales se
+    reportan siempre como promedio de 3 semillas.
+
+  Ver `docs/memoria/f9-remedicion-completa-v2.md`.
 
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
@@ -299,6 +311,7 @@ src/features/windows.py  primitiva de ventana (c−W, c] sobre odómetro + agreg
                          + compute_history_deviation(): agg(historia previa) − agg(ventana), NaN sin historia mínima
 src/features/sequences.py  la ventana en T bins de km × C canales (entrada de modelos secuenciales), aplanada a feat_seq_*
 src/models/registry.py   get_model(name, params); agregar un modelo = registrar un builder
+                         (`logistic` y `logistic_l1` desde la re-medición completa de v2)
 src/models/timesfm_zeroshot.py  series por km + TimesFM 3.0 zero-shot sobre los cortes del panel (no es del registry)
 src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia + rama estática (torch, opcional)
 src/models/survival_stacking.py  supervivencia en tiempo discreto: apila (fila × bin de km), hazard por bin,
@@ -388,6 +401,13 @@ scripts/cost_scenarios.py  punto de operación de K2 bajo escenarios de costo co
 scripts/decision_layer.py  capa de decisión sobre una corrida: curva a varios presupuestos de falsas alarmas con
                          su nulo, y el umbral fijado fuera de muestra (empírico y Neyman-Pearson); sin
                          `window_eval` (v2) solo con la etiqueta dura (configs/exp_decision_v2_{k2,ss}.yaml)
+scripts/make_v2all_configs.py  escribe configs/exp_v2all_*.yaml desde configs/v2all_runs.yaml (base exp_v2_lgbm_r3;
+                         `seeds: [...]` agrega la misma corrida con otras semillas del modelo)
+scripts/report_v2_models.py  reporte de muchas corridas con la misma cuenta: detección por auto con umbral exacto a
+                         varios presupuestos, nulo de bolsa, fuera de muestra, AUC dentro de mercado × motor, piso de
+                         la celda, mezclas por rango y bootstrap pareado (configs/report_v{1,2}_models.yaml)
+scripts/report_v2_leads.py  anticipación de la primera alerta (km, días aprox.) y trayectoria del score de los
+                         fallados según la distancia al evento (configs/report_v2_leads.yaml)
 scripts/explain_k2.py    explicabilidad de K2 de punta a punta (preregistro configs/explain_k2.yaml): reentrena y
                          verifica los folds, V1-V4, criterios, elección, mensajes al cliente (configs/explain_texts.yaml)
                          y casos → experiments/explain-k2/; scripts/explain_k2_report.py hace las figuras y cases.md

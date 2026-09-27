@@ -1,0 +1,17 @@
+# Anticipación y trayectoria del score de los mejores modelos sobre dev v2 (26-09-2026).
+#
+#   python scripts/report_v2_leads.py --config configs/report_v2_leads.yaml
+output_name: report-v2-leads
+experiments_dir: experiments
+k_consecutive: 2
+budgets: [0.05, 0.10, 0.20]
+far_km: 10000       # "lejos del evento": más allá de ~3 horizontes
+near_km: 3500       # G + H: dentro del horizonte de la etiqueta
+
+runs:
+  - {run: f9-v2-ss-r3, label: Survival stacking (F3)}
+  - {run: v2all-seeds3-cnn-lstm-signals, label: CNN-LSTM tutora ×3}
+  - {run: v2all-seeds3-cnn-lstm-trips, label: CNN-LSTM + trips ×3}
+  - {run: v2all-seeds3-gru-trips, label: GRU + trips ×3}
+  - {run: v2all-seeds3-cnn-lstm-trips-estaticas, label: CNN-LSTM + trips + estática ×3}
+  - {run: v2all-seeds3-gru-trips-estaticas, label: GRU + trips + estática ×3}

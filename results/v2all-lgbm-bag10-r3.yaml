@@ -1,0 +1,103 @@
+run: v2all-lgbm-bag10-r3
+logged_on: '2026-09-26'
+note: 'Re-medición completa v2 (26-09, exploratoria, no elige): LightGBM embolsado
+  ×10. Detección por auto con umbral exacto al 5 · 10 · 20% de falsas alarmas: 13
+  · 22 · 43% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor 18 · 33 · 62).
+  AUC por auto dentro de mercado × motor 0.55.  docs/memoria/f9-remedicion-completa-v2.md'
+source:
+  config_path: configs\exp_v2all_lgbm_bag10_r3.yaml
+  config_versioned: false
+  branch: exp/v2-remedicion-completa
+  commit: cd01989
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: vehicle_bagging
+  pr_auc: 0.10692676370479968
+  cohort_ceiling: 0.1766839378238342
+  cohort_lift: 3.0318652849740935
+  within_failed: 0.24250436112358842
+  within_failed_lift: 1.3725320145704563
+  when_delta: -0.016218903118893097
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.5055626943095336
+  vehicle_lift: 1.595331168710084
+  vehicle_base_rate: 0.31690140845070425
+  pr_auc_lo: 0.10464805423739316
+  pr_auc_hi: 0.12501555891247196
+  base_rate: 0.058275655814748355
+  lift: 1.834844451081042
+  roc_auc: 0.6834256612919635
+  brier: 0.1357711597689204
+  detection_rate: 0.15555555555555556
+  median_lead_km: 7016.0
+  budget: 50.0
+  panel: ${DATA_DIR}/processed/panel.parquet
+  panel_generation: '2026-09-26'
+  splits: ${DATA_DIR}/processed/splits_r3.json
+  n_positive: 682
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: v2all-lgbm-bag10-r3
+  seed: 42
+  data:
+    panel: ${DATA_DIR}/processed/panel.parquet
+  splits:
+    path: ${DATA_DIR}/processed/splits_r3.json
+    n_splits: 5
+    seed: 42
+    build_if_missing: false
+    strict: true
+    stratify:
+      column: label
+      level: vehicle
+      extra_columns:
+      - static_SalesCountry_cd
+      - aux_static_Engine
+      min_stratum_size: 5
+    min_valid_positives: 5
+    n_repeats: 3
+    test_split: ${DATA_DIR}/processed/test_split.json
+  model:
+    name: vehicle_bagging
+    params:
+      base_model: lgbm
+      base_params: {}
+      n_bags: 10
+      random_state: 42
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f9-v2all
+    job_type: train
+    tags:
+    - f9
+    - v2
+    - v2all
+    - r3
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  target:
+    name: grouped_label
+    params: {}
+  _config_path: configs\exp_v2all_lgbm_bag10_r3.yaml

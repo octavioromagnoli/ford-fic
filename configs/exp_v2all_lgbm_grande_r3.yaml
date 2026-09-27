@@ -1,0 +1,49 @@
+# Re-medición completa sobre la ENTREGA v2 (26-09-2026): LightGBM con más capacidad (15 hojas, 600 árboles).
+# Generado por scripts/make_v2all_configs.py desde configs/v2all_runs.yaml (no editar a mano).
+#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2all_lgbm_grande_r3.yaml
+name: v2all-lgbm-grande-r3
+seed: 42
+data:
+  panel: ${DATA_DIR}/processed/panel.parquet
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+    extra_columns:
+    - static_SalesCountry_cd
+    - aux_static_Engine
+    min_stratum_size: 5
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+model:
+  name: lgbm
+  params:
+    num_leaves: 15
+    n_estimators: 600
+    min_child_samples: 60
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f9-v2all
+  job_type: train
+  tags:
+  - f9
+  - v2
+  - v2all
+  - r3
+  mode: online
+  log_artifacts: false
+output_dir: experiments
