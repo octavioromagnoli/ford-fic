@@ -1,0 +1,20 @@
+# Capa de decisión sobre la entrega v2 (26-09-2026). survival stacking de F3 sobre v2, el que aprueba (a0) y (a′) en v2.
+# Es configs/exp_decision_k2.yaml sobre la corrida de v2, con la etiqueta dura: en v2 no hay
+# ventana del registro, así que no hay etiqueta corregida (V). No reentrena ni cambia el orden de
+# los autos: no consume presupuesto de comparaciones. Solo dev (predicciones fuera de fold).
+#
+#   python scripts/decision_layer.py --config configs/exp_decision_v2_ss.yaml
+#
+# Lectura: docs/memoria/f9-remedicion-v2.md (§ K2 sobre v2).
+seed: 0
+
+run_config: configs/exp_v2_ss_r3.yaml
+output_name: decision-v2-ss
+
+labels: [hard]
+
+# Los mismos presupuestos, nulo y ajuste fuera de muestra que la capa de decisión de K2 (F8).
+budgets_per_1000: [20, 50, 100, 200]
+null_permutations: 200
+alphas: [0.05, 0.10]
+np_delta: 0.05

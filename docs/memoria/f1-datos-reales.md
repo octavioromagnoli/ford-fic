@@ -1,5 +1,7 @@
 # Qué hay realmente en `data/raw/`
 
+> **Entrega v2 (26-09-2026):** los archivos de fallados y la estática cambiaron (columnas nuevas, una columna renombrada, `ProductionDay` de fallados corrido, una fila por evento). Lo de abajo describe la entrega 1; la v2 está en [f9-entrega-v2.md](f9-entrega-v2.md).
+
 **Fecha:** 2026-09-15 · **Fase:** F1 · **Reproduce:** `python scripts/eda_raw.py`
 
 Seis CSV, 1,2 GB, **tres tablas lógicas × dos cohortes de muestreo**

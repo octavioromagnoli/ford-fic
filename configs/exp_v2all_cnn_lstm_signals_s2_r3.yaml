@@ -1,0 +1,61 @@
+# Re-medición completa sobre la ENTREGA v2 (26-09-2026): CNN-LSTM de la tutora (signals + estática), semilla del modelo 2 (dispersión por semilla).
+# Generado por scripts/make_v2all_configs.py desde configs/v2all_runs.yaml (no editar a mano).
+#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2all_cnn_lstm_signals_s2_r3.yaml
+name: v2all-cnn-lstm-signals-s2-r3
+seed: 42
+data:
+  panel: ${DATA_DIR}/processed/panel_seq_v2.parquet
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+    extra_columns:
+    - static_SalesCountry_cd
+    - aux_static_Engine
+    min_stratum_size: 5
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+model:
+  name: cnn_lstm
+  params:
+    sequence_meta: ${DATA_DIR}/processed/panel_seq_v2_meta.json
+    conv_channels: 16
+    kernel_size: 3
+    lstm_hidden: 16
+    static_hidden: 4
+    head_hidden: 16
+    dropout: 0.3
+    epochs: 40
+    batch_size: 64
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    grad_clip: 1.0
+    class_weight: balanced
+    device: cpu
+    random_state: 2
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f9-v2all
+  job_type: train
+  tags:
+  - f9
+  - v2
+  - v2all
+  - r3
+  mode: online
+  log_artifacts: false
+output_dir: experiments

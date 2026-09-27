@@ -5,6 +5,277 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-27 · El sweep de la GRU no cambia la configuración: se queda la de hoy, con las semillas 42, 1 y 2
+
+**Decidió:** el equipo, después de la confirmación con semillas nuevas. **Configs:**
+`configs/sweep_gru.yaml`, `configs/exp_sweep_gru_*.yaml`, `configs/report_sweep_gru.yaml`. Detalle:
+[f10-sweep-gru.md](f10-sweep-gru.md).
+
+**Qué se midió:** un sweep Optuna TPE de 1 h sobre 13 hiperparámetros de la GRU + trips + estática
+completa (130 trials, semilla 42). El objetivo fue la detección por auto con umbral exacto, promedio
+al 5–20%. El mejor, t112, dio 0,492 contra 0,475 de la configuración de hoy. Re-medidos con las
+semillas 3, 4 y 5 en ensamble de 3, dan **0,469 contra 0,471**, y el bootstrap pareado no separa
+ningún presupuesto del cero.
+
+**Por qué:**
+- El +1,7 del sweep era el máximo de 65 intentos con una misma semilla. La semilla sola mueve el
+  objetivo ~8 puntos (0,395–0,476).
+- Las semillas no se eligen por resultado. Las 42, 1 y 2 son las del reporte v2, las auditorías y la
+  explicabilidad de la GRU.
+
+**Consecuencias:**
+- **No volver a barrer hiperparámetros de la GRU esperando mejoras.** Lo que sí rinde es ensamblar
+  semillas (~2–3 puntos), y un ensamble de más semillas va declarado en el preregistro del finalista v2.
+- "×3 semillas" es el ensamble por rango (0,460), no el promedio de las semillas sueltas (0,439).
+- La tasa de la celda mercado × motor (18 · 33 · 48 · 62% al 5 · 10 · 15 · 20%) sigue siendo el
+  piso: tres celdas concentran 117 de los 135 fallados de dev.
+
+---
+
+## 2026-09-26 · Re-medición completa sobre v2: los secuenciales con TripSummary pasan adelante; el finalista v2 sale de un preregistro contra la celda
+
+**Decidió:** nadie todavía; es una medición exploratoria pedida por el equipo ("volvé a correr todos
+los modelos con los nuevos datos"), no una elección. **Configs:** `configs/v2all_runs.yaml` →
+`configs/exp_v2all_*.yaml`, `configs/report_v2_models.yaml`, `configs/report_v2_leads.yaml`.
+Detalle: [f9-remedicion-completa-v2.md](f9-remedicion-completa-v2.md).
+
+**Qué se midió:** 42 modelos o variantes sobre dev v2, con los mismos folds R = 3. La detección por
+auto se mide con umbral exacto de 2% a 30% de falsas alarmas, con el nulo de bolsa, el umbral fuera de
+muestra y un bootstrap pareado por vehículo. Test sin tocar.
+
+**Lo que queda:**
+- **Los secuenciales con TripSummary le ganan a survival stacking con evidencia al 10–20%.**
+  CNN-LSTM + trips ×3 semillas detecta 25 · 36 · 56% al 5 · 10 · 20%; SS, 14 · 24 · 42%.
+  Con motor y modelo, la GRU + trips + estática ×3 llega a 27 · 42 · 61%.
+- **Ninguno le gana con evidencia a la tasa de fallas de la celda mercado × motor** (18 · 33 · 62%,
+  sin modelo). La ganancia del uso sobre la composición (~5–10 puntos al 5–10%) no se separa del
+  cero con 135 fallados.
+- **SS no empeoró respecto de la entrega 1**: sobre el nulo gana lo mismo al 5% (+8,9 → +8,7) y más
+  al 20% (+8,1 → +21,4). Lo que bajó es el nulo: en v1 las bolsas asimétricas (18 contra 9 cortes)
+  "detectaban" 10% al 5%.
+- **Las redes varían ±3–5 puntos por semilla**, y también con la cantidad de hilos de la CPU.
+
+**Consecuencias:**
+- **Todo número de un secuencial se reporta como promedio de 3 semillas.** La detección por auto se
+  reporta con umbral exacto y nulo, no con la grilla de `train.py`.
+- **El preregistro del finalista v2 tiene que incluir la celda mercado × motor como piso**, además de
+  SS y del nulo. Candidatos naturales: CNN-LSTM y GRU con trips ×3, con y sin estática.
+  Entre los dos sin estática se prefiere la CNN-LSTM: la GRU marca (b) +0,025 y su (a′) es +0,003.
+- **Si motor y modelo entran depende de un dato de Ford**, la tasa real de fallas del DPF en la
+  flota por mercado × motor. Si coincide con la de la muestra, entran sin reserva; si no, se
+  reponderan las celdas. Mientras tanto se reportan las dos versiones.
+- **La anticipación (~7.500 km, 2–3 meses de mediana) se cita como margen, no como pronóstico**:
+  el p25–p75 va de 3.300 a 12.000 km.
+
+---
+
+## 2026-09-26 · Se probó sacar la ventana de producción y se volvió a ella
+
+**Decidió:** Santino, con el equipo (pedido original: "sacar la fecha así no tenemos que tirar
+tantos datos, si total hacemos los cortes por km"; después de ver la evidencia: "volvé a como
+estaba antes"). **Config vigente:** `configs/data/test_split.yaml` (557). **Variante medida:**
+`configs/data/test_split_sinventana.yaml` y los `*_sinventana*`. Detalle:
+[f9-universo-v2.md](f9-universo-v2.md) §6, [f9-eda-v2.md](f9-eda-v2.md) §J.
+
+**Qué:** el universo sigue siendo el de la ventana de producción (557; dev 446 / test 111). El
+de 990 queda como variante reproducible, con su holdout **extendido** desde el vigente (nadie
+cambia de lado), y no se usa para elegir ni medir modelos.
+
+**Por qué:** cortar por km no evita el problema, porque lo que está sesgado es quién entra en la
+muestra, no el eje. Afuera de la ventana cada período tiene una sola cohorte (antes: 71 fallados
+y 3 sanos en dev; después: 0 fallados y 268 sanos). Con los 433 autos de afuera:
+- la fecha de producción sola, sin modelo, separa fallados de sanos dentro del mercado con AUC 0,87 (0,63 con la ventana);
+- **los modelos ordenan peor a los autos del dev de la ventana**: dentro de mercado ×
+  motor, survival stacking baja de 0,571 a 0,471 y los demás de ~0,58–0,60 a ~0,49–0,52;
+- la auditoría (b) de calendario marca +0,023 (+0,008 con la ventana);
+- la suba de (a′) (+0,016 → +0,049) es posición: el odómetro solo da +0,046.
+
+**Cómo se usan los 433 autos:** como referencia de la flota sana o en análisis *dentro* de
+fallados, nunca mezclados en una comparación fallado/sano.
+
+---
+
+## 2026-09-26 · K2 sobre v2 no es el mejor modelo; survival stacking es el más sólido, y no hay finalista v2
+
+**Decidió:** nadie todavía; es una medición, no una elección. **Config:**
+`configs/exp_decision_v2_{k2,ss}.yaml` (`scripts/decision_layer.py`, ahora sin ventana con
+`labels: [hard]`). Detalle: [f9-remedicion-v2.md](f9-remedicion-v2.md) § K2 sobre v2.
+
+**Qué se midió:** la capa de decisión de F8 sobre dev v2, con el nulo de tamaño de bolsa y el umbral
+fuera de muestra. Test sin tocar.
+- **K2 sin ventana** (su única parte portable es el horizonte completo) falla (a′), y su 5%
+  oficial da 0: la grilla de umbrales salta de 0% a 7% de falsas alarmas. Con umbral exacto
+  detecta 11,6%.
+- **Survival stacking** aprueba (a0) y (a′) y detecta 11,4% fuera de muestra al 5% (a 4,2% de
+  falsas alarmas reales) y 23% al 10%, con ~8.500 km de anticipación. Pero su (a′) no le gana al
+  piso posicional (+0,016 contra +0,024).
+
+**Consecuencias:**
+- El "~15–17%" del pitch es de la entrega 1. Sobre v2 el número honesto hoy es **~11–14% al 5%**.
+- Al 10% la tasa de la celda mercado × motor sola ya detecta ~25%. El 5% es donde el uso agrega
+  algo que la celda no da.
+- El control LightGBM detecta más que los dos con (a′) negativo: la detección por auto premia
+  *qué auto*. Elegir un finalista v2 sigue pidiendo un preregistro que diga con qué criterio se
+  elige, antes de mirar.
+
+---
+
+## 2026-09-26 · Entrega v2: qué decisiones de la entrega 1 se sostienen y cuáles se revierten
+
+**Decidió:** Santino (pedido: "revisar las decisiones que habíamos tomado para revertir las
+que estarían mal ahora"). **Alcance:** todo el proyecto. Evidencia:
+[f9-entrega-v2.md](f9-entrega-v2.md), [f9-universo-v2.md](f9-universo-v2.md),
+[f9-eda-v2.md](f9-eda-v2.md), [f9-remedicion-v2.md](f9-remedicion-v2.md). Las cuatro entradas
+siguientes son las que cambian algo; esta es la tabla completa.
+
+| decisión (fecha) | en la entrega v2 | por qué |
+|---|---|---|
+| Cohortes como `parts` (15-09) | se sostiene | + correcciones por parte en el loader (`rename`, `offsets`, `truncate_after`) |
+| 13 clones se colapsan (15-09) | **se sostiene** | los 7 pares que siguen en fallados vuelven a venir con historia de viajes idéntica bajo los dos códigos |
+| `Engine` fuera del set base (15-09) | **se revierte el motivo** | ENG_3 tiene 47 eventos en el universo; ver la entrada de motor |
+| Test del 20% congelado antes de F2 (16-09) | se sostiene el principio; **el holdout se re-sorteó** | ver la entrada del universo |
+| Familia B desde `AirRegeneration` (16-09) | se sostiene | mismo alias, misma escala 0–100 |
+| Sin elevación ni presión de neumáticos (16-09) | **cambia en parte** | la ciudad de venta da una altura (`configs/data/city_elevation.yaml`); presión y GPS siguen sin venir |
+| Universo = fecha utilizable + CHL/COL (17-09) | **se revierte el recorte por mercado; lo reemplaza el de producción** | los cinco mercados tienen eventos fechados; el sesgo se movió a la fecha de producción |
+| `ProductionDay` fuera (17/18-09) | se sostiene, **con otro porqué** | era en parte selección (lista de fallados cortada en jul-2025); dentro del universo ordena con AUC 0,63 |
+| `ModelSeries` y `daysUntilSale` fuera (18-09) | `daysUntilSale` se sostiene; **`ModelSeries` vuelve a candidata** con Engine | |
+| Temperatura ambiente como `aux_` (18-09) | se sostiene | además de estacional es de lugar: los fallados circulan más frío que los sanos del mismo mercado y mes |
+| Idle separado, velocidad recalculada, topes físicos (18-09) | se sostiene | 33% de idle; `KilometerPerHour` nulo exactamente ahí |
+| Marcador `Regenerations` como `aux_` (18-09) | se sostiene | se corta en mayo de 2026 también en v2 |
+| Panel v1: W/G/H/Δ, emparejado por odómetro × mes (18-09) | se sostiene como diseño | 139 de 141 eventos con positivo; la exposición previa al evento sigue cayendo antes que la de los sanos |
+| CV estratificada por `label` (18-09) | **se extiende** | `label × mercado × motor` (`splits.stratify.extra_columns`) |
+| Umbral de regeneración de 15 puntos (20-09) | se sostiene | |
+| El piso es el techo de cohorte; (a0) y (a′) aprueban (20-09) | **se sostiene** | techo v2 0,177 (3,03×); ningún modelo lo supera |
+| Decisión por vehículo con `mean` (20-09) | se sostiene; **las bolsas quedan casi simétricas** | 26,9 / 28,8 cortes por sano / fallado, contra 9,0 / 18,3 |
+| El finalista se elige por (a′) y estabilidad (20-09) | se sostiene | survival stacking aprueba (a′) en v2 (+0,016) |
+| Ventana del registro y censura dentro de ella (22-09) | **se revierte para v2** | ver la entrada de la ventana |
+| Reloj en días post-venta (22-09) | se sostiene | sd(log) edad 0,38 contra odómetro 0,91 |
+| K2 como finalista (22-09) y sus números (15–17%) | **no vale para v2** | su corrección era la ventana, que no existe en v2; sin ventana no aprueba (a′) y detecta menos que survival stacking (entrada de arriba). Elegir sobre v2 es un preregistro nuevo |
+| Cure model, E1/E2, incidencia externa, SS post-venta, F7, F8 (22–24-09) | resultados de la entrega 1 | la incidencia externa usaba a los fallados con fecha por defecto, que ya no están |
+| Presupuesto de comparaciones agotado (20–24-09) | **se reabre para v2** | todos los números son de otra población: re-medir es comparable; elegir, no |
+
+**La regla nueva que sale de v2:** toda comparación fallado/sano y todo AUC se reportan **dentro
+del mercado y dentro de mercado × motor**, al lado del agrupado. En v2 la separación agrupada
+entre autos (0,72–0,80) es casi toda de mercado y motor (dentro de la celda, 0,57–0,60), y la
+tasa por mercado está cruzada con cómo Ford armó la lista.
+
+---
+
+## 2026-09-26 · Universo v2: 557 vehículos por período de producción, y el holdout re-sorteado con la misma semilla
+
+**Decidió:** Santino. **Código:** `src/data/usable.py` (`production_day_window`),
+`src/eval/splits.py` (`holdout_on_universe`, `composite_strata`, `compare_holdouts`,
+`extra_columns` en `make_splits`), `scripts/make_test_split.py` (`draw.mode`). **Config:**
+`configs/data/test_split.yaml`. Detalle: [f9-universo-v2.md](f9-universo-v2.md).
+
+**Qué:**
+- El universo son **557 vehículos** (177 eventos), producidos entre el 20-01-2025 y el
+  31-07-2025, en ARG, BRA, CHL, COL y PER.
+- Dev **446 (141)** / test **111 (36)**. Se sortea una vez sobre el universo, con semilla 42,
+  estratificando por evento × mercado × motor (los estratos de < 5 se funden hacia arriba). Los
+  folds de CV estratifican igual.
+
+**Por qué el período de producción.** Es la misma regla simétrica del 17-09, en otro eje:
+- los 93 fallados producidos en 2024 no tienen ningún sano de su época;
+- entre los 341 sanos producidos desde agosto de 2025 no hay ningún fallado, contra ~50
+  esperados por su exposición.
+
+Un sano de octubre de 2025 no es un negativo verificable. El criterio de mercado ya no hace
+falta: en v2 los cinco mercados tienen eventos fechados.
+
+**Por qué re-sortear y no extender.** Lo pidió el equipo, y el universo, las etiquetas y los
+estratos cambiaron enteros: el holdout viejo se armó sobre una población que ya no existe. El
+universo se fijó sin mirar ninguna feature contra la etiqueta, y el sorteo se hizo una sola vez.
+
+**Qué se resigna:** 36 de los 111 autos de test estaban en el dev viejo y se miraron en F2–F8
+(13 con evento). La lista queda en `test_split.json → previous.test_vehicles_in_old_dev`, y **el
+test final se reporta también sin ellos**. La alternativa descartada (extender el holdout viejo)
+daba un test sin autos vistos, con estratos desbalanceados y sin respetar el pedido.
+
+**Qué no cambia:** el holdout viejo se reproduce bit a bit con `configs/data/test_split_v1.yaml`
+(huella `ba9aa4d290bc6610`) y sigue congelado en `data/processed-v1/`.
+
+---
+
+## 2026-09-26 · La referencia del evento en v2 es la fecha registrada − 21 días
+
+**Decidió:** Santino. **Código:** `label.reference_offset_days` en `scripts/build_dataset.py`.
+**Config:** `configs/data/panel_v2.yaml`. Detalle: [f9-entrega-v2.md](f9-entrega-v2.md) §6.
+
+**Qué.** El odómetro del evento se proyecta desde `fecha registrada − 21 d`, y G, H y la
+etiqueta se miden desde ahí.
+
+**Por qué.** En los 45 autos no-test con las dos fechas:
+- **la fecha v1 coincide con la intervención**: el cambio de aceite está en ±3 d y la sobrecarga
+  del filtro cae justo después;
+- **la fecha v2 cae una mediana de 14 días después** (IQR 8–27), con el aceite ya cambiado y la
+  sobrecarga ya terminada. Entre las dos fechas el auto circula normal;
+- el ralentí largo del taller aparece en las dos semanas previas a la fecha v2.
+
+Con la fecha v2 tal cual, G = 500 km (~9 días) deja el taller y los síntomas en la última
+ventana: es detección reactiva, lo que la regla 1 prohíbe. 21 días queda entre la mediana y el
+p75 del corrimiento.
+
+**Qué queda abierto:**
+- el corrimiento es poblacional: no se puede fechar la intervención auto por auto (F8);
+- la sensibilidad a 0 / 14 / 21 / 30 d se mide al fijar el panel v2;
+- la anticipación que se reporte se descuenta del corrimiento;
+- a Ford hay que preguntarle qué registra la fecha nueva.
+
+---
+
+## 2026-09-26 · `Engine` y `ModelSeries` vuelven a ser candidatas: el motivo de la exclusión ya no está
+
+**Decidió:** Santino (pedido: "agregaron más casos donde el motor 3 está fallado, ya no
+deberíamos descartarlo"). **Config:** `configs/data/panel_v2_estaticas.yaml` (motor y modelo
+como `static_`); `panel_v2.yaml` los deja `aux_` para re-medir el diseño v1. Detalle:
+[f9-remedicion-v2.md](f9-remedicion-v2.md) punto 5.
+
+**Qué se revierte:** la decisión del 15-09 ("ENG_3 es el 0% de los fallados: sesgo de
+muestreo") y la parte de `ModelSeries` del 18-09 ("sacar Engine y dejar ModelSeries renombra el
+sesgo"). En el universo v2, ENG_3 tiene 47 eventos en 189 autos. Dentro de Brasil falla 2,5×
+más que ENG_2 a igual edad, y en CHL/COL ENG_1 y ENG_3 casi no fallan (4 de 75).
+
+**Con qué condición entran.** Sumadas a survival stacking con horizonte completo, suben el AUC
+por vehículo agrupado de 0,75 a 0,80 y dentro del mercado de 0,64 a 0,71, **y no cambian el AUC
+dentro de mercado × motor** (0,60 → 0,60). Aportan la tasa de su celda, no orden entre autos.
+Por eso:
+1. un modelo con motor y modelo se reporta siempre también dentro de mercado × motor;
+2. el pitch no vende "sabemos qué motor falla en Brasil" como anticipación por uso;
+3. la celda BRA × ENG_3 tiene sus 46 eventos entre los 195 fallados agregados en v2. Si la
+   lista de Ford los eligió por motor, el efecto es de muestreo. **Es una pregunta para Ford.**
+
+**Qué no se decide acá:** si entran al set base del finalista de v2. Eso lo decide la elección
+de modelo sobre v2, con su preregistro.
+
+---
+
+## 2026-09-26 · En la entrega v2 no hay ventana del registro: la censura de un sano es el fin de extracción
+
+**Decidió:** Santino. **Revierte para v2** la entrada del 22-09 ("la censura de un sano es su
+exposición dentro de la ventana 01-09-2025 → 11-03-2026"), que sigue valiendo para lo medido
+con la entrega 1. Detalle: [f9-eda-v2.md](f9-eda-v2.md) §B y §C.
+
+**Por qué:**
+- Los eventos de v2 van de febrero de 2025 a septiembre de 2026. En el dev hay eventos todos
+  los meses desde septiembre de 2025.
+- El mes calendario no agrega nada sobre días desde la venta, mercado y motor (LR = 20,3,
+  15 gl, p = 0,16).
+- El riesgo por días desde la venta es plano (~3,3 por 100 autos-mes) después de los 4 meses. El
+  crecimiento a 16–18 que se medía en v1 era la ventana.
+
+**Qué cambia:**
+- `configs/data/event_clock.yaml` describe la entrega 1.
+- En v2 un sano se censura en el fin de extracción de los sanos (14-09-2026). Todo lo posterior
+  se descarta en el loader (`truncate_after`), porque los fallados se extrajeron hasta el 24-09.
+- Los 2 eventos de dev registrados después del 14-09 dependen del reloj. En el riesgo por fecha
+  registrada (EDA §B/C) son censuras en esa fecha. En el panel v2, con la referencia − 21 d,
+  caen antes del fin de extracción y cuentan como eventos.
+- **Lo que sí aparece es un efecto de cohorte de venta**: los vendidos en 2025Q1 fallan 2,1×
+  más que los de 2025Q2 a igual edad (LR p = 0,005). Las estáticas de fecha siguen como `aux_`.
+
+---
+
 ## 2026-09-24 · F4: el porqué de una alerta de K2 se explica con V3 y solo con hábitos que coinciden con la física del DPF
 
 **Alcance:** explicabilidad de K2, solo dev. **No es un candidato ni gasta presupuesto de

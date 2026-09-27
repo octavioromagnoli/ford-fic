@@ -1,4 +1,17 @@
-# Fuentes crudas. Auditado contra los archivos reales (F1, 2026-09-15).
+# Fuentes crudas: ENTREGA v2 de Ford (archivos del 24-09-2026, recibidos el 26-09; los viajes
+# de fallados, en su versión corregida del 26-09).
+# Auditada contra los archivos reales el 26-09-2026: docs/memoria/f9-entrega-v2.md.
+# La entrega 1 (15-09) está congelada en data/old_raw/ y se lee con raw_sources_v1.yaml.
+#
+# Qué cambió respecto de la entrega 1, archivo por archivo (md5 en la ficha):
+#   - StaticInformation_{Failed,NotFailed}: nuevos. Traen `SalesCity`, los países con
+#     su código ISO (CNTRY_1..5 = ARG, BRA, CHL, COL, PER; PRY es nuevo) y la de
+#     fallados trae UNA FILA POR EVENTO (19 autos con 2 o más).
+#   - TripSummary_Failed y DynamicInformation_Failed: nuevos (fallados agregados,
+#     extracción hasta el 24-09-2026). Como en la entrega 1, los viajes de los 7 pares de
+#     clones que siguen en fallados vienen repetidos bajo los dos códigos.
+#   - TripSummary_NotFailed y DynamicInformation_NotFailed: "(1).csv", byte a byte
+#     los de la entrega 1.
 #
 # Los datos vienen partidos en dos cohortes de muestreo: vehículos con evento
 # registrado (`*_Failed*`) y sin evento (`*_NotFailed*`). Cada tabla lógica se
@@ -6,11 +19,14 @@
 # `cohort` con la clave de la parte. OJO: `cohort` es la etiqueta, NO es una
 # feature -- ver la nota de `vehicles.IdentificationDate` más abajo.
 #
+# Una parte puede traer correcciones (src/data/loader.py): `rename` y `offsets`; una
+# tabla, `truncate_after`. Cada una está justificada donde se usa.
+#
 # Los paths son relativos a ${DATA_DIR} (por defecto `data/`, override con la
 # variable de entorno FORD_DATA_DIR). Los datos no se versionan.
 
 defaults:
-  # Los seis CSV vienen con BOM: sin esto la primera columna sale '\ufeffVehicleCode'.
+  # Los seis CSV vienen con BOM: sin esto la primera columna sale '﻿VehicleCode'.
   read_kwargs:
     encoding: utf-8-sig
 
@@ -19,37 +35,53 @@ part_column: cohort
 tables:
   vehicles:
     description: >
-      Info estática del vehículo, una fila por vehículo (378 con evento, 742 sin).
-      `IdentificationDate` está presente en el 100% de la cohorte failed y nula en
-      el 100% de la not_failed: ES la etiqueta del evento, no una covariable.
-      Nunca entra al modelo como `static_*`.
+      Info estática del vehículo. Sanos: una fila por código (las 13 parejas de clones
+      vienen repetidas dos veces, filas idénticas). Fallados: una fila por EVENTO
+      (298 filas, 277 códigos, 270 autos). `IdentificationDate` está presente en el
+      100% de la cohorte failed y nula en el 100% de la not_failed: ES la etiqueta del
+      evento, no una covariable. Nunca entra al modelo como `static_*`.
     parts:
-      failed: ${DATA_DIR}/raw/StaticInformation_FailedVins.csv
-      not_failed: ${DATA_DIR}/raw/StaticInformation_NotFailedVins.csv
+      failed:
+        path: ${DATA_DIR}/raw/StaticInformation_FailedVins_v2_20260924_144239.csv
+        # Solo en este archivo la columna del evento cambió de nombre.
+        rename: {IdentificationDaysSinceProduction: IdentificationDate}
+        # El ProductionDay de este archivo está contado desde un origen 538 días
+        # anterior: sin el corrimiento, `primer viaje − ProductionDay` da 19569 para
+        # los fallados y 20107 para los sanos; con él, 20107 para los 1019 autos
+        # (IQR 0 d). En los 15 códigos que están en los dos archivos la diferencia es
+        # exactamente 538. `IdentificationDate` es relativa a la producción y no se toca.
+        offsets: {ProductionDay: -538}
+      not_failed: ${DATA_DIR}/raw/StaticInformation_NotFailedVins_v2_20260924_144209.csv
     dtypes:
       VehicleCode: str
       IdentificationDate: float64     # días desde producción; NaN si no hay evento
       daysUntilSale: float64
-      ProductionDay: float64          # días desde el primer vehículo de la lista
-      Engine: str                     # ENG_3 no aparece en la cohorte failed (sesgo de muestreo)
+      ProductionDay: float64          # días desde el primer vehículo de la lista de sanos
+      Engine: str                     # en v2, ENG_3 tiene 63 filas fallidas (62 autos nuevos)
       ModelSeries: str
-      SalesCountry_cd: str
+      SalesCountry_cd: str            # ISO: ARG, BRA, CHL, COL, PER, PRY
+      SalesCity: str                  # 1 nulo en fallados, 21 en sanos
     date_columns: []
 
   trips:
-    description: Un registro por viaje, con agregados del viaje (2.53M filas).
+    description: Un registro por viaje, con agregados del viaje (2,5M filas).
     # Los timestamps mezclan dos formatos (con y sin milisegundos). Sin `ISO8601`,
     # pandas infiere el formato de la primera fila y las otras salen NaT en silencio
     # (ver docs/memoria/f2-fechas-formato-mixto.md).
     date_format: ISO8601
     parts:
-      failed: ${DATA_DIR}/raw/TripSummary_Failed_SelectionVins.csv
-      not_failed: ${DATA_DIR}/raw/TripSummary_NotFailed_SelectionVins.csv
+      failed: "${DATA_DIR}/raw/TripSummary_Failed_SelectionVins_vehiclecode_v2 (2).csv"
+      not_failed: "${DATA_DIR}/raw/TripSummary_NotFailed_SelectionVins (1).csv"
+    # La parte de sanos se extrajo el 14-09-2026 y la de fallados el 24-09. Un viaje
+    # posterior al último de los sanos solo puede existir para un fallado: se descarta.
+    truncate_after:
+      column: TripDatetimeStart
+      at: "2026-09-14T06:02:01+00:00"
     dtypes:
       VehicleCode: str
       OdometerTripStart: float64
       OdometerTripEnd: float64
-      KilometerPerHour: float64       # ~31% nulo
+      KilometerPerHour: float64       # ~33% nulo (los viajes de 0 km)
       FuelLvlStartPc: float64
       FuelLvlEndPc: float64
       EngineOilLifePCStart: float64
@@ -76,27 +108,31 @@ tables:
   signals:
     date_format: ISO8601            # mismo problema de formatos mixtos que `trips`
     description: >
-      Señales dinámicas del postratamiento (10.6M filas). `Message` es el nivel del
+      Señales dinámicas del postratamiento (10M filas). `Message` es el nivel del
       filtro: sus estados "malos" (Full / Overloaded / Over Limit) aparecen en las
       dos cohortes, así que NO son el evento -- son features de severidad y los
       candidatos número uno a memorizarse si no hay gap de blanking (regla 6).
     parts:
-      failed: ${DATA_DIR}/raw/DynamicInformation_Failed_SelectionVins.csv
-      not_failed: ${DATA_DIR}/raw/DynamicInformation_NotFailed_SelectionVins.csv
+      failed: ${DATA_DIR}/raw/DynamicInformation_Failed_SelectionVins_v2.csv
+      not_failed: "${DATA_DIR}/raw/DynamicInformation_NotFailed_SelectionVins (1).csv"
+    # Mismo motivo que en `trips`: la última señal de los sanos es del 12-09-2026 22:00.
+    truncate_after:
+      column: eventTimestamp
+      at: "2026-09-12T22:00:50+00:00"
     dtypes:
       VehicleCode: str
-      OdometerValue: float64          # 11,15% nulo (medido en F2, ver f2-union-y-holdout-dev-test.md)
-      Acumulation: float64            # 9 niveles enteros
+      OdometerValue: float64          # 9,9% nulo en sanos, 0,5% en fallados v2
+      Acumulation: float64            # 0-100
       Message: str
       Regenerations: str              # marcador literal "Regeneration", NO un conteo;
-                                      # nulo salvo en la fila del evento de regeneración
+                                      # nulo salvo en la fila del evento de regeneración.
+                                      # Se corta en mayo de 2026 también en v2.
       DistanceBetweenRegenerations: float64
     date_columns:
       - eventTimestamp
 
-# Clave de join entre tablas: `VehicleCode` en las seis tablas, y los conteos de
-# vehículos cierran exacto (378 / 742 en las tres). El riesgo #1 del plan (que las
-# tablas no joineen) está descartado.
+# Clave de join entre tablas: `VehicleCode` en las seis tablas. Los conteos cierran: 277
+# códigos de fallados en estática, viajes y señales (270 autos: 7 pares son clones).
 join_keys:
   vehicle_id_column: VehicleCode
   odometer_column:

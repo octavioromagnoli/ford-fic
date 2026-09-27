@@ -1,0 +1,15 @@
+# VARIANTE SIN LA VENTANA DE PRODUCCIÓN (universo de 990, holdout test_split_sinventana.json).
+# No es el universo vigente (ese es el de la ventana, 557): se conserva como evidencia de por
+# qué no se usa para elegir ni medir modelos. Ver docs/memoria/f9-universo-v2.md §6.
+#
+# Panel v2 con estáticas de configuración (motor y modelo) + `feat_cut_odo`.
+#
+#   python scripts/build_dataset.py --config configs/data/panel_v2_sinventana_estaticas.yaml
+#   python scripts/build_survival_panel.py --config configs/data/panel_survival_v2_sinventana_estaticas.yaml
+panel_config: configs/data/panel_v2_sinventana_estaticas.yaml
+
+columns:
+  feat_cut_odo: cut_odo
+
+output:
+  panel: ${DATA_DIR}/processed/panel_survival_sinventana_estaticas.parquet

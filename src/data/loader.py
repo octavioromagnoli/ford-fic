@@ -7,13 +7,32 @@ archivos reales solo haya que tocar el config.
 El esquema declarado en ese YAML es *provisional* hasta que cierre F1: el loader
 no rompe si una columna declarada no aparece, pero lo reporta en
 `describe_tables()` para que el desvío quede a la vista y no se descubra tarde.
+
+## Transformaciones por parte (entrega v2, 26-09-2026)
+
+La segunda entrega de Ford no trae las seis partes con el mismo esquema, y cada
+desvío se corrige acá, declarado en el YAML, para que ningún consumidor tenga que
+acordarse (`docs/memoria/f9-entrega-v2.md`):
+
+- `rename`: la estática de fallados llama `IdentificationDaysSinceProduction` a lo
+  que la de sanos llama `IdentificationDate`.
+- `offsets`: el `ProductionDay` de la estática de fallados está contado desde otro
+  origen (+538 días). Sin el corrimiento, el anclaje al calendario se rompe solo
+  para una cohorte.
+- `truncate_after` (por tabla): los fallados se extrajeron diez días después que
+  los sanos. Todo lo posterior al fin de la extracción de los sanos se descarta,
+  para que ninguna cohorte tenga telemetría que la otra no puede tener.
+
+Una parte se puede declarar como un path (formato viejo) o como un mapping con
+`path` y esas claves. Sin ellas, el comportamiento es el de siempre.
 """
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from collections.abc import Iterator
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -32,6 +51,23 @@ _READERS = {
     ".xlsx": pd.read_excel,
     ".xls": pd.read_excel,
 }
+
+
+@dataclass(frozen=True)
+class PartSpec:
+    """Una parte (archivo) de una tabla lógica, con las correcciones que necesita."""
+
+    name: str | None
+    path: Path
+    # columna tal como viene en el archivo -> nombre del contrato
+    rename: dict[str, str] = field(default_factory=dict)
+    # columna del contrato -> corrimiento que se suma después del cast
+    offsets: dict[str, float] = field(default_factory=dict)
+
+    def raw_name(self, column: str) -> str:
+        """Nombre en el archivo de una columna del contrato (para `usecols`)."""
+        inverse = {canonical: raw for raw, canonical in self.rename.items()}
+        return inverse.get(column, column)
 
 
 def load_sources_config(config_path: str | Path = DEFAULT_SOURCES_CONFIG) -> dict[str, Any]:
@@ -70,21 +106,24 @@ def load_table(
 
     frames = []
     parts = _table_parts(spec, table=name)
-    for part_name, part_path in parts:
-        frame = _read_one(part_path, table=name, read_kwargs=read_kwargs, nrows=nrows)
-        if part_name is not None:
-            frame[part_column] = part_name
+    for part in parts:
+        frame = _read_one(part.path, table=name, read_kwargs=read_kwargs, nrows=nrows)
+        frame = _apply_part_columns(frame, part, table=name)
+        if part.name is not None:
+            frame[part_column] = part.name
+        frame = _apply_dtypes(frame, declared_dtypes, table=name)
+        frame = _apply_offsets(frame, part, table=name)
         frames.append(frame)
     df = frames[0] if len(frames) == 1 else pd.concat(frames, ignore_index=True)
 
-    df = _apply_dtypes(df, declared_dtypes, table=name)
     df = _parse_dates(df, date_columns, table=name, fmt=spec.get("date_format"))
+    df = _truncate(df, spec, table=name)
     logger.info(
         "Tabla `%s`: %d filas x %d columnas desde %s",
         name,
         len(df),
         df.shape[1],
-        ", ".join(str(part_path) for _, part_path in parts),
+        ", ".join(str(part.path) for part in parts),
     )
     return df
 
@@ -100,7 +139,8 @@ def iter_table(
 
     `trips` y `signals` suman 13M de filas: agregarlas por ventana (F2) o perfilarlas
     (EDA) no entra cómodo en memoria de una sola vez. `columns` limita la lectura a
-    las columnas que se van a usar.
+    las columnas que se van a usar, con los nombres **del contrato** (el loader los
+    traduce a los del archivo de cada parte).
     """
     cfg = load_sources_config(config_path)
     tables = cfg["tables"]
@@ -113,24 +153,38 @@ def iter_table(
         **(spec.get("read_kwargs", {}) or {}),
     }
     part_column = spec.get("part_column", cfg.get("part_column", "cohort"))
-    declared_dtypes: dict[str, str] = spec.get("dtypes", {}) or {}
-    date_columns: list[str] = spec.get("date_columns", []) or []
+    all_dtypes: dict[str, str] = spec.get("dtypes", {}) or {}
+    all_dates: list[str] = spec.get("date_columns", []) or []
 
-    for part_name, part_path in _table_parts(spec, table=name):
-        if part_path.suffix.lower() not in {".csv", ".txt", ".tsv"}:
-            raise ValueError(f"`iter_table` solo soporta CSV/TSV; `{name}` es {part_path.suffix}")
+    truncate_column = (spec.get("truncate_after") or {}).get("column")
+    for part in _table_parts(spec, table=name):
+        if part.path.suffix.lower() not in {".csv", ".txt", ".tsv"}:
+            raise ValueError(f"`iter_table` solo soporta CSV/TSV; `{name}` es {part.path.suffix}")
         kwargs = dict(read_kwargs)
+        declared_dtypes, date_columns = all_dtypes, all_dates
+        extra: list[str] = []
         if columns is not None:
             wanted = [c for c in columns if c != part_column]
-            kwargs["usecols"] = wanted
+            # El recorte por fin de extracción necesita su fecha aunque no se la pida:
+            # se lee, se recorta y se descarta, para que ninguna lectura parcial lo esquive.
+            if truncate_column and truncate_column not in wanted:
+                extra = [truncate_column]
+            kwargs["usecols"] = [part.raw_name(c) for c in wanted + extra]
             # Sin esto, cada chunk avisa por cada columna declarada que no pedimos.
-            declared_dtypes = {c: t for c, t in declared_dtypes.items() if c in wanted}
-            date_columns = [c for c in date_columns if c in wanted]
-        for chunk in pd.read_csv(part_path, chunksize=chunksize, **kwargs):
-            if part_name is not None:
-                chunk[part_column] = part_name
+            declared_dtypes = {c: t for c, t in all_dtypes.items() if c in wanted}
+            date_columns = [c for c in all_dates if c in wanted + extra]
+        if not part.path.exists():
+            _read_one(part.path, table=name, read_kwargs=kwargs, nrows=0)  # levanta el error de siempre
+        for chunk in pd.read_csv(part.path, chunksize=chunksize, **kwargs):
+            chunk = _apply_part_columns(chunk, part, table=name)
+            if part.name is not None:
+                chunk[part_column] = part.name
             chunk = _apply_dtypes(chunk, declared_dtypes, table=name)
+            chunk = _apply_offsets(chunk, part, table=name)
             chunk = _parse_dates(chunk, date_columns, table=name, fmt=spec.get("date_format"))
+            chunk = _truncate(chunk, spec, table=name, quiet=True)
+            if extra:
+                chunk = chunk.drop(columns=extra)
             yield chunk
 
 
@@ -178,17 +232,45 @@ def describe_tables(
     return pd.DataFrame(rows)
 
 
-def _table_parts(spec: dict[str, Any], *, table: str) -> list[tuple[str | None, Path]]:
-    """Partes de una tabla: `parts: {cohorte: path}` o un único `path`.
+def table_parts(
+    name: str, config_path: str | Path = DEFAULT_SOURCES_CONFIG
+) -> list[PartSpec]:
+    """Las partes declaradas de una tabla, con sus correcciones (para auditorías)."""
+    tables = load_sources_config(config_path)["tables"]
+    if name not in tables:
+        raise KeyError(f"Tabla `{name}` no declarada. Disponibles: {sorted(tables)}")
+    return _table_parts(tables[name], table=name)
+
+
+def _table_parts(spec: dict[str, Any], *, table: str) -> list[PartSpec]:
+    """Partes de una tabla: `parts: {cohorte: path | {path, rename, offsets}}` o un `path`.
 
     Los datos crudos vienen partidos por cohorte de muestreo (failed / not_failed);
     declararlas como `parts` mantiene una sola tabla lógica río abajo.
     """
     parts = spec.get("parts")
     if parts:
-        return [(str(part_name), resolve_path(part_path)) for part_name, part_path in parts.items()]
+        out = []
+        for part_name, part in parts.items():
+            if isinstance(part, (str, Path)):
+                out.append(PartSpec(name=str(part_name), path=resolve_path(part)))
+                continue
+            if not isinstance(part, dict) or "path" not in part:
+                raise ValueError(f"Tabla `{table}`, parte `{part_name}`: se espera un path o un mapping con `path`")
+            unknown = set(part) - {"path", "rename", "offsets"}
+            if unknown:
+                raise ValueError(f"Tabla `{table}`, parte `{part_name}`: claves desconocidas {sorted(unknown)}")
+            out.append(
+                PartSpec(
+                    name=str(part_name),
+                    path=resolve_path(part["path"]),
+                    rename=dict(part.get("rename") or {}),
+                    offsets={str(k): float(v) for k, v in (part.get("offsets") or {}).items()},
+                )
+            )
+        return out
     if spec.get("path"):
-        return [(None, resolve_path(spec["path"]))]
+        return [PartSpec(name=None, path=resolve_path(spec["path"]))]
     raise ValueError(f"Tabla `{table}`: el config no declara ni `path` ni `parts`")
 
 
@@ -219,6 +301,11 @@ def _read_one(
     return df.head(nrows) if nrows is not None else df
 
 
+def _apply_part_columns(frame: pd.DataFrame, part: PartSpec, *, table: str) -> pd.DataFrame:
+    """Renombra las columnas de la parte a los nombres del contrato."""
+    return frame.rename(columns=part.rename) if part.rename else frame
+
+
 def _apply_dtypes(df: pd.DataFrame, dtypes: dict[str, str], *, table: str) -> pd.DataFrame:
     for column, dtype in dtypes.items():
         if column not in df.columns:
@@ -234,6 +321,15 @@ def _apply_dtypes(df: pd.DataFrame, dtypes: dict[str, str], *, table: str) -> pd
     return df
 
 
+def _apply_offsets(frame: pd.DataFrame, part: PartSpec, *, table: str) -> pd.DataFrame:
+    """Suma los corrimientos declarados de la parte (después del cast numérico)."""
+    for column, value in part.offsets.items():
+        if column not in frame.columns:
+            continue
+        frame[column] = frame[column] + value
+    return frame
+
+
 def _parse_dates(
     df: pd.DataFrame, date_columns: list[str], *, table: str, fmt: str | None = None
 ) -> pd.DataFrame:
@@ -243,3 +339,29 @@ def _parse_dates(
             continue
         df[column] = pd.to_datetime(df[column], format=fmt, errors="coerce")
     return df
+
+
+def _truncate(
+    frame: pd.DataFrame, spec: dict[str, Any], *, table: str, quiet: bool = False
+) -> pd.DataFrame:
+    """Descarta las filas posteriores al fin de extracción común (`truncate_after`)."""
+    rule = spec.get("truncate_after")
+    if not rule:
+        return frame
+    column = rule["column"]
+    if column not in frame.columns:
+        # Una lectura con `columns` que no pidió la fecha no se puede recortar: se avisa.
+        logger.warning(
+            "Tabla `%s`: `truncate_after` necesita `%s` y la lectura no la trae; filas SIN recortar",
+            table, column,
+        )
+        return frame
+    at = pd.Timestamp(rule["at"])
+    values = frame[column]
+    if getattr(values.dt, "tz", None) is None and at.tzinfo is not None:
+        at = at.tz_convert(None)
+    keep = ~(values > at)
+    n_drop = int((~keep).sum())
+    if n_drop and not quiet:
+        logger.info("Tabla `%s`: %d filas posteriores a %s descartadas (fin de extracción)", table, n_drop, at)
+    return frame.loc[keep] if n_drop else frame

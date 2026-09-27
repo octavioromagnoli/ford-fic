@@ -1,0 +1,98 @@
+run: sweep-gru-seeds3-top1
+logged_on: '2026-09-27'
+note: 'Mejor trial del sweep (t112) ×3 semillas nuevas: 27,4 / 44,0 / 53,8 / 62,2%
+  (promedio 0,469). Contra la de hoy, −2 a +3 puntos con el IC del bootstrap pareado
+  cruzando 0: NO se adopta (docs/memoria/f10-sweep-gru.md).'
+source:
+  config_path: configs\exp_sweep_gru_seeds3_top1.yaml
+  config_versioned: false
+  branch: exp/sweep-gru
+  commit: 26ddf9c
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: rank_ensemble
+  pr_auc: 0.1717925133439667
+  cohort_ceiling: 0.1766839378238342
+  cohort_lift: 3.0318652849740935
+  within_failed: 0.27338060336490866
+  within_failed_lift: 1.547286112886433
+  when_delta: 0.024958157629361488
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.6610987831281631
+  vehicle_lift: 2.0861339378710917
+  vehicle_base_rate: 0.31690140845070425
+  pr_auc_lo: null
+  pr_auc_hi: null
+  base_rate: 0.058275655814748355
+  lift: 2.9479293015607655
+  roc_auc: 0.7617900528121777
+  brier: 0.2962283192341488
+  detection_rate: 0.15555555555555556
+  median_lead_km: 5975.0
+  budget: 50.0
+  panel: null
+  panel_generation: '2026-09-27'
+  splits: null
+  n_positive: 682
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: sweep-gru-seeds3-top1
+  seed: 42
+  ensemble:
+    method: rank_mean
+    members:
+    - run: sweep-gru-top1-s3-r3
+      config: configs/exp_sweep_gru_top1_s3_r3.yaml
+      weight: 0.3333
+    - run: sweep-gru-top1-s4-r3
+      config: configs/exp_sweep_gru_top1_s4_r3.yaml
+      weight: 0.3333
+    - run: sweep-gru-top1-s5-r3
+      config: configs/exp_sweep_gru_top1_s5_r3.yaml
+      weight: 0.3333
+  compare:
+    reference: f9-v2-ss-r3
+    against:
+    - f9-v2-lgbm-r3
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f10-sweep-gru-confirm
+    job_type: ensemble
+    tags:
+    - f10
+    - v2
+    - sweep
+    - gru
+    - confirm
+    - semillas
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_sweep_gru_seeds3_top1.yaml
+  model:
+    name: rank_ensemble
+    members:
+    - sweep-gru-top1-s3-r3
+    - sweep-gru-top1-s4-r3
+    - sweep-gru-top1-s5-r3

@@ -85,7 +85,12 @@ def main() -> int:
     args = parse_args()
     cfg = load_config(args.config)
     seed = set_seed(int(cfg["seed"]))
-    label_cfg = LabelConfig(**{k: v for k, v in cfg["label"].items()})
+    # Entrega v2: la fecha registrada cae ~2 semanas DESPUÉS de la intervención (el cambio de
+    # aceite y el fin de la sobrecarga del filtro quedan antes; docs/memoria/f9-entrega-v2.md).
+    # La referencia del evento se corre hacia atrás para que el gap G blanquee el taller y
+    # los síntomas, no los días siguientes. 0 = la fecha tal cual (entrega 1).
+    reference_offset_days = float(cfg["label"].get("reference_offset_days", 0) or 0)
+    label_cfg = LabelConfig(**{k: v for k, v in cfg["label"].items() if k != "reference_offset_days"})
     chunksize = int((cfg.get("scan") or {}).get("chunksize", 500_000))
 
     # 1 · universo -----------------------------------------------------------------
@@ -124,7 +129,7 @@ def main() -> int:
     dev_index = static.index[static.index.astype(str).isin(dev)]
     origin_day, anchor_stats = estimate_origin_day(first_trip.reindex(dev_index), static.loc[dev_index, "static_ProductionDay"])
     is_event = static["event_observed"].eq(1)
-    dates = event_dates(static.loc[is_event], origin_day)
+    dates = event_dates(static.loc[is_event], origin_day) - pd.Timedelta(days=reference_offset_days)
     events = project_dates_to_odometer(dates, trips)
     vehicles = static.join(events, how="left")
     vehicles["event_odo_km"] = vehicles["event_odo_km"].where(is_event)
@@ -167,7 +172,7 @@ def main() -> int:
         "config": cfg.get("_config_path"),
         "features_spec": str(spec_path),
         "seed": seed,
-        "label": label_cfg.__dict__,
+        "label": {**label_cfg.__dict__, "reference_offset_days": reference_offset_days},
         "anchor": {"origin_day_since_epoch": origin_day, "estimated_on": "dev_vehicles", **anchor_stats},
         "events": {
             "n": int(len(events)),

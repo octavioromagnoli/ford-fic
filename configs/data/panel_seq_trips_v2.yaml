@@ -1,0 +1,80 @@
+# Panel SECUENCIAL signals + TripSummary sobre la ENTREGA v2 (26-09-2026): panel_seq_trips.yaml con base_panel = panel_v2.yaml.
+#   python scripts/build_seq_panel.py --config configs/data/panel_seq_trips_v2.yaml
+#
+# (lo que sigue es el encabezado de panel_seq_trips.yaml)
+# Panel SECUENCIAL v1 + TripSummary: las mismas filas y la misma ventana que
+# `panel_seq_v1.yaml`, con los 9 canales de `signals` MÁS 6 de `trips`.
+#
+#   python scripts/build_dataset.py --config configs/data/panel_v1.yaml        # antes, si no existe
+#   python scripts/build_seq_panel.py --config configs/data/panel_seq_trips.yaml
+#
+# Por qué existe: el panel secuencial v1 es la lectura de la solución de la tutora
+# ("usó solo dos datasets"), y deja afuera la tabla donde el EDA encontró lo que más
+# anticipa —idle de 0 km, trayectos por debajo de régimen térmico, velocidad—
+# (docs/memoria/f2-eda-revision-y-features.md, CLAUDE.md §hallazgos). Este panel es
+# la ablación de canales por familia: mismo modelo, mismos folds, misma ventana,
+# `signals` vs. `signals + trips`. Si el número no se mueve, la tabla dinámica extra
+# no aporta ORDEN que la red pueda usar (los agregados de `trips` ya están en el
+# panel v1 y ahí sí suman).
+seed: 42
+
+# Universo, cortes, etiqueta, W/G/H/Δ, sanos emparejados, fuentes, dedupe y umbrales
+# de las derivadas: todo sale del panel v1. Acá no se decide nada del problema.
+base_panel: configs/data/panel_v2.yaml
+
+sequence:
+  # L = W del panel v1, igual que panel_seq_v1: con L > W los bins previos al primer
+  # registro codifican el odómetro del corte, que es el atajo que el emparejado de
+  # sanos existe para cerrar. La ventana larga se mide con el panel que la tiene
+  # (panel_w2000 / panel_w3000), no estirando el lookback sobre W = 1000.
+  lookback_km: 1000
+  bin_km: 50              # T = 20 bins. Tiene que dividir a Δ = 500 (grilla de cortes)
+
+  channels:
+    # --- signals: los mismos 9 de panel_seq_v1.yaml, en el mismo orden -------------
+    - {name: n_records, source: signals, column: "*", agg: count, fill: zero, transform: log1p}
+    - {name: observed, source: signals, column: "*", agg: any, fill: zero}
+    - {name: acum_mean, source: signals, column: Acumulation, agg: mean, fill: carry}
+    - {name: acum_max, source: signals, column: Acumulation, agg: max, fill: carry}
+    - {name: acum_rise, source: signals, column: acum_rise, agg: sum, fill: zero}
+    - {name: regen_drops, source: signals, column: acum_regen_drop, agg: sum, fill: zero}
+    - {name: msg_full_frac, source: signals, column: msg_full, agg: mean, fill: zero}
+    - {name: msg_severe_frac, source: signals, column: msg_severe, agg: mean, fill: zero}
+    - {name: msg_cleaning_auto_frac, source: signals, column: msg_cleaning_auto, agg: mean, fill: zero}
+
+    # --- trips: lo que más anticipa según el EDA, en orden de km ------------------
+    # Las derivadas salen de src/features/trips.py con los umbrales de features_v1.yaml
+    # (`regime_temp_c: 70`, `urban_speed_kmh: 30`, ...): el bin las agrega, no las
+    # redefine. Un viaje cae en el bin de su `OdometerTripEnd`.
+    #
+    # Cobertura: `n_trips` es la única de conteo, y es la que le deja ver a la red que
+    # un bin sin viajes no es un bin con valores en cero. Por eso las demás son `carry`
+    # (último valor DENTRO de la misma secuencia, todo anterior al corte) y no `zero`:
+    # un bin sin viajes que entra como `idle_frac = 0` diría "no hubo idle", que es
+    # falso; el arrastre dice "lo último que se sabe del vehículo".
+    - {name: n_trips, source: trips, column: "*", agg: count, fill: zero, transform: log1p}
+    # El 35% de las filas de `trips` es motor encendido sin desplazamiento, y es la
+    # señal que más anticipa el evento. Fracción sobre TODAS las filas del bin.
+    - {name: idle_frac, source: trips, column: idle, agg: mean, fill: carry}
+    # Las tres siguientes son fracciones/medias ENTRE LOS QUE SE MUEVEN: las columnas
+    # `*_moving` traen NaN en los idle, así que el `mean` del bin ya los ignora.
+    - {name: below_regime_frac, source: trips, column: below_regime_moving, agg: mean, fill: carry}
+    - {name: speed_kmh, source: trips, column: speed_kmh_moving, agg: mean, fill: carry}
+    - {name: trip_km, source: trips, column: trip_km_moving, agg: mean, fill: carry}
+    - {name: trip_duration_min, source: trips, column: trip_duration_min_moving, agg: mean, fill: carry}
+
+# Fuera, por construcción (src/features/sequences.py::FORBIDDEN_COLUMNS): el marcador
+# `signals.Regenerations` y `DistanceBetweenRegenerations`, cortados el 25-05-2026 para
+# toda la flota (miden el calendario, y el calendario mide la etiqueta). Las
+# regeneraciones se cuentan desde las caídas del nivel (`acum_regen_drop`).
+#
+# Tampoco entran canales de temperatura ambiente ni nada con deriva de calendario:
+# `aux_`, no `feat_` (CLAUDE.md, hallazgo del emparejado por odómetro × mes).
+
+# Las `aux_*` del panel v1 viajan (no entran al modelo: cv.py selecciona por prefijo),
+# para poder auditar atajos sin reconstruir nada.
+keep_aux: true
+
+output:
+  panel: ${DATA_DIR}/processed/panel_seq_trips_v2.parquet
+  meta: ${DATA_DIR}/processed/panel_seq_trips_v2_meta.json

@@ -1,0 +1,39 @@
+# Re-medición completa sobre la ENTREGA v2 (26-09-2026): ensamble por rango de survival stacking + LightGBM (control), pesos iguales fijos.
+# Exploratorio (no es E1/E2 ni un preregistro): mismas filas y folds, verificado por scripts/ensemble_rank.py.
+#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_v2all_ens_ss_lgbm.yaml
+name: v2all-ens-ss-lgbm
+seed: 42
+ensemble:
+  method: rank_mean
+  members:
+  - run: f9-v2-ss-r3
+    config: configs/exp_v2_ss_r3.yaml
+    weight: 0.5
+  - run: f9-v2-lgbm-r3
+    config: configs/exp_v2_lgbm_r3.yaml
+    weight: 0.5
+compare:
+  reference: f9-v2-ss-r3
+  against:
+  - f9-v2-lgbm-r3
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f9-v2all
+  job_type: ensemble
+  tags:
+  - f9
+  - v2
+  - v2all
+  - ensamble
+  - r3
+  mode: online
+  log_artifacts: false
+output_dir: experiments

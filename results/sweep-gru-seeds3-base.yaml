@@ -1,0 +1,98 @@
+run: sweep-gru-seeds3-base
+logged_on: '2026-09-27'
+note: 'GRU de hoy ×3 semillas nuevas (3, 4, 5), ensamble por rango: detección exacta
+  28,6 / 41,2 / 54,3 / 64,2% al 5/10/15/20% (promedio 0,471). Referencia de la confirmación
+  del sweep (configs/report_sweep_gru.yaml).'
+source:
+  config_path: configs\exp_sweep_gru_seeds3_base.yaml
+  config_versioned: false
+  branch: exp/sweep-gru
+  commit: 26ddf9c
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: rank_ensemble
+  pr_auc: 0.16413388496101725
+  cohort_ceiling: 0.1766839378238342
+  cohort_lift: 3.0318652849740935
+  within_failed: 0.2645098035835544
+  within_failed_lift: 1.4970789469685044
+  when_delta: 0.015471737015475162
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.6545763498014547
+  vehicle_lift: 2.065552037151257
+  vehicle_base_rate: 0.31690140845070425
+  pr_auc_lo: null
+  pr_auc_hi: null
+  base_rate: 0.058275655814748355
+  lift: 2.8165085860686
+  roc_auc: 0.7444416298290574
+  brier: 0.29450895452478787
+  detection_rate: 0.14814814814814814
+  median_lead_km: 8495.842917432923
+  budget: 50.0
+  panel: null
+  panel_generation: '2026-09-27'
+  splits: null
+  n_positive: 682
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: sweep-gru-seeds3-base
+  seed: 42
+  ensemble:
+    method: rank_mean
+    members:
+    - run: sweep-gru-base-s3-r3
+      config: configs/exp_sweep_gru_base_s3_r3.yaml
+      weight: 0.3333
+    - run: sweep-gru-base-s4-r3
+      config: configs/exp_sweep_gru_base_s4_r3.yaml
+      weight: 0.3333
+    - run: sweep-gru-base-s5-r3
+      config: configs/exp_sweep_gru_base_s5_r3.yaml
+      weight: 0.3333
+  compare:
+    reference: f9-v2-ss-r3
+    against:
+    - f9-v2-lgbm-r3
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f10-sweep-gru-confirm
+    job_type: ensemble
+    tags:
+    - f10
+    - v2
+    - sweep
+    - gru
+    - confirm
+    - semillas
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_sweep_gru_seeds3_base.yaml
+  model:
+    name: rank_ensemble
+    members:
+    - sweep-gru-base-s3-r3
+    - sweep-gru-base-s4-r3
+    - sweep-gru-base-s5-r3

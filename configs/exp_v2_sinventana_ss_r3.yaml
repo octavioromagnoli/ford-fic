@@ -1,0 +1,62 @@
+# VARIANTE SIN LA VENTANA DE PRODUCCIÓN (universo de 990, holdout test_split_sinventana.json).
+# No es el universo vigente (ese es el de la ventana, 557): se conserva como evidencia de por
+# qué no se usa para elegir ni medir modelos. Ver docs/memoria/f9-universo-v2.md §6.
+#
+# Re-medición sobre la ENTREGA v2 (26-09-2026): survival stacking (finalista de F3), R=3.
+#
+# Mismo modelo y mismos hiperparámetros que configs/exp_survival_stacking_r3.yaml; cambian los datos (panel_v2.yaml:
+# universo de 557, fecha de referencia − 21 d, folds por label × mercado × motor). No es
+# un candidato nuevo: hace comparable una fila que ya existía (presupuesto de comparaciones).
+#
+#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2_sinventana_ss_r3.yaml
+name: f9-v2-sinventana-ss-r3
+seed: 42
+
+data:
+  panel: ${DATA_DIR}/processed/panel_survival_sinventana.parquet
+
+splits:
+  path: ${DATA_DIR}/processed/splits_sinventana_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+    extra_columns: [static_SalesCountry_cd, aux_static_Engine]   # lo que declara el archivo de folds
+    min_stratum_size: 5
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split_sinventana.json
+
+target:
+  name: discrete_survival
+  params: {}
+
+model:
+  name: survival_stacking
+  params:
+    horizon_km: 3000
+    bin_km: 500
+    max_horizon_km: 6000
+    random_state: 42
+
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f9-v2
+  job_type: train
+  tags: [f9, v2, survival, r3]
+  mode: online
+  log_artifacts: false
+
+output_dir: experiments

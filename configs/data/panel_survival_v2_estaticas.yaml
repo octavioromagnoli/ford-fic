@@ -1,0 +1,11 @@
+# Panel v2 con estáticas de configuración (motor y modelo) + `feat_cut_odo`.
+#
+#   python scripts/build_dataset.py --config configs/data/panel_v2_estaticas.yaml
+#   python scripts/build_survival_panel.py --config configs/data/panel_survival_v2_estaticas.yaml
+panel_config: configs/data/panel_v2_estaticas.yaml
+
+columns:
+  feat_cut_odo: cut_odo
+
+output:
+  panel: ${DATA_DIR}/processed/panel_survival_estaticas.parquet

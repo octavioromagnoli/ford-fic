@@ -1,0 +1,86 @@
+# Reporte de la re-medición completa sobre dev v2 (26-09-2026): todas las corridas medidas con la
+# misma cuenta, detección por auto de 2% a 30% de falsas alarmas. Reporte, no selección.
+#
+#   python scripts/report_v2_models.py --config configs/report_v2_models.yaml
+seed: 0
+output_name: report-v2-models
+experiments_dir: experiments
+strata_panel: ${DATA_DIR}/processed/panel.parquet   # mercado y motor por vehículo (para el AUC dentro de celda)
+
+k_consecutive: 2
+n_thresholds: 50              # solo para la columna "grilla 5%" (la cuenta de train.py)
+budgets: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+null_permutations: 200
+n_boot: 1000
+reference: f9-v2-ss-r3        # survival stacking de F3: el que aprueba (a0) y (a') sobre v2
+extra_references: [piso-celda, v2all-seeds3-cnn-lstm-signals]   # la composición sola y la CNN-LSTM de la tutora
+
+bag_diag:
+  healthy_cuts: 9             # cortes medios por sano en el panel v1 (f9-remedicion-v2.md)
+
+runs:
+  # pisos
+  - {run: f9-v2-baserate, label: Tasa base, family: piso}
+  - {run: f9-v2-posicional-r3, label: "Piso posicional (solo odómetro del corte)", family: piso}
+  # tabulares
+  - {run: f9-v2-lgbm-r3, label: LightGBM (control F3), family: tabular}
+  - {run: v2all-lgbm-grande-r3, label: LightGBM grande, family: tabular}
+  - {run: v2all-lgbm-bag10-r3, label: LightGBM embolsado ×10, family: tabular}
+  - {run: v2all-lgbm-ordinal-r3, label: LightGBM ordinal, family: tabular}
+  - {run: v2all-lgbm-estaticas-r3, label: LightGBM + motor/modelo, family: tabular}
+  - {run: v2all-logistic-l2-r3, label: Logística L2, family: tabular}
+  - {run: v2all-logistic-l1-r3, label: Logística L1, family: tabular}
+  # supervivencia
+  - {run: f9-v2-ss-r3, label: Survival stacking (F3), family: supervivencia}
+  - {run: v2all-ss-bag10-r3, label: SS embolsado ×10, family: supervivencia}
+  - {run: v2all-ss-grande-r3, label: SS grande, family: supervivencia}
+  - {run: v2all-ss-h12k-r3, label: SS horizonte 12.000 km, family: supervivencia}
+  - {run: f9-v2-ss-hfull-r3, label: "SS horizonte completo (K2 sin ventana)", family: supervivencia}
+  - {run: v2all-ss-estaticas-r3, label: SS + motor/modelo, family: supervivencia}
+  - {run: f9-v2-ss-hfull-r3-estaticas, label: SS horizonte completo + motor/modelo, family: supervivencia}
+  - {run: v2all-gpboost-ss-r3, label: SS + efecto aleatorio por auto (GPBoost), family: supervivencia}
+  # secuenciales (semilla 42; las semillas 1 y 2 van abajo, en `semilla`)
+  - {run: v2all-cnn-lstm-signals-r3, label: "CNN-LSTM tutora (signals + país)", family: secuencial}
+  - {run: v2all-cnn-lstm-trips-r3, label: "CNN-LSTM + TripSummary", family: secuencial}
+  - {run: v2all-cnn-lstm-trips-grande-r3, label: "CNN-LSTM grande + TripSummary", family: secuencial}
+  - {run: v2all-gru-signals-r3, label: "GRU (signals + país)", family: secuencial}
+  - {run: v2all-gru-trips-r3, label: "GRU + TripSummary", family: secuencial}
+  - {run: v2all-cnn-lstm-signals-estaticas-r3, label: "CNN-LSTM tutora con estática completa", family: secuencial}
+  - {run: v2all-cnn-lstm-trips-estaticas-r3, label: "CNN-LSTM + TripSummary + estática completa", family: secuencial}
+  - {run: v2all-gru-trips-estaticas-r3, label: "GRU + TripSummary + estática completa", family: secuencial}
+  # promedio por rango de 3 semillas del modelo (el mismo modelo con menos varianza)
+  - {run: v2all-seeds3-cnn-lstm-signals, label: "CNN-LSTM tutora (signals + país) ×3 semillas", family: secuencial ×3}
+  - {run: v2all-seeds3-cnn-lstm-trips, label: "CNN-LSTM + TripSummary ×3 semillas", family: secuencial ×3}
+  - {run: v2all-seeds3-gru-signals, label: "GRU (signals + país) ×3 semillas", family: secuencial ×3}
+  - {run: v2all-seeds3-gru-trips, label: "GRU + TripSummary ×3 semillas", family: secuencial ×3}
+  - {run: v2all-seeds3-cnn-lstm-signals-estaticas, label: "CNN-LSTM tutora con estática completa ×3 semillas", family: secuencial ×3}
+  - {run: v2all-seeds3-cnn-lstm-trips-estaticas, label: "CNN-LSTM + TripSummary + estática completa ×3 semillas", family: secuencial ×3}
+  - {run: v2all-seeds3-gru-trips-estaticas, label: "GRU + TripSummary + estática completa ×3 semillas", family: secuencial ×3}
+  # ensambles por rango (scripts/ensemble_rank.py)
+  - {run: v2all-ens-ss-cnntrips, label: "Ensamble SS + CNN-LSTM trips", family: ensamble}
+  - {run: v2all-ens-ss-lgbm, label: "Ensamble SS + LightGBM", family: ensamble}
+  - {run: v2all-ens-ss-cnntrips-lgbm, label: "Ensamble SS + CNN-LSTM trips + LightGBM", family: ensamble}
+  # semillas sueltas (para la dispersión por semilla; no van a la tabla principal)
+  - {run: v2all-cnn-lstm-signals-s1-r3, label: "CNN-LSTM tutora (semilla 1)", family: semilla}
+  - {run: v2all-cnn-lstm-signals-s2-r3, label: "CNN-LSTM tutora (semilla 2)", family: semilla}
+  - {run: v2all-cnn-lstm-trips-s1-r3, label: "CNN-LSTM + TripSummary (semilla 1)", family: semilla}
+  - {run: v2all-cnn-lstm-trips-s2-r3, label: "CNN-LSTM + TripSummary (semilla 2)", family: semilla}
+  - {run: v2all-gru-signals-s1-r3, label: "GRU signals (semilla 1)", family: semilla}
+  - {run: v2all-gru-signals-s2-r3, label: "GRU signals (semilla 2)", family: semilla}
+  - {run: v2all-gru-trips-s1-r3, label: "GRU + TripSummary (semilla 1)", family: semilla}
+  - {run: v2all-gru-trips-s2-r3, label: "GRU + TripSummary (semilla 2)", family: semilla}
+  - {run: v2all-cnn-lstm-signals-estaticas-s1-r3, label: "CNN-LSTM tutora + estática completa (semilla 1)", family: semilla}
+  - {run: v2all-cnn-lstm-signals-estaticas-s2-r3, label: "CNN-LSTM tutora + estática completa (semilla 2)", family: semilla}
+  - {run: v2all-cnn-lstm-trips-estaticas-s1-r3, label: "CNN-LSTM + trips + estática completa (semilla 1)", family: semilla}
+  - {run: v2all-cnn-lstm-trips-estaticas-s2-r3, label: "CNN-LSTM + trips + estática completa (semilla 2)", family: semilla}
+  - {run: v2all-gru-trips-estaticas-s1-r3, label: "GRU + trips + estática completa (semilla 1)", family: semilla}
+  - {run: v2all-gru-trips-estaticas-s2-r3, label: "GRU + trips + estática completa (semilla 2)", family: semilla}
+
+# Mezclas por rango con el piso de celda (misma repetición, mismos folds): ¿el uso le suma a la composición?
+rank_mixes:
+  - {name: mix-celda-ss, label: "Celda + survival stacking (rango)", members: [piso-celda, f9-v2-ss-r3]}
+  - {name: mix-celda-lgbm, label: "Celda + LightGBM (rango)", members: [piso-celda, f9-v2-lgbm-r3]}
+  - {name: mix-celda-cnntrips3, label: "Celda + CNN-LSTM trips ×3 (rango)", members: [piso-celda, v2all-seeds3-cnn-lstm-trips]}
+  - {name: mix-celda-grutrips3, label: "Celda + GRU trips ×3 (rango)", members: [piso-celda, v2all-seeds3-gru-trips]}
+  - {name: mix-grutrips3-cnntrips3, label: "GRU trips ×3 + CNN-LSTM trips ×3 (rango)", members: [v2all-seeds3-gru-trips, v2all-seeds3-cnn-lstm-trips]}
+  - {name: mix-ss-grutrips3, label: "SS + GRU trips ×3 (rango)", members: [f9-v2-ss-r3, v2all-seeds3-gru-trips]}

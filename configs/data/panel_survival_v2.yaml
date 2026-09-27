@@ -1,0 +1,11 @@
+# Panel v2 + `feat_cut_odo` (el odómetro del corte como covariable del hazard base), igual
+# que configs/data/panel_survival.yaml hacía sobre el panel v1. Mismas filas ⇒ mismos folds.
+#
+#   python scripts/build_survival_panel.py --config configs/data/panel_survival_v2.yaml
+panel_config: configs/data/panel_v2.yaml
+
+columns:
+  feat_cut_odo: cut_odo
+
+output:
+  panel: ${DATA_DIR}/processed/panel_survival.parquet

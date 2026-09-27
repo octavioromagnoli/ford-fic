@@ -1,0 +1,122 @@
+# Panel sobre la ENTREGA v2 (26-09-2026) con el DISEÑO del panel v1: misma terna, mismo
+# emparejado, mismas features. Sirve para re-medir lo que ya existía sobre los datos
+# nuevos (no es un candidato: la regla del presupuesto de comparaciones lo permite
+# porque hace comparable una fila existente).
+#
+#   python scripts/build_dataset.py --config configs/data/panel_v2.yaml
+#
+# Tres cosas cambian respecto de panel_v1.yaml, y ninguna es de modelado:
+#   1. el holdout es el de la entrega v2 (557 vehículos: 446 dev / 111 test);
+#   2. `label.reference_offset_days: 21`: la fecha registrada v2 cae ~2 semanas después
+#      de la intervención (cambio de aceite y fin de la sobrecarga del filtro antes de la
+#      fecha; mediana del corrimiento v2 − v1: 14 d, p75 27-33 d). Sin correrla, el gap G
+#      (500 km ≈ 9 días) dejaría el taller y los síntomas adentro de la última ventana;
+#   3. los folds estratifican por label × mercado × motor (src/eval/splits.py).
+# Evidencia: docs/memoria/f9-entrega-v2.md y f9-eda-v2.md.
+#
+seed: 42
+
+sources: configs/data/raw_sources.yaml
+dedupe: configs/data/vehicle_dedupe.yaml   # 13 vehículos duplicados bajo dos códigos (F1)
+
+# Universo + holdout congelado. El panel se construye con los 557 del universo v2 (dev +
+# test); los 434 excluidos no entran. `dev_vehicles` es además la referencia para
+# estimar el origen del calendario y la distribución de cortes de los sanos: el test
+# no se mira ni en agregado.
+test_split: ${DATA_DIR}/processed/test_split.json
+
+axis: odometer            # eje por defecto (plan §0.3). El evento se traduce a km con el anclaje de F1.
+
+label:
+  window_km: 1000         # W · ventana móvil hacia atrás sobre la que se agregan las features
+  gap_km: 500             # G · blanking. Sin esto el modelo detecta en vez de anticipar
+  horizon_km: 3000        # H · el evento cuenta si cae en [corte+G, corte+G+H]
+  # Referencia del evento = fecha registrada − 21 d (ver el encabezado). 0 = entrega 1.
+  reference_offset_days: 21
+  cut_step_km: 500        # Δ · cada cuántos km se genera un punto de corte (grilla de múltiplos)
+  # Sanos: un corte solo es un negativo verificable si el vehículo se observó hasta
+  # corte+G+H. `drop` los descarta; `keep_as_negative` los deja como 0 asumiendo que
+  # no hubo evento (más filas, etiqueta con ruido).
+  censored_policy: drop
+  # Control de calidad de la ventana: filas con menos viajes, o que cubren menos de
+  # esta fracción de W en km recorridos, se descartan (huecos de registro).
+  min_trips_in_window: 5
+  min_km_covered_frac: 0.5
+
+sampling:
+  # Los cortes de vehículos sanos se muestrean con la MISMA distribución que los
+  # positivos de dev (plan §9), sobre el odómetro Y sobre el mes del corte. En v2 los
+  # eventos se reparten en 13 meses, pero la exposición previa al evento de los fallados
+  # sigue cayendo antes (pico sep-2025 a ene-2026) que la de los sanos (pareja en 2026):
+  # sin el mes, el calendario vuelve a ser un atajo (f9-eda-v2.md §1). Mismas celdas y
+  # mismo déficit que el panel v1.
+  match_healthy_cut_distribution: true
+  match_on: [cut_odo, cut_date]
+  odo_bin_km: 4000
+  date_freq: M
+  max_shortfall: 0.25
+
+features:
+  spec: configs/data/features_v1.yaml
+  # Familias del plan §4. Cada entrada del spec se traduce a una columna feat_* con
+  # la primitiva de src/features/windows.py: (columna derivada, agregador).
+  enabled_families: [A_thermal, B_regeneration, C_usage, D_severity]
+
+  # Estáticas que SÍ entran como `static_*`.
+  #   - SalesCountry_cd: en v2 son cinco mercados con niveles de uso y tasas de falla muy
+  #     distintos; el modelo necesita verlo para no confundir nivel con síntoma.
+  static_columns: [SalesCountry_cd]
+
+  # Fuera del set base (quedan en el panel como `aux_static_*`, para ablaciones):
+  #   - Engine: ENG_3 es el 0% de los fallados y el 20% de los sanos de dev (F1).
+  #   - ModelSeries: el cruce Engine × ModelSeries es casi diagonal; MODEL_3 tiene 0
+  #     eventos de 24 y MODEL_4 2 de 91. Sacar Engine y dejar ModelSeries renombra el sesgo.
+  #   - ProductionDay: ρ = −0,435 con la etiqueta y −0,933 con span_days. Es la
+  #     ventana de observación (los producidos tarde no llegaron a fallar), no física.
+  #   - daysUntilSale: el mismo sesgo por otra vía. La fecha de venta
+  #     (ProductionDay + daysUntilSale) da ρ = −0,48 con la etiqueta y la tasa de
+  #     eventos por quintil va de 0,53 a 0,00: un vehículo vendido tarde no llegó a
+  #     acumular km antes del corte de los datos. Con W/G/H fijos, un modelo que la use
+  #     aprende cuándo se vendió el auto, no cómo se usa.
+  # En v2 se suma SalesCity (una ciudad no es una feature: su altura, si entra, va aparte).
+  # Engine y ModelSeries siguen afuera SOLO para que la re-medición sea la del diseño v1;
+  # su aporte se mide con configs/data/panel_survival_v2_estaticas.yaml.
+  static_excluded: [Engine, ModelSeries, ProductionDay, daysUntilSale, SalesCity]
+
+splits:
+  n_splits: 5
+  seed: 42
+  # De qué columna sale la etiqueta con la que se estratifican los folds. `label` es
+  # la que mide el PR-AUC (¿el evento cae en el horizonte de ESTA fila?);
+  # `event_observed` dice si el vehículo falló alguna vez, que no es lo mismo.
+  # `level: vehicle` la colapsa con max por vehículo: ¿tiene al menos un corte
+  # positivo? Ver src/eval/splits.py::make_splits.
+  stratify:
+    column: label
+    level: vehicle
+    # v2: el estrato es label × mercado × motor (los chicos se funden hacia arriba). El
+    # riesgo cambia 8× entre mercados y ENG_3 falla casi solo en Brasil.
+    extra_columns: [static_SalesCountry_cd, aux_static_Engine]
+    min_stratum_size: 5
+  # Guarda dura: un fold con menos de estas filas label=1 en validación hace fallar
+  # el armado. Con menos, el PR-AUC del fold es ruido; con cero, NaN.
+  min_valid_positives: 5
+  # Repeticiones de la CV, cada una con otra semilla (seed + r*10000). 1 = CV simple.
+  # La repetición 0 siempre son los folds de `seed`, así que subir R no invalida lo
+  # ya corrido: lo complementa.
+  n_repeats: 1
+
+output:
+  panel: ${DATA_DIR}/processed/panel.parquet
+  splits: ${DATA_DIR}/processed/splits.json
+  meta: ${DATA_DIR}/processed/panel_meta.json
+
+# Publicación como wandb Artifacts (plan §4): `python scripts/log_panel_artifact.py`.
+# Mismo team y proyecto que las corridas (regla 9); `WANDB_ENTITY`/`WANDB_MODE` lo pisan.
+wandb:
+  project: ford-fic
+  entity: oromagnoli-
+  artifact: panel-v2            # tipo `dataset`: panel.parquet + splits.json + panel_meta.json + YAMLs
+  holdout_artifact: test-split  # tipo `holdout`: test_split.json
+  group: f2-panel
+  tags: [f9, panel-v2]

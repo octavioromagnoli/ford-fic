@@ -1,0 +1,80 @@
+# Sweep bayesiano de hiperparámetros de la GRU + TripSummary + estática completa (27-09-2026).
+#
+# Pedido del equipo: la GRU va a ser el modelo final y antes de fijarla se barren sus
+# hiperparámetros. Solo dev, con los mismos folds (splits_r3.json) y la misma cuenta que
+# report_v2_models.py. El test no se toca.
+#
+#   python scripts/sweep_gru.py --config configs/sweep_gru.yaml
+#
+# Ojo con lo que sale (presupuesto de comparaciones, CLAUDE.md): el mejor trial de un sweep es
+# el máximo de muchos intentos contra los mismos 135 autos con evento y los mismos folds, así
+# que su detección está inflada. El sweep propone una configuración; la que se adopte se
+# re-mide con semillas que el sweep no usó (`--write-configs`) y contra la de hoy con bootstrap pareado.
+name: sweep-gru
+base_config: configs/exp_v2all_gru_trips_estaticas_r3.yaml   # panel, folds, holdout y eval
+
+# --- presupuesto --------------------------------------------------------------------------
+# Medido el 27-09 (12 núcleos físicos, 6 workers × 3 hilos ≈ 94% de CPU): la configuración de hoy
+# (40 épocas, batch 64, R = 3) tarda 7,3 min; el trial mediano del espacio, ~4–5 min. Con la poda
+# (un trial podado cuesta 1/3), 1 h rinde ~80–120 trials: 12 aleatorios y el resto guiados por TPE.
+# Más horas no compran mucho: con 135 autos con evento, más trials también inflan más al mejor.
+timeout_minutes: 60
+n_workers: 6
+threads_per_worker: 3
+max_trials: null               # null: corta solo por tiempo
+
+# --- optimizador ----------------------------------------------------------------------------
+study:
+  storage: experiments/sweep-gru/journal.log   # JournalFileStorage: varios procesos, sin servidor
+  sampler:
+    name: tpe
+    seed: 42
+    n_startup_trials: 12       # aleatorios antes de que TPE modele (≈ 1 ronda de los workers × 2)
+    multivariate: true         # modela las interacciones (lr × épocas × batch)
+    group: true                # espacio condicional (attention_hidden solo con pooling: attention)
+  pruner:                      # poda por repetición: un trial que en la rep 0 queda bajo la mediana no sigue
+    name: median
+    n_startup_trials: 12
+    n_warmup_steps: 0
+  enqueue_base: true           # el primer trial es la configuración de hoy: la vara, medida con la misma cuenta
+
+# --- objetivo -----------------------------------------------------------------------------
+# Detección por auto con umbral exacto (report_v2_models.py), promedio de los presupuestos de
+# falsas alarmas del pitch, y después promedio de las R repeticiones (nunca de los scores
+# promediados: eso es un ensamble encubierto, run_cv).
+objective:
+  budgets: [0.05, 0.10, 0.15, 0.20]
+  k_consecutive: 2
+
+# --- espacio ------------------------------------------------------------------------------
+# type: int | float | categorical; log: true para escalas multiplicativas.
+# `when` hace el parámetro condicional (solo se sortea si el otro tomó ese valor).
+space:
+  pooling:          {type: categorical, choices: [attention, last, mean]}
+  hidden:           {type: int, low: 8, high: 64, log: true}
+  num_layers:       {type: int, low: 1, high: 2}
+  attention_hidden: {type: int, low: 4, high: 32, log: true, when: {pooling: attention}}
+  static_hidden:    {type: int, low: 2, high: 16, log: true}
+  head_hidden:      {type: int, low: 8, high: 64, log: true}
+  dropout:          {type: float, low: 0.0, high: 0.5}
+  epochs:           {type: int, low: 10, high: 80, step: 5}
+  batch_size:       {type: categorical, choices: [32, 64, 128, 256]}
+  learning_rate:    {type: float, low: 1.0e-4, high: 1.0e-2, log: true}
+  weight_decay:     {type: float, low: 1.0e-6, high: 1.0e-2, log: true}
+  grad_clip:        {type: float, low: 0.5, high: 5.0, log: true}
+  class_weight:     {type: categorical, choices: [balanced, none]}
+
+# --- salida -------------------------------------------------------------------------------
+top_k: 5                       # las mejores quedan en experiments/sweep-gru/top.yaml
+confirm_seeds: [3, 4, 5]       # `--write-configs`: las top_k y la de hoy con semillas que nadie usó (el sweep usa la 42)
+
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f10-sweep-gru
+  job_type: sweep
+  tags: [f10, v2, sweep, gru]
+  mode: online
+
+output_dir: experiments

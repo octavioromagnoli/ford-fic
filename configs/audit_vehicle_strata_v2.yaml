@@ -1,0 +1,31 @@
+# ¿Qué agrega entrenar con los autos de fuera de la ventana de producción? (26-09-2026)
+#
+#   python scripts/audit_vehicle_strata.py --config configs/audit_vehicle_strata_v2.yaml
+#
+# Las mismas corridas sobre los dos universos de la entrega v2: con la ventana
+# (exp_v2_*, 557 autos, el vigente) y sin ella (exp_v2_sinventana_*, 990). El AUC por vehículo
+# se mide agrupado, dentro del mercado y dentro de mercado × motor, sobre todos los autos de
+# dev de cada corrida y solo sobre los autos de dev de la ventana (426 con cortes en su panel, 419 en el sin ventana).
+vehicle_table: ${DATA_DIR}/processed/vehicles.parquet
+experiments_dir: ${REPO_ROOT}/experiments
+
+subsets:
+  todos: null
+  ventana: ${DATA_DIR}/processed/test_split.json   # sus dev_vehicles
+
+strata:
+  agrupado: []
+  mercado: [static_SalesCountry_cd]
+  mercado_motor: [static_SalesCountry_cd, static_Engine]
+
+runs:
+  - f9-v2-lgbm-r3
+  - f9-v2-ss-r3
+  - f9-v2-ss-hfull-r3
+  - f9-v2-ss-hfull-r3-estaticas
+  - f9-v2-sinventana-lgbm-r3
+  - f9-v2-sinventana-ss-r3
+  - f9-v2-sinventana-ss-hfull-r3
+  - f9-v2-sinventana-ss-hfull-r3-estaticas
+
+output: ${REPO_ROOT}/experiments/audit_vehicle_strata_v2.csv

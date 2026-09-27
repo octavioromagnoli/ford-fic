@@ -1,0 +1,94 @@
+run: v2all-ens-ss-lgbm
+logged_on: '2026-09-26'
+note: 'Re-medición completa v2 (26-09, exploratoria, no elige): Ensamble SS + LightGBM.
+  Detección por auto con umbral exacto al 5 · 10 · 20% de falsas alarmas: 17 · 29
+  · 45% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor 18 · 33 · 62). AUC
+  por auto dentro de mercado × motor 0.58.  docs/memoria/f9-remedicion-completa-v2.md'
+source:
+  config_path: configs\exp_v2all_ens_ss_lgbm.yaml
+  config_versioned: false
+  branch: exp/v2-remedicion-completa
+  commit: cd01989
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: rank_ensemble
+  pr_auc: 0.11863194824841912
+  cohort_ceiling: 0.1766839378238342
+  cohort_lift: 3.0318652849740935
+  within_failed: 0.24935056192216562
+  within_failed_lift: 1.4112803064802921
+  when_delta: -0.008341218387794502
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.525300591476474
+  vehicle_lift: 1.657615199770207
+  vehicle_base_rate: 0.31690140845070425
+  pr_auc_lo: null
+  pr_auc_hi: null
+  base_rate: 0.058275655814748355
+  lift: 2.035703358286289
+  roc_auc: 0.7082684633965034
+  brier: 0.30446479104248736
+  detection_rate: 0.16296296296296298
+  median_lead_km: 6514.854489406058
+  budget: 50.0
+  panel: null
+  panel_generation: '2026-09-26'
+  splits: null
+  n_positive: 682
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: v2all-ens-ss-lgbm
+  seed: 42
+  ensemble:
+    method: rank_mean
+    members:
+    - run: f9-v2-ss-r3
+      config: configs/exp_v2_ss_r3.yaml
+      weight: 0.5
+    - run: f9-v2-lgbm-r3
+      config: configs/exp_v2_lgbm_r3.yaml
+      weight: 0.5
+  compare:
+    reference: f9-v2-ss-r3
+    against:
+    - f9-v2-lgbm-r3
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f9-v2all
+    job_type: ensemble
+    tags:
+    - f9
+    - v2
+    - v2all
+    - ensamble
+    - r3
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  _config_path: configs\exp_v2all_ens_ss_lgbm.yaml
+  model:
+    name: rank_ensemble
+    members:
+    - f9-v2-ss-r3
+    - f9-v2-lgbm-r3
