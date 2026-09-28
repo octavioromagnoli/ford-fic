@@ -155,11 +155,13 @@ if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
 </script></body></html>''', height=118)
 
 
-def chart_style(chart):
-    return chart.properties(padding={"left": 16, "right": 24, "top": 16, "bottom": 16}, autosize={"type": "fit", "contains": "padding"}).configure(
+def chart_style(chart, fit="fit"):
+    """`fit="fit-x"` for charts with one row per item: the height is the plot's (title, axes and legend go around
+    it) instead of the whole chart's, so the rows keep their size however long the legend or the axis title get."""
+    return chart.properties(padding={"left": 16, "right": 24, "top": 16, "bottom": 16}, autosize={"type": fit, "contains": "padding"}).configure(
         background=PANEL).configure_view(strokeOpacity=0).configure_title(
         color="#c6d6ec", font="Manrope", fontSize=12, fontWeight=600, anchor="start", offset=12).configure_axis(
         labelColor="#b6c8e0", titleColor="#b6c8e0", gridColor="#20324d", domainColor="#30445f",
         tickColor="#30445f", labelFont="Manrope", titleFont="Manrope", labelFontSize=12,
         titleFontSize=12, titlePadding=16).configure_legend(labelColor="#c6d6ec", titleColor="#c6d6ec",
-        labelFont="Manrope", labelFontSize=12)
+        labelFont="Manrope", labelFontSize=12, labelLimit=0)

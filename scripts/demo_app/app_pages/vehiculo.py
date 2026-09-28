@@ -7,7 +7,7 @@ import streamlit as st
 
 from scripts.demo_app.common import (DEVIATION_COLORS, KIND_LABELS, MODEL_COLOR, MUTED, agents_cfg, bundle,
                                      current_week, events, triage_for, week_label)
-from src.agents.formatting import format_value, short_date
+from src.agents.formatting import format_value, number, short_date
 from src.agents.policy import week_end
 
 from scripts.demo_app.presentation import heading, chart_style, message, table
@@ -20,6 +20,8 @@ today = week_end(week)
 v_all = b.vehicles
 seen = b.cuts.loc[b.cuts["cut_date"] < today, "vehicle_id"].unique()
 name = model_name(b.meta)
+# Vega escribe los decimales con punto: los ejes los pasan a coma, como el resto de la app.
+DECIMAL_COMMA = "replace(format(datum.value, '.1f'), '.', ',')"
 
 
 def _label(vid: str) -> str:
@@ -57,13 +59,15 @@ with st.container(key="vehicle_metrics"):
 
 # --- el riesgo en el tiempo --------------------------------------------------------------------
 # Solo lo que se sabía hasta esta semana: lo que pasó después está en «Qué pasó después».
-data = past.assign(km=lambda f: f["cut_odo"].map(lambda x: format_value(x, "int") + " km"))
+data = past.assign(km=lambda f: f["cut_odo"].map(lambda x: format_value(x, "int") + " km"),
+                   puntaje=lambda f: f["score"].map(lambda s: number(s, 2)))
 base = alt.Chart(data).encode(x=alt.X("cut_date:T", title=None, axis=alt.Axis(format="%d-%m-%y", tickCount=6)))
-line = base.mark_line(color=MODEL_COLOR, strokeWidth=2).encode(y=alt.Y("score:Q", title=None, scale=alt.Scale(domain=[0, 1])))
+line = base.mark_line(color=MODEL_COLOR, strokeWidth=2).encode(
+    y=alt.Y("score:Q", title=None, scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(labelExpr=DECIMAL_COMMA)))
 points = base.mark_point(filled=True, size=70, color=MODEL_COLOR).encode(
     y="score:Q",
     tooltip=[alt.Tooltip("cut_date:T", title="Fecha", format="%d-%m-%Y"), alt.Tooltip("km:N", title="Odómetro"),
-             alt.Tooltip("score:Q", title="Puntaje", format=".2f")])
+             alt.Tooltip("puntaje:N", title="Puntaje")])
 rules = pd.DataFrame({"y": [b.threshold], "t": [f"umbral ({b.meta['budget_per_1000'] / 10:g}% de falsas alarmas)"]})
 threshold = alt.Chart(rules).mark_rule(color=MUTED, strokeDash=[5, 3]).encode(y="y:Q", tooltip=alt.Tooltip("t:N", title=""))
 layers = [threshold, line, points]
@@ -99,29 +103,42 @@ with right:
     dv = b.deviations.loc[b.deviations["vehicle_id"].eq(vid)].copy()
     if len(dv):
         # Solo hacia el lado que la física del filtro señala como riesgoso: del lado de los sanos no hay barra.
-        dv["efecto"] = np.select([dv["named"], dv["risky"]], list(DEVIATION_COLORS)[:2], default=list(DEVIATION_COLORS)[2])
+        named_label, risky_label = DEVIATION_COLORS
+        dv["efecto"] = np.where(dv["named"], named_label, risky_label)
         dv["start"] = 50.0
-        dv["end"] = np.where(dv["risky"], 100.0 * dv["share"], 50.0)
-        dv["step"] = (dv["label"] + " (" + dv["value_text"] + " vs " + dv["reference_text"] + ")"
-                      + np.where(dv["risky"], "", " · del lado de los sanos"))
+        dv["end"] = 100.0 * dv["share"]
+        dv["detail"] = dv["value_text"] + " vs " + dv["reference_text"]
         dv["supera"] = [f"{format_value(s_, 'pct')} de los sanos del mercado" if r_ else "—"
                         for s_, r_ in zip(dv["share"], dv["risky"])]
         dv = dv.sort_values(["named", "risky", "share"], ascending=[False, False, False], kind="stable")
         min_share = float(b.meta["explanation"]["min_healthy_share"])
-        # Cada hábito escribe su nombre arriba de la barra, no en el eje: en un celular el eje se comía el ancho.
-        rows = alt.Chart(dv).encode(y=alt.Y("step:N", sort=None, title=None, axis=None))
-        bars = rows.mark_bar(cornerRadiusEnd=4, height=12, yOffset=9).encode(
-            x=alt.X("start:Q", title=WHY_CHART_AXIS, scale=alt.Scale(domain=[50, 100])), x2="end:Q",
+        # Una fila de 60 px por hábito: su nombre y sus valores en dos renglones arriba de la barra, no en el eje (en un
+        # celular el eje se comía el ancho). El alto es el del gráfico sin título, eje ni leyenda (`fit-x`): con `fit`
+        # se lo comían ellos, las filas quedaban en 21 px y cada barra caía en el renglón del hábito siguiente.
+        rows = alt.Chart(dv).encode(y=alt.Y("feature:N", title=None, axis=None,
+                                            scale=alt.Scale(domain=list(dv["feature"]))))
+        # La escala y el título, iguales en las dos capas con x: al combinar los ejes, un título vacío le gana al otro.
+        x_scale, x_title = alt.Scale(domain=[50, 100]), list(WHY_CHART_AXIS)
+        bars = rows.transform_filter(alt.datum.risky).mark_bar(cornerRadiusEnd=4, height=12, yOffset=15).encode(
+            x=alt.X("start:Q", title=x_title, scale=x_scale, axis=alt.Axis(tickCount=5)), x2="end:Q",
             color=alt.Color("efecto:N", scale=alt.Scale(domain=list(DEVIATION_COLORS), range=list(DEVIATION_COLORS.values())),
                             legend=alt.Legend(orient="bottom", title=None, columns=1)),
             tooltip=[alt.Tooltip("label:N", title=""), alt.Tooltip("value_text:N", title="Este auto"),
                      alt.Tooltip("reference_text:N", title="Mediana de los sanos"), alt.Tooltip("supera:N", title="Supera al")])
-        names = rows.mark_text(align="left", baseline="middle", yOffset=-8, color="#c6d6ec", font="Manrope",
-                               fontSize=12, limit=alt.ExprRef("width")).encode(x=alt.value(0), text="step:N")
-        cut = alt.Chart(pd.DataFrame({"x": [100.0 * min_share]})).mark_rule(color=MUTED, strokeDash=[4, 3]).encode(x="x:Q")
-        st.altair_chart(chart_style(alt.layer(cut, bars, names).properties(height=44 * len(dv), title=WHY_CHART_TITLE)),
+        text = dict(align="left", baseline="middle", font="Manrope", fontSize=12, limit=alt.ExprRef("width"))
+        names = rows.mark_text(yOffset=-18, color="#c6d6ec", fontWeight=600, **text).encode(x=alt.value(0), text="label:N")
+        details = rows.mark_text(yOffset=-3, color=MUTED, **text).encode(x=alt.value(0), text="detail:N")
+        # Un hábito del lado de los sanos lo dice donde iría su barra (en el renglón de los valores no entraba en un celular).
+        healthy = rows.transform_filter(~alt.datum.risky).mark_text(yOffset=15, color=MUTED, fontStyle="italic", **text).encode(
+            x=alt.value(0), text=alt.value("del lado de los sanos"))
+        cut = alt.Chart(pd.DataFrame({"x": [100.0 * min_share]})).mark_rule(color=MUTED, strokeDash=[4, 3]).encode(
+            x=alt.X("x:Q", title=x_title, scale=x_scale))
+        st.altair_chart(chart_style(alt.layer(cut, bars, names, details, healthy).properties(height=60 * len(dv),
+                                                                                            title=WHY_CHART_TITLE),
+                                    fit="fit-x"),
                         width="stretch", theme=None)
-        st.caption(WHY_CHART_CAPTION.format(share=format_value(min_share, "pct")))
+        st.caption(WHY_CHART_CAPTION.format(share=format_value(min_share, "pct"),
+                                            max_factors=int(b.meta["explanation"]["max_factors"])))
 
 # --- lo que se le mandó ------------------------------------------------------------------------
 sent = st.container(key="sent")

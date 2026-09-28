@@ -2328,7 +2328,7 @@ def demo_gru_checks() -> None:
                 "plantilla sin hábitos": acfg["templates"]["workshop_no_habits"],
                 "chequeo charla": acfg["workshop_checks"]["charla_conductor"],
                 "app": " ".join([WHY_INTRO, WHY_NONE, WHY_CAPTION, WHY_CHART_TITLE,
-                                 WHY_CHART_CAPTION.format(share="75%"), HABITS_CAPTION])}
+                                 WHY_CHART_CAPTION.format(share="75%", max_factors=3), HABITS_CAPTION])}
     fixed_problems = ([p for name, text in to_driver.items() for p in banned_problems(text, banned + driver_rules, name)]
                       + [p for name, text in to_staff.items() for p in banned_problems(text, banned, name)])
     check(

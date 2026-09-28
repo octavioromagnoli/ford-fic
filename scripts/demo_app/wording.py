@@ -18,10 +18,12 @@ WHY_CAPTION = ("Es una comparación con la flota, no lo que usó el modelo: el m
                "mercado» es la mediana de los autos sanos de la muestra de desarrollo del mismo mercado; el auto se "
                "mide en las revisiones de la alerta.")
 WHY_CHART_TITLE = "Comparado con los autos sanos de su mercado"
-WHY_CHART_AXIS = "Autos sanos del mercado que supera, del lado que perjudica al filtro (%)"
+#: En dos renglones: en una sola línea no entra en el ancho de un celular.
+WHY_CHART_AXIS = ("Autos sanos del mercado que supera,", "del lado que perjudica al filtro (%)")
 WHY_CHART_CAPTION = ("Cada barra va de la mediana de los sanos (50%) a la parte de ellos que el auto supera hacia el lado "
                      "que la física del filtro señala como riesgoso. Un hábito del lado de los sanos no se dibuja. Se "
-                     "nombra si supera al {share} de los sanos (línea punteada).")
+                     "nombran los que superan al {share} de los sanos (línea punteada), hasta {max_factors}: los que más "
+                     "se apartan.")
 HABITS_CAPTION = "Comparado con autos sanos de su mercado: "
 
 
