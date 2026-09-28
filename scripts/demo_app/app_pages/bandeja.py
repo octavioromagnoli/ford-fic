@@ -179,29 +179,34 @@ for card_index, rec in enumerate(result["events"]):
             st.badge(KIND_LABELS[ev["kind"]], color="red" if ev["kind"] == "persistencia" else "orange")
             st.badge(facts["accion"]["nombre"], icon=ACTION_ICONS.get(ev["action"]), color="blue")
             st.caption(f"{facts['mercado']} · {facts['fecha']}")
-        if not collapsed:
-            st.markdown(f'<p class="card-lead">{escape(draft["drafts"]["linea_bandeja"])}</p>',
-                        unsafe_allow_html=True)
-            if facts["habitos"]:
-                st.caption(HABITS_CAPTION + " · ".join(
-                    f"{h['nombre']} {h['tu_valor']} (sanos {h['autos_sanos_comparables']})"
-                    for h in facts["habitos"]))
-            tab_driver, tab_shop, tab_check = st.tabs(["Al conductor", "Al taller", "Hechos y verificador"])
-            with tab_driver:
-                message(draft["driver_text"], subject=True, note=disclaimer)
-            with tab_shop:
-                message(draft["workshop_text"])
-            with tab_check:
-                if draft["source"] == "agente":
-                    st.success(f"Redactado por el agente y aprobado por el verificador (intento {draft['attempts']}).",
-                               icon=":material/verified:")
-                else:
-                    st.info(draft["note"] or "Plantilla del bundle.", icon=":material/description:")
-                for i, probs in enumerate(draft["problems"], start=1):
-                    if probs:
-                        st.warning(f"Intento {i}, rechazado:\n\n" + "\n".join(f"- {p}" for p in probs))
-                st.caption("Los hechos que recibió el agente (lo único que puede citar):")
-                st.json(facts, expanded=1)
+            if collapsed:
+                # La marca que lee el CSS: el cuerpo sigue en la página y se pliega con una transición.
+                st.markdown('<span class="card-folded"></span>', unsafe_allow_html=True)
+        # Siempre se dibuja: si Streamlit lo borrara al contraer, no habría nada que animar.
+        with st.container(key=f"cardbody_{card_index}"):
+            with st.container(key=f"cardfold_{card_index}"):
+                st.markdown(f'<p class="card-lead">{escape(draft["drafts"]["linea_bandeja"])}</p>',
+                            unsafe_allow_html=True)
+                if facts["habitos"]:
+                    st.caption(HABITS_CAPTION + " · ".join(
+                        f"{h['nombre']} {h['tu_valor']} (sanos {h['autos_sanos_comparables']})"
+                        for h in facts["habitos"]))
+                tab_driver, tab_shop, tab_check = st.tabs(["Al conductor", "Al taller", "Hechos y verificador"])
+                with tab_driver:
+                    message(draft["driver_text"], subject=True, note=disclaimer)
+                with tab_shop:
+                    message(draft["workshop_text"])
+                with tab_check:
+                    if draft["source"] == "agente":
+                        st.success("Redactado por el agente y aprobado por el verificador "
+                                   f"(intento {draft['attempts']}).", icon=":material/verified:")
+                    else:
+                        st.info(draft["note"] or "Plantilla del bundle.", icon=":material/description:")
+                    for i, probs in enumerate(draft["problems"], start=1):
+                        if probs:
+                            st.warning(f"Intento {i}, rechazado:\n\n" + "\n".join(f"- {p}" for p in probs))
+                    st.caption("Los hechos que recibió el agente (lo único que puede citar):")
+                    st.json(facts, expanded=1)
         # Decidir a la izquierda; ir a la ficha, que no decide nada, a la derecha y sin peso de botón.
         with st.container(horizontal=True, vertical_alignment="center", key=f"cardactions_{card_index}"):
             if decided:

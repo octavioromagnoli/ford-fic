@@ -217,9 +217,20 @@ iframe[data-testid="stIFrame"]{background:transparent;color-scheme:dark}
 [class*="st-key-alertcard_"] [data-testid="stCaptionContainer"]{max-width:92ch}
 [class*="st-key-cardactions_"]{gap:8px!important;align-items:center}
 [class*="st-key-cardactions_"]>:last-child{margin-left:auto}
-/* Tarjeta decidida y contraída: encabezado y estado, sin el cuerpo */
-[class*="st-key-alertcard_"]:not(:has(.card-lead)){background:var(--surface);gap:10px!important;padding-block:var(--s2)}
-[class*="st-key-alertcard_"]:not(:has(.card-lead)) h4:before{background:var(--muted)}
+/* Tarjeta decidida: el cuerpo se pliega (grid 1fr → 0fr) y queda el encabezado con el estado.
+   La marca .card-folded la pone bandeja.py; el cuerpo nunca sale del DOM, así la transición tiene de dónde partir. */
+[class*="st-key-alertcard_"]{transition:background-color .3s ease,padding .3s ease}
+[class*="st-key-alertcard_"] h4:before{transition:background-color .3s ease}
+[data-testid="stElementContainer"]:has(.card-folded){display:none}
+[data-testid="stLayoutWrapper"]:has(>[class*="st-key-cardbody_"]){transition:margin-top .32s cubic-bezier(.4,0,.2,1)}
+[class*="st-key-cardbody_"]{display:grid!important;grid-template-rows:1fr;opacity:1;
+  transition:grid-template-rows .32s cubic-bezier(.4,0,.2,1),opacity .22s ease,visibility 0s linear 0s}
+[class*="st-key-cardbody_"]>*{min-height:0;overflow:hidden}
+[class*="st-key-alertcard_"]:has(.card-folded){background:var(--surface);padding-block:var(--s2)}
+[class*="st-key-alertcard_"]:has(.card-folded) h4:before{background:var(--muted)}
+[class*="st-key-alertcard_"]:has(.card-folded) [data-testid="stLayoutWrapper"]:has(>[class*="st-key-cardbody_"]){margin-top:-14px}
+[class*="st-key-alertcard_"]:has(.card-folded) [class*="st-key-cardbody_"]{grid-template-rows:0fr;opacity:0;visibility:hidden;
+  transition:grid-template-rows .32s cubic-bezier(.4,0,.2,1),opacity .18s ease,visibility 0s linear .32s}
 
 /* ---- Messages: a preview of what the driver or the workshop receives, text untouched ----------------------- */
 .message-body{max-width:72ch;overflow-wrap:anywhere;font:400 var(--fs-body)/1.65 Manrope,Arial,sans-serif;color:#d8e5f6;background:var(--inset);border:1px solid var(--line-soft);border-radius:var(--radius-sm);padding:20px 24px}
