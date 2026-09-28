@@ -81,6 +81,9 @@ verifier:
     # El porqué es una comparación con la flota sana, no lo que usó el modelo (que no tiene atribución).
     - {pattern: '\bse parec\w*', why: "los hábitos se comparan con autos sanos de su mercado: no es parecido con autos que fallaron"}
     - {pattern: '\b(?:alert|marc|detect)(?:ó|aron|amos|a|an|ado|ada|ar)\b[^.]{0,40}\bpor\s+(?:su|sus|tu|tus|el|la|los|las)\b', why: "atribuye la alerta a algo del auto: los hábitos son una comparación con la flota, no lo que usó el modelo"}
+    # Sin hábitos en los hechos, ninguno se aparta de los sanos: la comparación se hizo. (Revisando la semana de apertura, un
+    # resumen del taller decía "no hay hábitos que se puedan comparar con autos sanos".)
+    - {pattern: '\bse\s+pued\w*\s+comparar\b|\bpara\s+comparar\b|\bh[aá]bitos\s+comparables\b', why: "los hábitos siempre se comparan con los sanos de su mercado: lo que puede pasar es que ninguno se aparte"}
   # Además, en el mensaje al conductor: nada de síntomas del filtro ni de jerga del modelo.
   driver_banned:
     - {pattern: '\bcarga\b', why: "síntoma del filtro: es para el taller"}

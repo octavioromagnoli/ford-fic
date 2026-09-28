@@ -2363,14 +2363,20 @@ def demo_gru_checks() -> None:
     attributed = verify_drafts(with_body("El sistema marcó tu auto por tu velocidad media en viaje: 16 km/h, contra "
                                          "19 km/h en autos sanos."), facts, dview, acfg)
     no_healthy = verify_drafts(with_body("Tu velocidad media en viaje es de 16 km/h, contra 19 km/h."), facts, dview, acfg)
+    not_comparable = json.loads(json.dumps(good))
+    not_comparable["taller"]["resumen"] = ("Alerta de VEH_A. No hay hábitos del conductor que se puedan comparar con autos "
+                                           "sanos de su mercado.")
+    not_comparable = verify_drafts(not_comparable, facts, dview, acfg)
     current = {r["pattern"] for r in acfg["verifier"]["banned"]} | {r["pattern"] for r in acfg["verifier"]["driver_banned"]}
     check(
         "demo GRU · el verificador rechaza el marco viejo («se parece a autos que fallaron»), la atribución («lo marcó por "
-        "tu…») y un aviso que no dice que la comparación es con autos sanos, sin perder ninguna regla anterior",
+        "tu…»), un aviso que no dice que la comparación es con autos sanos y que los hábitos «no se puedan comparar», sin "
+        "perder ninguna regla anterior",
         verify_drafts(good, facts, dview, acfg) == []
         and any("se parece" in p for p in similar) and any("marcó tu auto por tu" in p for p in attributed)
-        and any("falta decirlo" in p for p in no_healthy) and set(_VERIFIER_FLOOR) <= current,
-        f"{similar[:1]} · {attributed[:1]} · {no_healthy[:1]}",
+        and any("falta decirlo" in p for p in no_healthy) and any("se puedan comparar" in p for p in not_comparable)
+        and set(_VERIFIER_FLOOR) <= current,
+        f"{similar[:1]} · {attributed[:1]} · {no_healthy[:1]} · {not_comparable[:1]}",
     )
 
     # -- el modelo de la demo es un ensamble sin ventana del registro, con el umbral exacto del reporte v2 ------
