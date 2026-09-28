@@ -518,6 +518,58 @@ def build_grouped_label_target(
 
 
 # --------------------------------------------------------------------------- #
+# Etiqueta suave lejos del evento
+# --------------------------------------------------------------------------- #
+@register_target("far_soft_label")
+def build_far_soft_label_target(
+    panel: pd.DataFrame,
+    train_mask: np.ndarray,
+    *,
+    far_target: float,
+    far_scale_km: float | None = None,
+    label_column: str = "label",
+) -> TargetSpec:
+    """`label` de siempre, más un valor chico en los cortes de autos con evento que caen lejos.
+
+    Con `label` a secas, los cortes de un auto que falla y que quedan a más de `G + H` del
+    evento se entrenan como un sano (0). Pero la detección se mide por auto: cualquier
+    alerta antes del evento cuenta, y el auto que falla ya se separa de los sanos a más de
+    10.000 km (f9-remedicion-completa-v2.md §7). Este modo les da a esos cortes
+    `far_target` (o `far_target · exp(−(tte − G − H) / far_scale_km)` si se pide que decaiga
+    con la distancia al evento): es el objetivo "lineal por tramos" de vida útil de Heimes
+    (2008) llevado a clasificación. Los cortes positivos siguen en 1 y los sanos en 0.
+
+    El gap no se toca (regla 1): el corte más cercano al evento de un fallado está en `E − G`
+    y ya es positivo; los que reciben el valor suave están todos más lejos que `G + H`. El
+    modelo tiene que aceptar `y` en [0, 1] (`gru_seq` con `soft_labels: true`).
+    """
+    if not 0.0 < float(far_target) < 1.0:
+        raise ValueError("`far_target` tiene que estar en (0, 1): 0 es `label` y 1 es la cohorte")
+    mask = np.asarray(train_mask, dtype=bool)
+    train = panel.loc[mask]
+    needed = [label_column, "event_observed", "time_to_event_km", "gap_km", "horizon_km"]
+    missing = [c for c in needed if c not in train]
+    if missing:
+        raise KeyError(f"El panel no tiene {missing}: no se puede armar `far_soft_label`")
+
+    label = train[label_column].astype(int).to_numpy()
+    tte = train["time_to_event_km"].to_numpy(dtype=float)
+    reach = (train["gap_km"] + train["horizon_km"]).to_numpy(dtype=float)
+    far = (train["event_observed"].to_numpy() == 1) & (label == 0) & (tte > reach)
+    value = np.full(len(train), float(far_target))
+    if far_scale_km is not None:
+        value = value * np.exp(-(tte - reach) / float(far_scale_km))
+    y = np.where(far, value, label.astype(float))
+    return TargetSpec(
+        y=y,
+        name="far_soft_label",
+        params={"far_target": float(far_target), "far_scale_km": far_scale_km, "label_column": label_column},
+        info={"n_rows": int(len(train)), "n_positive": int(label.sum()), "n_far": int(far.sum()),
+              "mean_far_target": float(value[far].mean()) if far.any() else float("nan")},
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Multi-horizonte ordinal
 # --------------------------------------------------------------------------- #
 @register_target("ordinal_horizon")
