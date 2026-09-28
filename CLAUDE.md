@@ -56,6 +56,13 @@ cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del
   - La semilla mueve más que los hiperparámetros, y "×3 semillas" es el ensamble por rango.
 
   Ver `docs/memoria/f10-sweep-gru.md`.
+- **F12 (28-09): nada sube la detección de la GRU al 5–10%.** Hubo preregistro con lista cerrada:
+  GRU ×10 semillas, ensamble GRU + CNN-LSTM trips + tutora y ese ensamble + celda. Al 10% dan 42–45%
+  contra 43% de la GRU ×3, sin separarse. Al 20%, el ensamble heterogéneo suma +6/+10 puntos,
+  pero eso no estaba preregistrado. El techo es de información (AUC dentro de la celda 0,62–0,66)
+  (`docs/memoria/f12-preregistro-deteccion.md`). La altura y el gasoil por zona están en
+  `f11-altura-combustible.md`: la altura no se separa del cero y el gasoil es constante por país
+  salvo en BRA.
 
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
