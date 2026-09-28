@@ -1,0 +1,25 @@
+# F13: MiniRocket contra la GRU de referencia (P0 de F12). Preregistro en
+# docs/memoria/f13-preregistro-minirocket.md (escrita antes de medir). Solo dev, test sin tocar.
+#   python scripts/report_v2_models.py --config configs/report_f13.yaml   # -> experiments/report-f13/
+seed: 0
+output_name: report-f13
+experiments_dir: experiments
+strata_panel: ${DATA_DIR}/processed/panel.parquet
+
+k_consecutive: 2
+n_thresholds: 50
+budgets: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+null_permutations: 200
+n_boot: 1000
+reference: v2all-seeds3-gru-trips-estaticas     # P0
+extra_references: [piso-celda]
+
+bag_diag:
+  healthy_cuts: 9
+
+runs:
+  - {run: v2all-seeds3-gru-trips-estaticas, label: "P0 · GRU + TripSummary + estática ×3 semillas", family: secuencial ×3}
+  - {run: f13-minirocket-seeds3, label: "M1 · MiniRocket + Ridge ×3 semillas", family: F13}
+  - {run: f13-minirocket-r3, label: "MiniRocket (semilla 42)", family: semilla}
+  - {run: f13-minirocket-s1-r3, label: "MiniRocket (semilla 1)", family: semilla}
+  - {run: f13-minirocket-s2-r3, label: "MiniRocket (semilla 2)", family: semilla}

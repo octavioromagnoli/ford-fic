@@ -146,6 +146,21 @@ def _build_gru_seq(params: dict[str, Any]) -> BaseEstimator:
     return GRUSeqClassifier(**params)
 
 
+@register("minirocket")
+def _build_minirocket(params: dict[str, Any]) -> BaseEstimator:
+    """MiniRocket multivariado (convoluciones fijas + `RidgeClassifierCV`) sobre la secuencia de la ventana.
+
+    La pregunta de F13: ¿el techo de la GRU/CNN-LSTM es del modelo o de la información? Solo
+    corre sobre un panel secuencial: la forma sale de `sequence_meta`. Numpy puro, sin torch.
+    Detalle en `src/models/minirocket.py`.
+    """
+    from src.models.minirocket import MiniRocketClassifier
+
+    params.setdefault("class_weight", "balanced")
+    params.setdefault("random_state", 42)
+    return MiniRocketClassifier(**params)
+
+
 @register("survival_stacking")
 def _build_survival_stacking(params: dict[str, Any]) -> BaseEstimator:
     """Supervivencia en tiempo discreto sobre las filas apiladas, sin efecto aleatorio.

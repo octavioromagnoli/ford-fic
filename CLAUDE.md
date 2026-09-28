@@ -63,6 +63,9 @@ cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del
   (`docs/memoria/f12-preregistro-deteccion.md`). La altura y el gasoil por zona están en
   `f11-altura-combustible.md`: la altura no se separa del cero y el gasoil es constante por país
   salvo en BRA.
+- **F13 (28-09): MiniRocket pierde con evidencia contra la GRU.** Con la misma entrada da
+  27% al 10% contra 43% (IC de la diferencia [−26; −8]), (a′) negativo e inestable entre semillas
+  (`docs/memoria/f13-preregistro-minirocket.md`). La GRU ×3 sigue siendo la referencia.
 
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
@@ -328,6 +331,8 @@ src/models/registry.py   get_model(name, params); agregar un modelo = registrar 
                          (`logistic` y `logistic_l1` desde la re-medición completa de v2)
 src/models/timesfm_zeroshot.py  series por km + TimesFM 3.0 zero-shot sobre los cortes del panel (no es del registry)
 src/models/cnn_lstm.py   baseline de la tutora: Conv1D+LSTM sobre la secuencia + rama estática (torch, opcional)
+src/models/minirocket.py MiniRocket multivariado en numpy (kernels fijos + RidgeClassifierCV) sobre la misma secuencia;
+                         sin aeon/sktime, que bajan numpy/scipy (F13)
 src/models/survival_stacking.py  supervivencia en tiempo discreto: apila (fila × bin de km), hazard por bin,
                          score = 1 − S(H|x). Backend lightgbm o gpboost (efecto aleatorio por vehículo, opcional).
                          Entrada tardía opcional (`entry_km` en el `y`, target `window_km_survival`)
@@ -449,7 +454,7 @@ scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run script
                          con el waterfall y el mensaje al cliente, perfil de uso contra los sanos), Costos (punto de
                          operación y ahorro según costos y prevalencia real, con escenarios precargados) y Modelo
                          (contra la referencia y los pisos, límites); configs/dashboard_k2.yaml
-scripts/check_setup.py   smoke test del harness (206 chequeos)
+scripts/check_setup.py   smoke test del harness (211 chequeos)
 scripts/eda_raw.py       diagnóstico de F1 sobre los crudos; deja CSVs en experiments/eda/
 scripts/build_eda_cache.py  cache dev-only del EDA (una pasada por los crudos) + paleta,
                          diccionario de 3 vías y factibilidad de las features del plan §4

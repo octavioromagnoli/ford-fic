@@ -1,0 +1,62 @@
+# F13: MiniRocket multivariado + RidgeClassifierCV sobre la secuencia de la GRU de referencia, semilla 42.
+# Preregistro: docs/memoria/f13-preregistro-minirocket.md. Misma entrada, folds y cuenta que P0 de F12.
+#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_f13_minirocket_r3.yaml
+name: f13-minirocket-r3
+seed: 42
+data:
+  panel: ${DATA_DIR}/processed/panel_seq_trips_v2_estaticas.parquet
+splits:
+  path: ${DATA_DIR}/processed/splits_r3.json
+  n_splits: 5
+  seed: 42
+  build_if_missing: false
+  strict: true
+  stratify:
+    column: label
+    level: vehicle
+    extra_columns:
+    - static_SalesCountry_cd
+    - aux_static_Engine
+    min_stratum_size: 5
+  min_valid_positives: 5
+  n_repeats: 3
+  test_split: ${DATA_DIR}/processed/test_split.json
+model:
+  name: minirocket
+  params:
+    sequence_meta: ${DATA_DIR}/processed/panel_seq_trips_v2_estaticas_meta.json
+    num_features: 10000
+    max_dilations_per_kernel: 32
+    alphas:
+    - 0.001
+    - 0.004642
+    - 0.021544
+    - 0.1
+    - 0.464159
+    - 2.154435
+    - 10.0
+    - 46.415888
+    - 215.443469
+    - 1000.0
+    class_weight: balanced
+    random_state: 42
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f13-minirocket
+  job_type: train
+  tags:
+  - f13
+  - v2
+  - r3
+  - minirocket
+  mode: online
+  log_artifacts: false
+output_dir: experiments

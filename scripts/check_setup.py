@@ -1995,6 +1995,43 @@ def explain_checks() -> None:
     )
 
 
+def minirocket_checks() -> None:
+    """F13: MiniRocket ve un patrón temporal que un lineal por columna no ve, y es reproducible."""
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import roc_auc_score
+
+    from src.models.minirocket import KERNEL_INDICES, _dilations
+    from src.models.registry import get_model
+
+    rng = np.random.default_rng(3)
+    T, C = 20, 4
+
+    def make(n: int) -> tuple[np.ndarray, np.ndarray]:
+        y = rng.integers(0, 2, n)
+        X = rng.normal(size=(n, T, C))
+        for i in np.where(y == 1)[0]:
+            t = rng.integers(2, T - 4)
+            X[i, t:t + 3, 1] += np.array([2.0, -2.0, 2.0])   # zig-zag en un lugar al azar
+        return np.hstack([X.reshape(n, -1), rng.normal(size=(n, 2))]), y
+
+    Xtr, ytr = make(600)
+    Xte, yte = make(400)
+    params = {"seq_len": T, "n_channels": C, "num_features": 840}
+    model = get_model("minirocket", dict(params)).fit(Xtr, ytr)
+    auc = roc_auc_score(yte, model.predict_proba(Xte)[:, 1])
+    flat = roc_auc_score(yte, LogisticRegression(max_iter=2000).fit(Xtr, ytr).predict_proba(Xte)[:, 1])
+    check("minirocket: 84 kernels de largo 9 con tres pesos 2", KERNEL_INDICES.shape == (84, 3))
+    check("minirocket: con T=20 las dilataciones son {1, 2}", _dilations(20, 10_000)[0].tolist() == [1, 2])
+    check("minirocket: detecta un patrón en posición al azar que el lineal por columna no ve",
+          auc > 0.7 and auc - flat > 0.1, f"AUC {auc:.2f} contra {flat:.2f}")
+    again = get_model("minirocket", dict(params)).fit(Xtr, ytr)
+    check("minirocket: la misma semilla da el mismo score",
+          np.allclose(model.predict_proba(Xte), again.predict_proba(Xte)))
+    check("minirocket: rechaza T < 9", _raises(
+        lambda: get_model("minirocket", {"seq_len": 8, "n_channels": 2}).fit(np.zeros((4, 16)), [0, 1, 0, 1]),
+        ValueError))
+
+
 def delivery_v2_checks() -> None:
     """Entrega v2 (26-09-2026): correcciones por parte del loader, estrato compuesto, ventana
     de producción del universo, sorteo sobre el universo y eventos repetidos."""
@@ -2754,6 +2791,7 @@ def main() -> int:
     dashboard_checks()
     explain_checks()
     delivery_v2_checks()
+    minirocket_checks()
 
     failed =[name for name, ok, _ in _checks if not ok]
     print()

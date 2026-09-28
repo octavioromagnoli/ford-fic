@@ -1,0 +1,39 @@
+# F13 (M1): MiniRocket ×3 semillas, promedio por rango. Preregistro: docs/memoria/f13-preregistro-minirocket.md.
+#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_f13_minirocket_seeds3.yaml
+name: f13-minirocket-seeds3
+seed: 42
+ensemble:
+  method: rank_mean
+  members:
+  - run: f13-minirocket-r3
+    config: configs/exp_f13_minirocket_r3.yaml
+    weight: 0.3333
+  - run: f13-minirocket-s1-r3
+    config: configs/exp_f13_minirocket_s1_r3.yaml
+    weight: 0.3333
+  - run: f13-minirocket-s2-r3
+    config: configs/exp_f13_minirocket_s2_r3.yaml
+    weight: 0.3333
+compare:
+  reference: v2all-seeds3-gru-trips-estaticas
+  against: []
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f13-minirocket
+  job_type: ensemble
+  tags:
+  - f13
+  - v2
+  - r3
+  - minirocket
+  mode: online
+  log_artifacts: false
+output_dir: experiments
