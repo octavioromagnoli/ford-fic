@@ -110,7 +110,9 @@ bundle:
   dir: experiments/demo-bundle-gru
   # wandb Artifact que baja la app desplegada. La versión se fija acá (`v0`, `v1`…) para que la demo no cambie
   # sola: publicar y cambiar el pin es una decisión. `demo-bundle` es la demo anterior, con K2: no se toca.
+  # v1 (28-09): los mismos datos que v0; cambian 3 resúmenes y los textos de VEH_0451 por las reglas nuevas del
+  # verificador (docs/memoria/f9-demo-gru.md, «Revisión visual»).
   artifact: demo-bundle-gru
-  version: v0
+  version: v1
   entity: oromagnoli-
   project: ford-fic

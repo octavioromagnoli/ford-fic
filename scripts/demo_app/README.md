@@ -37,20 +37,24 @@ Los contadores animan únicamente enteros y terminan en la cadena exacta recibid
 
 ## Revisión visual
 
-Capturas de las tres pantallas y sus detalles en Chrome aislado, a 1440×900 y 1920×1080, en `experiments/demo-ui-review/` (no versionado). El informe `review.json` registra consola, accesibilidad e interacciones.
+**Demo con la GRU (28-09).** Chrome headless manejado por Playwright, a 1440×900 y a 390×844 táctil. Espera a que Streamlit termine de dibujar por websocket (una captura directa de Chrome headless se queda en la pantalla de carga) y recorre el contenedor que scrollea, que no es el documento. Revisa:
+- las tres páginas y el calendario: «Próxima», las flechas, una columna y el dock;
+- las cuatro tarjetas de la semana de apertura con sus tres pestañas;
+- la ficha de VEH_0563, abierta desde «Ver ficha»;
+- la línea de tiempo, la tabla oficial y «Qué no promete»;
+- el recorrido «Cómo usar»;
+- en cada página, la consola, los requests fallidos y el desborde horizontal.
 
-Después se agregaron capturas a 390×844 (celular), 844×390 (celular apaisado) y 820×1180 (tablet), con dos controles:
-- que ningún elemento se salga del ancho y ninguna métrica quede truncada;
-- que los controles del dock midan al menos 44 px.
+Qué se corrigió y por qué está en `docs/memoria/f9-demo-gru.md` («Revisión visual y bundle v1»). El contenedor se probó igual, con la clave de la demo.
 
-En el celular se probó además el recorrido completo: navegar desde el dock, saltar a la próxima semana con alertas y revelar el desenlace.
-
-Se revisaron la navegación desde la Bandeja, el cambio de semana, la selección de vehículo, el revelado del desenlace, el movimiento reducido, los valores finales de los contadores y la igualdad literal de los mensajes con la caché del bundle.
+**Demo anterior, con K2.** Capturas en Chrome aislado a 1440×900, 1920×1080, 390×844, 844×390 y 820×1180 en `experiments/demo-ui-review/` (no versionado), con el recorrido completo en el celular.
 
 ## Límites de Streamlit observados
 
 - `st.switch_page` (el botón «Ver ficha») descarta el estado de los widgets, y la ficha abría en la primera semana. Por eso la semana vive en `_week` (`common.py`), una clave que no pertenece a ningún widget. El calendario y el dock solo la reflejan y la actualizan con sus callbacks.
 - La navegación normal desde la raíz no produce errores de consola. Al arrancar directamente en `/vehiculo` o `/resultados`, Streamlit 1.63 prueba primero `/<página>/_stcore/health` y `host-config`: devuelve dos 404 y luego conecta correctamente con la raíz. Para el pitch, abrir la raíz.
 - axe detecta `aria-expanded` en el `<section>` del sidebar nativo, cuyo rol no admite ese atributo. No se manipula el DOM interno del framework para ocultar el hallazgo. No detectó infracciones de contraste WCAG AA en las pantallas revisadas.
-- `st.components.v1.html`, solicitado para los contadores, funciona en la versión fijada, pero Streamlit avisa de su deprecación en el log del servidor. Revisar la migración a `st.iframe` antes de actualizar Streamlit.
+- `st.components.v1.html`, solicitado para los contadores, funciona en la versión fijada, pero Streamlit avisa de su deprecación en el log del servidor. Revisar la migración a `st.iframe` antes de actualizar Streamlit. Su iframe deja además, en la consola del navegador, nueve avisos de Chrome sobre los permisos y el sandbox que le pone Streamlit.
+- Los gráficos con fechas dejan en la consola avisos de Vega («Infinite extent for field…»). No son errores: Streamlit crea la vista vacía y le inserta los datos después, para poder agregar filas. Un dominio de fechas fijo no los evita, porque Vega-Lite lo compila como una señal que también se evalúa tarde.
+- Con `autosize: fit` (lo que pone `presentation.chart_style` por defecto), el alto del gráfico incluye título, ejes y leyenda. En los gráficos de una fila por ítem (el porqué, la línea de tiempo) va `fit="fit-x"`: con `fit`, una leyenda o un título de eje largos achican las filas.
 - Manrope se carga desde Google Fonts, con Arial como alternativa si no hay conexión.

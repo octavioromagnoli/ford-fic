@@ -1,6 +1,7 @@
 # Demo de producto con la GRU final (v2): el porqué pasa a ser una comparación con la flota
 
-**Fecha:** 2026-09-27 · **Fase:** F9 (producto, para el pitch del 02-10) · **Rama:** `feat/demo-gru`
+**Fecha:** 2026-09-27 (revisión visual y bundle v1: 28-09) · **Fase:** F9 (producto, para el pitch del 02-10) ·
+**Rama:** `feat/demo-gru`
 **Alcance:** entrega v2, solo dev (426 autos: 135 fallan, 291 sanos), ensamble por rango de la GRU +
 TripSummary + estática completa con las semillas 42, 1 y 2, etiqueta dura, repetición 1, 5% de falsas
 alarmas con umbral exacto. **Test sin tocar**: el bundle falla si trae un vehículo de test.
@@ -109,14 +110,50 @@ aparecieron tres cosas, y se corrigieron antes de precalentar:
 2. un aviso llevaba de asunto "Revisión preventiva del DPF";
 3. el aviso final decía "esto compara tu uso" en mensajes sin hábitos.
 
-El precalentado final cubre 36 semanas con 60 eventos (53 alertas y 7 escalamientos), con 298 respuestas en la
-caché (`gpt-5.4-mini-2026-03-17`). Los 60 textos y los 36 resúmenes son del agente: ninguna plantilla y ninguna
+El precalentado de la v0 cubre 36 semanas con 60 eventos (53 alertas y 7 escalamientos), con 298 respuestas en la
+caché (`gpt-5.4-mini-2026-03-17`; la v1 tiene 302, ver «Revisión visual»). Los 60 textos y los 36 resúmenes son del agente: ninguna plantilla y ninguna
 acción rechazada. El verificador atajó 10 intentos: 6 por lenguaje causal ("porque"), 3 por atribución y 1 por
 un asunto de revisión en un aviso. Al precalentar aparecieron dos cosas más, y se corrigieron:
 - en la semana de apertura, el triage pedía la acción y redactaba en el mismo paso: ahora usa una herramienta
   por paso (`llm.parallel_tool_calls: false`);
 - dos resúmenes contaban el trabajo de las herramientas: el prompt pide describir la semana, y el verificador
   rechaza "quedó aprobado" y "plantilla".
+
+## Revisión visual y bundle v1 (28-09)
+
+La extensión de Chrome no estaba conectada, así que la revisión se hizo con un Chrome headless manejado por
+Playwright, que espera a que Streamlit termine de dibujar por websocket. Se miró a 1440×900 y a 390×844 (táctil),
+con capturas, consola, requests y desborde horizontal. Lo roto se corrigió en `scripts/demo_app/`, sin tocar datos:
+- **El gráfico de desvíos de la ficha.** Con `autosize: fit`, las filas quedaban en 21 px y cada barra caía en el
+  renglón del hábito siguiente. El eje iba de 0 a 100, y en el celular el título del eje achicaba el gráfico a
+  ~165 px. Ahora las filas miden 60 px (`fit-x`), con el hábito y sus valores arriba de la barra. El eje va de 50 a
+  100 y la leyenda no se trunca. El pie aclara que se nombran hasta 3: VEH_0563 tiene un cuarto hábito sobre el
+  75% que no se nombra.
+- **El calendario de 82 semanas.** En el celular se pisaban 17 de las 18 etiquetas de mes y cada semana medía
+  2 px. Ahora los meses que no entran se ocultan (medido en el navegador), el año va debajo y las semanas se tocan.
+- **«Qué pasó después».**
+  - Los meses están en castellano, y el eje y la leyenda se repiten arriba (son 53 filas).
+  - La tabla oficial ya no desborda en el celular, y el azar lleva un decimal (5,4% y 10,7%).
+  - El dock ya no muestra la semana.
+- **Consola:** no hay errores. Quedan avisos de Vega, «Infinite extent», porque Streamlit crea la vista antes de
+  insertar los datos. También quedan los del iframe de los contadores.
+
+La revisión a mano de la semana de apertura (las 4 tarjetas, sus hechos y el resumen) encontró un texto
+impreciso. El resumen del taller de VEH_0451 decía «No hay hábitos del conductor que se puedan comparar con autos
+sanos», pero la comparación se hizo y ningún hábito se aparta. El verificador **sumó tres reglas**, sin sacar
+ninguna:
+- «se puedan comparar»;
+- un hábito como motivo de la acción («VEH_0563 va con aviso por temperatura media del motor de 58 °C…»), que
+  apareció al re-precalentar;
+- los ids internos («turno_concesionario»), que ya estaban en dos resúmenes de la v0.
+
+Entre los 276 textos del bundle, las reglas atrapan exactamente cuatro, y se regeneraron con 7 llamadas a la API:
+los textos de VEH_0451 y los resúmenes del 29-09-2025, el 10-11-2025 y el 02-03-2026. Los datos (`cuts`,
+`vehicles`, `deviations`) son idénticos a los de la v0.
+
+**`demo-bundle-gru:v1`** está fijado en `configs/demo.yaml`, y la v0 queda en wandb. Tiene 302 respuestas en la
+caché y 14 intentos rechazados en total, 4 de ellos por las reglas nuevas. El contenedor se probó en local: baja
+la v1, pide la clave y sirve las tres páginas.
 
 ## Decisiones
 
