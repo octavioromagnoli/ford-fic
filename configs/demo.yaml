@@ -14,6 +14,13 @@
 
 product_name: Ford DPF
 
+# La marca que se ve en la app (barra lateral, celular, login, pestaña del navegador y «Cómo usar»): el script de Ford
+# × el equipo. `product_name` sigue siendo el nombre interno, el del bundle y los prompts de los agentes; ningún texto
+# generado lo escribe.
+brand:
+  team: SOG
+  page_title: SOG · Ford Innovation Challenge III
+
 # El modelo que puntúa la flota: la GRU + TripSummary + estática completa sobre la entrega v2, en ensamble por rango
 # de las semillas 42, 1 y 2 (la configuración que dejó el sweep, docs/memoria/f10-sweep-gru.md). Nombre y familia
 # viajan en la meta del bundle: la app no los escribe a mano.

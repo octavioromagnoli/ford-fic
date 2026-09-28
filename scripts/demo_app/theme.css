@@ -29,11 +29,19 @@ h4{font-size:var(--fs-title)!important;font-weight:700!important;letter-spacing:
 .page-heading h1{font-size:var(--fs-page)!important;letter-spacing:-.04em;font-weight:800!important;line-height:1.1;margin:0 0 6px;padding:0}
 .page-heading p{font-size:var(--fs-meta);color:var(--muted);margin:0}
 
-/* ---- Brand: the Ford script, a hairline and DPF, centred on one axis ------------------------------------- */
-.brand{display:flex;align-items:center;gap:14px;margin:0;line-height:1}
-.brand img{height:32px;width:auto;display:block}
-.brand span{display:flex;align-items:center;gap:14px;font-size:22px;font-weight:800;letter-spacing:.08em;color:var(--electric);line-height:1}
-.brand span:before{content:'';width:1px;height:28px;background:linear-gradient(180deg,transparent,#3d5a82 22%,#3d5a82 78%,transparent)}
+/* ---- Brand: Ford × SOG. The Ford script, a drawn × in the app's electric accent and the team's wordmark, on one
+   axis. The sizes are set once per place (--brand-*): sidebar here, masthead and login below. ----------------- */
+.brand{--brand-h:30px;--brand-x:10px;--brand-team:23px;--brand-gap:12px;display:flex;align-items:center;gap:var(--brand-gap);margin:0;line-height:1}
+.brand img{height:var(--brand-h);width:auto;display:block;flex:none}
+.brand-x{position:relative;flex:none;width:var(--brand-x);height:var(--brand-x)}
+.brand-x:before,.brand-x:after{content:'';position:absolute;left:50%;top:50%;width:141%;height:1.5px;border-radius:1px;background:var(--electric);transform:translate(-50%,-50%) rotate(45deg)}
+.brand-x:after{transform:translate(-50%,-50%) rotate(-45deg)}
+/* Caps with air: the tracking reads as a wordmark, not a label; the negative margin gives back the last letter's. */
+.brand-team{font-size:var(--brand-team);font-weight:800;letter-spacing:.2em;margin-right:-.2em;color:var(--text);line-height:1;white-space:nowrap}
+/* Centred on the box, the caps float above the script. Lowered by 14% of its height, SOG sits on the baseline of
+   «ord» and fills its x-height, and the × stays in the middle of the caps. */
+.brand :is(.brand-x,.brand-team){top:calc(var(--brand-h) * .14)}
+.brand-team{position:relative}
 /* Under the lockup, in sentence case: what it is, then where it comes from. */
 .brand-block{padding:0 0 22px;margin:0 0 14px;border-bottom:1px solid var(--line)}
 .st-key-side_nav{gap:4px!important}
@@ -49,6 +57,9 @@ h4{font-size:var(--fs-title)!important;font-weight:700!important;letter-spacing:
 .st-key-topbar{justify-content:space-between;gap:16px!important;flex-wrap:nowrap!important}
 .st-key-topbar>[data-testid="stElementContainer"]:first-child{flex:1 1 auto!important;width:auto!important;min-width:0!important}
 .topbar-lead{display:flex;align-items:center;gap:16px;min-height:40px}
+/* Streamlit pulls every markdown block up by 1rem at the bottom: the row centred a 24 px box, and the 40 px lead sat
+   8 px below «Cómo usar». */
+.st-key-topbar [data-testid="stMarkdownContainer"]{margin-bottom:0}
 .masthead-brand{display:none}
 .status{font-size:var(--fs-label);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#afcaed;white-space:nowrap}
 .status:before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--electric);margin-right:8px;box-shadow:0 0 12px #4da3ff;animation:beacon 3s ease-in-out infinite;vertical-align:.1em}
@@ -286,9 +297,7 @@ label:has(input[type="checkbox"]:focus-visible){outline:2px solid var(--focus);o
 
 /* ---- Login ------------------------------------------------------------------------------------------------- */
 .st-key-login{max-width:420px;width:100%;margin:12vh auto 0}
-.st-key-login .brand img{height:44px}
-.st-key-login .brand span{font-size:30px;gap:18px}
-.st-key-login .brand span:before{height:38px}
+.st-key-login .brand{--brand-h:42px;--brand-x:13px;--brand-team:32px;--brand-gap:16px}
 .st-key-login .brand-block{border:0;padding-bottom:8px;margin-bottom:20px}
 
 /* ---- Compact mode (app.py). Streamlit collapses the sidebar at 768 px and below, and with the header hidden it
@@ -300,10 +309,7 @@ label:has(input[type="checkbox"]:focus-visible){outline:2px solid var(--focus);o
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]):not(:has(.st-key-dock_week)) [data-testid="stMainBlockContainer"]{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .status{display:none}
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .masthead-brand{display:flex;margin:0}
-.masthead-brand{gap:10px}
-.masthead-brand img{height:24px}
-.masthead-brand span{font-size:17px;gap:10px}
-.masthead-brand span:before{height:20px}
+.masthead-brand{--brand-h:22px;--brand-x:8px;--brand-team:17px;--brand-gap:9px}
 /* The calendar in compact mode: the dock already has the arrows, so the card keeps the week and the chart. */
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl{padding:14px 12px 10px}
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .tl-ctrl{display:none}

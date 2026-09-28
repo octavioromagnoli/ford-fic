@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from src.agents.formatting import long_date
 
-from scripts.demo_app.common import bundle
+from scripts.demo_app.common import bundle, cfg
 from scripts.demo_app.wording import model_name
 
 
@@ -26,7 +26,7 @@ def tour_steps(page: str) -> list[dict]:
     start, end = long_date(meta["replay"]["start"]), long_date(meta["replay"]["end"])
 
     intro = _step(
-        "Así se usa Ford DPF",
+        f"Así se usa la demo de {cfg()['brand']['team']}",
         f"Estás en el lugar de quien gestiona la posventa. {name} revisa cada auto cada 500 km y, cuando el riesgo del "
         "filtro de partículas se sostiene, lo alerta. Los agentes convierten cada alerta en una acción lista para "
         "aprobar. Este recorrido te muestra cada parte.")

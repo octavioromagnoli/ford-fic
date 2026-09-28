@@ -2,7 +2,8 @@
 
 <!-- impeccable:product-schema 1 -->
 
-Alcance: **Ford DPF** (antes Radar DPF), la demo de producto de F9 (`scripts/demo_app/`). El dashboard de K2
+Alcance: la demo de producto de F9 (`scripts/demo_app/`), con la marca **Ford × SOG** (SOG es el equipo; el
+nombre interno del producto es Ford DPF, antes Radar DPF). El dashboard de K2
 (`scripts/dashboard_k2/`) y el del EDA son herramientas internas del equipo y quedan fuera.
 
 ## Platform
@@ -84,8 +85,8 @@ del evento (el gap de blanking).
 
   Se escala si el score sigue sobre el umbral 2 revisiones después del aviso. Una revisión es un
   corte cada 500 km.
-- **Agentes:** `cache_first` por defecto. Las 36 semanas con eventos del replay están precalentadas: 298
-  respuestas en la caché, con `gpt-5.4-mini-2026-03-17`. «Regenerar en vivo» llama a la API y no
+- **Agentes:** `cache_first` por defecto. Las 36 semanas con eventos del replay están precalentadas: 302
+  respuestas en la caché del bundle v1, con `gpt-5.4-mini-2026-03-17`. «Regenerar en vivo» llama a la API y no
   pisa la versión guardada. `cache_only` sirve para ensayar sin red.
 
 ## Capabilities and Constraints
@@ -137,19 +138,28 @@ del evento (el gap de blanking).
 
 ## Brand Commitments
 
-- **Nombre:** Ford DPF (`product_name` en `configs/demo.yaml`). Hasta el 26-09-2026 se llamó
-  Radar DPF. Los prompts de los agentes (`configs/agents.yaml`) dicen Ford DPF desde el 27-09;
-  cambiarlos invalida la caché del LLM.
+- **Marca: Ford × SOG** (desde el 28-09-2026, decisión del usuario). SOG es el nombre del equipo, y
+  «DPF» ya no va en la marca: no se entendía por qué la app lo decía.
+  - La marca es el script de Ford, un × y «SOG». Aparece en la barra lateral, arriba en el celular y
+    en el login.
+  - La pestaña del navegador dice «SOG · Ford Innovation Challenge III» y el recorrido, «Así se usa
+    la demo de SOG». Todo sale de `brand` en `configs/demo.yaml`.
+  - «Ford DPF» (`product_name`) queda como nombre interno del bundle y de los prompts de los agentes
+    (`configs/agents.yaml`), que ningún texto generado escribe. Cambiar los prompts invalida la caché
+    del LLM. Antes se llamó Radar DPF (hasta el 26-09) y Ford DPF como marca (26-09 al 28-09).
 - **Ford:** la palabra «Ford» de la marca es el **script de Ford** (el logo escrito), en blanco sobre
-  el fondo oscuro. «DPF» va en tipografía. Lo autorizó el usuario el 26-09-2026 y reemplaza la regla
-  anterior de no usar el logo.
+  el fondo oscuro. Lo autorizó el usuario el 26-09-2026 y reemplaza la regla anterior de no usar el
+  logo.
+  - El × es de dos trazos finos en el azul eléctrico de la app (dibujado, no el carácter), y «SOG»
+    va en Manrope 800 blanco con espaciado amplio.
+  - SOG se apoya sobre la línea de base del script y ocupa la altura de las minúsculas de «ord».
   - El archivo sale del «Ford logo flat.svg» de Wikimedia Commons: el archivo es de dominio público,
     pero la marca es de Ford.
   - El óvalo azul y el resto de la identidad oficial no se usan.
   - Se puede nombrar al Ford Innovation Challenge III (desafío *Data-Driven Powertrain
     Intelligence*).
 - **Tipografía:** la corporativa de Ford (Ford Antenna) es propietaria y no está en el repo. Si el
-  challenge entrega los archivos, puede reemplazar a Manrope; hasta entonces «DPF» y la interfaz van
+  challenge entrega los archivos, puede reemplazar a Manrope; hasta entonces «SOG» y la interfaz van
   en Manrope.
 - **Voz:** operativa y honesta. Comparación, no causa. Ninguna certeza que el modelo no tenga.
 
@@ -160,8 +170,8 @@ del evento (el gap de blanking).
   se apartan de la flota sana, los mensajes, las señales del filtro, los números oficiales, el triage
   de las semanas con eventos y la caché del LLM. La demo anterior, con K2, sigue en `demo-bundle:v0`.
 - **Textos reales:** los agentes redactaron los 60 textos y los 36 resúmenes, todos aprobados por
-  el verificador (10 reintentos en el camino). Lo que se corrigió después de revisar a mano la primera
-  semana está en `docs/memoria/f9-demo-gru.md`.
+  el verificador (14 reintentos en el camino, en la v1). Lo que se corrigió después de revisar a mano la
+  primera semana está en `docs/memoria/f9-demo-gru.md`.
 - **El porqué:** una comparación con los autos sanos de dev del mismo mercado (`src/eval/fleet_profile.py`).
   No es atribución: la GRU no la tiene.
 - **Revisión visual previa:** capturas a 1440×900 y 1920×1080 en `experiments/demo-ui-review/`

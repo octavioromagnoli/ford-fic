@@ -27,7 +27,7 @@ from scripts.demo_app.wording import model_note  # noqa: E402
 
 from scripts.demo_app.presentation import brand_block, brand_html, inject_theme, timeline, tour  # noqa: E402
 
-st.set_page_config(page_title=cfg()["product_name"], page_icon=":material/local_gas_station:", layout="wide")
+st.set_page_config(page_title=cfg()["brand"]["page_title"], page_icon=":material/local_gas_station:", layout="wide")
 
 inject_theme()
 
@@ -79,7 +79,7 @@ FLEET_NOTE = (f"Flota de la muestra de desarrollo: {c['vehicles']} autos diésel
 MODEL_NOTE = model_note(b.meta, llm().model, llm().mode)
 
 with st.sidebar:
-    st.markdown(brand_block(cfg()["product_name"]), unsafe_allow_html=True)
+    st.markdown(brand_block(cfg()["brand"]["team"]), unsafe_allow_html=True)
     with st.container(key="side_nav"):
         st.page_link("app_pages/bandeja.py", label="Bandeja", icon=":material/inbox:")
         st.page_link("app_pages/vehiculo.py", label="Vehículo", icon=":material/directions_car:")
@@ -93,7 +93,7 @@ with st.sidebar:
 # aparece acá cuando la barra lateral está colapsada (celular).
 page_id = {"vehiculo": "vehiculo", "resultados": "resultados"}.get(page.url_path, "bandeja")
 with st.container(horizontal=True, vertical_alignment="center", key="topbar"):
-    st.markdown('<div class="topbar-lead">' + brand_html(cfg()["product_name"], "masthead-brand") +
+    st.markdown('<div class="topbar-lead">' + brand_html(cfg()["brand"]["team"], "masthead-brand") +
                 '<div class="status">Replay · muestra de desarrollo</div></div>', unsafe_allow_html=True)
     with st.container(key="tour", width="content"):
         tour(tour_steps(page_id))

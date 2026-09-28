@@ -25,17 +25,18 @@ def _ford_script() -> str:
     return "data:image/svg+xml;base64," + b64encode((HERE / "assets" / "ford-script.svg").read_bytes()).decode()
 
 
-def brand_html(product: str, extra_class: str = "") -> str:
-    """`Ford DPF`: the Ford script for the first word, a hairline, the rest as type."""
-    first, _, rest = product.partition(" ")
-    mark = f'<img src="{_ford_script()}" alt="Ford">' if first == "Ford" else escape(first)
+def brand_html(team: str, extra_class: str = "") -> str:
+    """`Ford × SOG`: the Ford script, a drawn ×, and the team's name as a wordmark, centred on one axis. The lockup is
+    one image for assistive tech; its parts are presentational."""
     classes = f"brand {extra_class}".strip()
-    return f'<div class="{classes}">{mark}<span>{escape(rest)}</span></div>'
+    return (f'<div class="{classes}" role="img" aria-label="Equipo {escape(team)}, para Ford">'
+            f'<img src="{_ford_script()}" alt=""><span class="brand-x" aria-hidden="true"></span>'
+            f'<span class="brand-team">{escape(team)}</span></div>')
 
 
-def brand_block(product: str) -> str:
-    """The lockup plus what the product is and where it comes from (sidebar and login)."""
-    return (f'<div class="brand-block">{brand_html(product)}'
+def brand_block(team: str) -> str:
+    """The lockup plus what the product does and where it comes from (sidebar and login)."""
+    return (f'<div class="brand-block">{brand_html(team)}'
             '<p class="brand-tag">Posventa predictiva del filtro de partículas diésel</p>'
             '<p class="brand-event">Ford Innovation Challenge III</p></div>')
 

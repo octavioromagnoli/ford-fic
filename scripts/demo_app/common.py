@@ -129,7 +129,7 @@ def check_password() -> bool:
     if not expected or st.session_state.get("auth_ok"):
         return True
     with st.container(key="login"):
-        st.markdown(brand_block(cfg()["product_name"]), unsafe_allow_html=True)
+        st.markdown(brand_block(cfg()["brand"]["team"]), unsafe_allow_html=True)
         with st.form("login_form"):
             pwd = st.text_input("Contraseña de la demo", type="password")
             if st.form_submit_button("Entrar", type="primary"):
