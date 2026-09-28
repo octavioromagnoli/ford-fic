@@ -268,6 +268,11 @@ label:has(input[type="checkbox"]:focus-visible){outline:2px solid var(--focus);o
 .data-table thead th{font-size:var(--fs-label);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--panel-head)}
 .data-table tbody th{font-weight:600;color:var(--text)}
 .data-table tbody tr:last-child>*{border-bottom:0}
+/* A phone: tighter cells, so the value columns of the official table fit without scrolling sideways. */
+@container (max-width:400px){
+  .data-table table :is(th,td){padding:10px 8px}
+  .data-table table :is(th,td):first-child{padding-left:12px}
+}
 /* Stacked tables: each row becomes a block of label/value pairs when narrow. */
 @container (max-width:520px){
   .data-table.stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
@@ -291,6 +296,8 @@ label:has(input[type="checkbox"]:focus-visible){outline:2px solid var(--focus);o
 .stApp:not(:has([data-testid="stSidebar"][aria-expanded="false"])) :is(.st-key-compact_dock,.st-key-compact_notes),
 .stApp:not(:has([data-testid="stSidebar"][aria-expanded="false"])) [data-testid="stLayoutWrapper"]:has(>:is(.st-key-compact_dock,.st-key-compact_notes)){display:none!important}
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stMainBlockContainer"]{padding:1rem 1rem calc(148px + env(safe-area-inset-bottom))}
+/* «Qué pasó después» has no week in the dock: only the pages. */
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]):not(:has(.st-key-dock_week)) [data-testid="stMainBlockContainer"]{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .status{display:none}
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .masthead-brand{display:flex;margin:0}
 .masthead-brand{gap:10px}

@@ -53,7 +53,7 @@ def detection_line(meta: dict[str, Any], budgets: tuple[int, ...] = (50, 100)) -
     for i, b in enumerate(x for x in budgets if x in curve):
         out = held.get(b)
         oos = "" if out is None else (f" ({_pct(out['detection'])} con el umbral fijado fuera de muestra)" if i == 0
-                                      else f" ({_pct(out['detection'])})")
+                                      else f" ({_pct(out['detection'])} fuera de muestra)")
         lead = f"Al {b / 10:g}% de falsas alarmas anticipa {_pct(curve[b]['detection'])} de los autos que fallan" if i == 0 \
             else f"al {b / 10:g}%, {_pct(curve[b]['detection'])}"
         parts.append(lead + oos)

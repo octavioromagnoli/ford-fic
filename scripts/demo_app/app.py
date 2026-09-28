@@ -103,17 +103,19 @@ if page_id != "resultados":
 
 # Controles compactos. En 768 px o menos Streamlit colapsa la barra lateral, y con el header oculto no hay
 # cómo abrirla: lo que vive ahí se repite acá (la semana y las páginas en un dock abajo, al alcance del
-# pulgar; las notas al final). theme.css los muestra solo con la barra colapsada.
+# pulgar; las notas al final). theme.css los muestra solo con la barra colapsada. La semana no va en «Qué pasó
+# después», igual que el calendario: esa página muestra la temporada entera.
 with st.container(key="compact_dock"):
-    with st.container(horizontal=True, vertical_alignment="center", gap="small", key="dock_week"):
-        st.button("Semana anterior", key="dock_prev", icon=":material/chevron_left:", on_click=_move, args=(-1,),
-                  disabled=week == week_list[0])
-        st.markdown(f'<div class="dock-week"><span>Semana</span><strong>{week_label_short(week)}</strong></div>',
-                    unsafe_allow_html=True)
-        st.button("Semana siguiente", key="dock_next", icon=":material/chevron_right:", on_click=_move, args=(1,),
-                  disabled=week == week_list[-1])
-        st.button("Próxima", key="dock_skip", icon=":material/skip_next:", on_click=_next_with_events,
-                  help="Próxima semana con alertas", disabled=not any(w > week for w in event_weeks))
+    if page_id != "resultados":
+        with st.container(horizontal=True, vertical_alignment="center", gap="small", key="dock_week"):
+            st.button("Semana anterior", key="dock_prev", icon=":material/chevron_left:", on_click=_move, args=(-1,),
+                      disabled=week == week_list[0])
+            st.markdown(f'<div class="dock-week"><span>Semana</span><strong>{week_label_short(week)}</strong></div>',
+                        unsafe_allow_html=True)
+            st.button("Semana siguiente", key="dock_next", icon=":material/chevron_right:", on_click=_move, args=(1,),
+                      disabled=week == week_list[-1])
+            st.button("Próxima", key="dock_skip", icon=":material/skip_next:", on_click=_next_with_events,
+                      help="Próxima semana con alertas", disabled=not any(w > week for w in event_weeks))
     with st.container(horizontal=True, gap=None, key="dock_nav"):
         st.page_link("app_pages/bandeja.py", label="Bandeja", icon=":material/inbox:")
         st.page_link("app_pages/vehiculo.py", label="Vehículo", icon=":material/directions_car:")
