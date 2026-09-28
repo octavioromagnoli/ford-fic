@@ -1,7 +1,7 @@
 # Demo de producto con la GRU con etiqueta suave (F11) y una perilla de falsas alarmas
 
-**Fecha:** 2026-09-28 · **Fase:** F9 (producto, para el pitch del 02-10) · **Rama:** `feat/demo-gru-suave` (sale de
-`feat/demo-gru`, con `main` mergeado)
+**Fecha:** 2026-09-28 · **Fase:** F9 (producto, para el pitch del 02-10) · **Rama:** `feat/demo-gru` (con `main`
+mergeado)
 **Alcance:** entrega v2, solo dev (426 autos: 135 fallan, 291 sanos), ensamble por rango de la GRU con etiqueta
 suave, semillas 101, 102 y 103, folds de confirmación; etiqueta dura, repetición 1 y umbral exacto en cuatro
 puntos de operación. **Test sin tocar**: el bundle falla si trae un vehículo de test.
