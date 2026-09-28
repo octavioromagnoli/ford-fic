@@ -1,0 +1,28 @@
+# F12: ¿se puede subir la detección de la GRU al 5-10%? Lista cerrada en
+# docs/memoria/f12-preregistro-deteccion.md (escrita antes de medir). Solo dev, test sin tocar.
+#   python scripts/report_v2_models.py --config configs/report_f12.yaml   # -> experiments/report-f12/
+seed: 0
+output_name: report-f12
+experiments_dir: experiments
+strata_panel: ${DATA_DIR}/processed/panel.parquet
+
+k_consecutive: 2
+n_thresholds: 50
+budgets: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+null_permutations: 200
+n_boot: 1000
+reference: v2all-seeds3-gru-trips-estaticas     # P0
+extra_references: [piso-celda]
+
+bag_diag:
+  healthy_cuts: 9
+
+runs:
+  - {run: v2all-seeds3-gru-trips-estaticas, label: "P0 · GRU + TripSummary + estática ×3 semillas", family: secuencial ×3}
+  - {run: f12-p1-gru-seeds10, label: "P1 · la misma GRU ×10 semillas", family: F12}
+  - {run: f12-p2-hetero9, label: "P2 · GRU ×3 + CNN-LSTM trips ×3 + CNN-LSTM tutora ×3", family: F12}
+  - {run: v2all-seeds3-cnn-lstm-trips-estaticas, label: "CNN-LSTM + TripSummary + estática ×3 (miembro de P2)", family: secuencial ×3}
+  - {run: v2all-seeds3-cnn-lstm-signals-estaticas, label: "CNN-LSTM tutora con estática ×3 (miembro de P2)", family: secuencial ×3}
+
+rank_mixes:
+  - {name: f12-p3-hetero9-celda, label: "P3 · P2 + celda (rango, mitad y mitad)", members: [piso-celda, f12-p2-hetero9]}

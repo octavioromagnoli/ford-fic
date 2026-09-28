@@ -1,0 +1,56 @@
+# F12 (P2: GRU + CNN-LSTM trips + CNN-LSTM tutora, ×3 semillas cada una), preregistrado en docs/memoria/f12-preregistro-deteccion.md.
+#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_f12_p2_hetero9.yaml
+name: f12-p2-hetero9
+seed: 42
+ensemble:
+  method: rank_mean
+  members:
+  - run: v2all-gru-trips-estaticas-r3
+    config: configs/exp_v2all_gru_trips_estaticas_r3.yaml
+    weight: 0.1111
+  - run: v2all-gru-trips-estaticas-s1-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s1_r3.yaml
+    weight: 0.1111
+  - run: v2all-gru-trips-estaticas-s2-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s2_r3.yaml
+    weight: 0.1111
+  - run: v2all-cnn-lstm-trips-estaticas-r3
+    config: configs/exp_v2all_cnn_lstm_trips_estaticas_r3.yaml
+    weight: 0.1111
+  - run: v2all-cnn-lstm-trips-estaticas-s1-r3
+    config: configs/exp_v2all_cnn_lstm_trips_estaticas_s1_r3.yaml
+    weight: 0.1111
+  - run: v2all-cnn-lstm-trips-estaticas-s2-r3
+    config: configs/exp_v2all_cnn_lstm_trips_estaticas_s2_r3.yaml
+    weight: 0.1111
+  - run: v2all-cnn-lstm-signals-estaticas-r3
+    config: configs/exp_v2all_cnn_lstm_signals_estaticas_r3.yaml
+    weight: 0.1111
+  - run: v2all-cnn-lstm-signals-estaticas-s1-r3
+    config: configs/exp_v2all_cnn_lstm_signals_estaticas_s1_r3.yaml
+    weight: 0.1111
+  - run: v2all-cnn-lstm-signals-estaticas-s2-r3
+    config: configs/exp_v2all_cnn_lstm_signals_estaticas_s2_r3.yaml
+    weight: 0.1111
+compare:
+  reference: v2all-seeds3-gru-trips-estaticas
+  against: []
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f12-deteccion
+  job_type: ensemble
+  tags:
+  - f12
+  - v2
+  - r3
+  mode: online
+  log_artifacts: false
+output_dir: experiments

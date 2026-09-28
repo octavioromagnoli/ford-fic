@@ -190,8 +190,17 @@ def measure(name: str, pred: pd.DataFrame, n_rep: int, cfg: dict, strata: dict[s
 
 
 def paired_bootstrap(ref: dict, other: dict, budgets: list[float], n_boot: int,
-                     rng: np.random.Generator) -> list[dict]:
-    """Diferencia de detección (otra − referencia) con autos remuestreados, promedio sobre repeticiones."""
+                     rng: np.random.Generator, primary: list[float] | None = None) -> list[dict]:
+    """Diferencia de detección (otra − referencia) con autos remuestreados, promedio sobre repeticiones.
+
+    Con `primary`, agrega una fila `budget = "primary"`: la diferencia del promedio de la detección
+    sobre esos presupuestos, con las mismas réplicas (el criterio único de un preregistro, que evita
+    elegir después el presupuesto que dio mejor).
+    """
+    if primary:
+        missing = [b for b in primary if b not in budgets]
+        if missing:
+            raise ValueError(f"`primary_budgets` {missing} no están en `budgets`")
     event = ref["event"]
     if not np.array_equal(event, other["event"]):
         raise ValueError("las corridas no tienen los mismos autos en el mismo orden")
@@ -207,9 +216,15 @@ def paired_bootstrap(ref: dict, other: dict, budgets: list[float], n_boot: int,
 
     point = diff(fail, heal)
     boots = np.array([diff(rng.choice(fail, len(fail)), rng.choice(heal, len(heal))) for _ in range(n_boot)])
-    return [{"budget": b, "diff": float(point[j]), "ci_lo": float(np.quantile(boots[:, j], 0.025)),
+    rows = [{"budget": b, "diff": float(point[j]), "ci_lo": float(np.quantile(boots[:, j], 0.025)),
              "ci_hi": float(np.quantile(boots[:, j], 0.975)), "p_le_0": float((boots[:, j] <= 0).mean())}
             for j, b in enumerate(budgets)]
+    if primary:
+        cols = [budgets.index(b) for b in primary]
+        pt, bs = float(point[cols].mean()), boots[:, cols].mean(axis=1)
+        rows.append({"budget": "primary", "diff": pt, "ci_lo": float(np.quantile(bs, 0.025)),
+                     "ci_hi": float(np.quantile(bs, 0.975)), "p_le_0": float((bs <= 0).mean())})
+    return rows
 
 
 def state_family(summaries: list[dict], name: str) -> str | None:
@@ -321,7 +336,8 @@ def main() -> int:
         for name, st in state.items():
             if name == against or against not in state or state_family(summaries, name) == "semilla":
                 continue
-            for row in paired_bootstrap(state[against], st, budgets, int(cfg["n_boot"]), rng):
+            primary = [float(b) for b in cfg.get("primary_budgets") or []]
+            for row in paired_bootstrap(state[against], st, budgets, int(cfg["n_boot"]), rng, primary):
                 paired.append({"run": name, "reference": against, **row})
     paired = pd.DataFrame(paired)
 
