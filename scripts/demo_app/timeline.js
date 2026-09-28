@@ -80,9 +80,14 @@ function build(data) {
       const label = document.createElement('span');
       label.style.gridColumn = `${i + 1} / span 4`;
       label.innerHTML = w.month + (w.year ? ` <span class="tl-year">${w.year}</span>` : '');
+      if (w.year) label.classList.add('has-year');
       axis.appendChild(label);
     }
   });
+  // The months that fit depend on the width (82 weeks leave ~4 px per week on a phone): thin them out again
+  // whenever the axis changes size, and once the web font has loaded.
+  new ResizeObserver(() => fitAxis(axis)).observe(axis);
+  document.fonts?.ready.then(() => fitAxis(axis));
   // One tab stop for the whole chart; the arrows move between weeks (roving tabindex).
   cols.addEventListener('keydown', (e) => {
     const i = Number(document.activeElement?.dataset?.i ?? root._i);
@@ -96,6 +101,34 @@ function build(data) {
   root.querySelector('.tl-next').addEventListener('click', () => go(root, root._i + 1));
   root.querySelector('.tl-skip').addEventListener('click', () => go(root, root._nextEvent));
   return root;
+}
+
+// Hides the month labels that would run into the one before them, left to right. A label with the year (the
+// first month and every January) always stays: the months before it give way. Nothing crosses the right edge.
+function fitAxis(axis) {
+  const labels = [...axis.children];
+  labels.forEach(l => l.classList.remove('is-hidden'));
+  const edge = axis.getBoundingClientRect().right;
+  const boxes = labels.map(l => {
+    const range = document.createRange();
+    range.selectNodeContents(l);
+    return range.getBoundingClientRect();
+  });
+  const gap = 8;
+  const kept = [];
+  const fits = i => !kept.length || boxes[i].left >= boxes[kept[kept.length - 1]].right + gap;
+  labels.forEach((l, i) => {
+    if (l.classList.contains('has-year')) {
+      while (!fits(i) && !labels[kept[kept.length - 1]].classList.contains('has-year')) {
+        labels[kept.pop()].classList.add('is-hidden');
+      }
+      kept.push(i);
+    } else if (fits(i) && boxes[i].right <= edge + 1) {
+      kept.push(i);
+    } else {
+      l.classList.add('is-hidden');
+    }
+  });
 }
 
 function tip(root, i) {
