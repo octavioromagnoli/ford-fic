@@ -1,0 +1,21 @@
+# F11: en qué se apoya la GRU con etiqueta suave, contra la GRU de hoy (docs/memoria/f11-gru-objetivo-suave.md).
+# Reentrena la repetición 0 de los folds de confirmación con la semilla 101 y permuta cada canal / estática.
+#
+#   WANDB_MODE=disabled python scripts/explain_perm_seq.py --config configs/explain_f11.yaml
+seed: 0
+output_name: explain-f11
+experiments_dir: experiments
+repeat: 0
+n_permutations: 3
+k_consecutive: 2
+budgets: [0.05, 0.10, 0.15, 0.20]    # el criterio primario de F11
+
+experiments:
+  - configs/exp_f11_gru_ref_conf_s101.yaml
+  - configs/exp_f11_gru_suave_conf_s101.yaml
+
+families:
+  cobertura: [n_records, observed, n_trips]
+  estado DPF: [acum_mean, acum_max, acum_rise, regen_drops, msg_full_frac, msg_severe_frac, msg_cleaning_auto_frac]
+  hábitos: [idle_frac, below_regime_frac, speed_kmh, trip_km, trip_duration_min]
+  estática: [static_SalesCountry_cd, static_Engine, static_ModelSeries]

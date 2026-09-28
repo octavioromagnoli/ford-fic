@@ -1,0 +1,14 @@
+# F11: anticipación de la primera alerta y trayectoria del score, GRU con etiqueta suave contra la
+# GRU de hoy (semillas 101-103, folds de confirmación).
+#
+#   python scripts/report_v2_leads.py --config configs/report_f11_leads.yaml
+output_name: report-f11-leads
+experiments_dir: experiments
+k_consecutive: 2
+budgets: [0.05, 0.10, 0.20]
+far_km: 10000
+near_km: 3500
+
+runs:
+  - {run: f11-seeds3-gru-ref-conf, label: GRU de hoy ×3}
+  - {run: f11-seeds3-gru-suave-conf, label: GRU con etiqueta suave ×3}

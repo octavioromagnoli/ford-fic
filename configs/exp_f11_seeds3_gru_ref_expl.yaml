@@ -36,3 +36,6 @@ wandb:
   mode: online
   log_artifacts: false
 output_dir: experiments
+compare:
+  reference: f11-gru-ref-expl-s101
+  against: []

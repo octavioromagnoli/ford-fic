@@ -56,6 +56,17 @@ cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del
   - La semilla mueve más que los hiperparámetros, y "×3 semillas" es el ensamble por rango.
 
   Ver `docs/memoria/f10-sweep-gru.md`.
+- **F11 (28-09): la GRU con etiqueta suave lejos del evento le gana con evidencia a la GRU de hoy.**
+  Misma arquitectura, panel e hiperparámetros; los cortes de un auto que falla a más de `G + H` del
+  evento entrenan con 0,15 en vez de 0 (`target: far_soft_label`, `gru_seq` con `soft_labels: true`).
+  - Confirmación preregistrada (folds nuevos, semilla 2026; semillas 101–103): **+9,6 puntos de
+    detección media al 5–20%, IC95 [3,0; 14,4], p = 0,0015**. Detecta 34,6 · 48,6 · 60,2 · 70,1% al
+    5 · 10 · 15 · 20%, contra 24,0 · 42,0 · 51,6 · 57,5%.
+  - **Es el primer modelo que le gana con evidencia a la celda mercado × motor** (+14,6 [3,7; 22,5]).
+    AUC dentro de mercado × motor 0,689 contra 0,645. Aprueba (a0) y (a′); (b) +0,004.
+  - Configs `configs/exp_f11_*.yaml`; es el mejor sobre dev v2 y **el test sigue sin tocar**.
+
+  Ver `docs/memoria/f11-gru-objetivo-suave.md`.
 
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
@@ -341,6 +352,8 @@ src/training/targets.py  con qué se entrena (no con qué se mide) y cómo la sa
                          `cure_window` (exposición en la ventana del registro, para el cure model) y
                          `window_survival` (el tramo en riesgo del panel v1 en días, F5 §3.3) y
                          `window_km_survival` (el mismo tramo en km, con entrada tardía: el finalista de F6).
+                         `far_soft_label` (0 < τ < 1 en los cortes lejanos de autos que fallan: la GRU de F11,
+                         con `soft_labels: true`).
                          Lo que se evalúa sigue siendo `label`; cv.py no sabe qué modos hay
 src/eval/splits.py       splits antileakage + serialización a splits.json; estrato compuesto (`composite_strata`,
                          `extra_columns`), holdout sobre el universo (`holdout_on_universe`), `compare_holdouts` y
@@ -418,6 +431,9 @@ scripts/report_v2_leads.py  anticipación de la primera alerta (km, días aprox.
 scripts/sweep_gru.py     sweep bayesiano (Optuna TPE + poda por repetición, workers en paralelo sobre un journal) de
                          los hiperparámetros de la GRU, solo dev; `--write-configs` escribe las top_k con semillas que
                          el sweep no usó, para confirmarlas con train.py y report_v2_models.py (configs/sweep_gru.yaml)
+scripts/explain_perm_seq.py  en qué se apoya un secuencial para detectar autos: permuta cada canal (sus T bins juntos) y
+                         cada estática en la validación de una repetición y mide la caída de la detección por auto
+                         y el |Δlogit| por familia (configs/explain_f11.yaml)
 scripts/explain_k2.py    explicabilidad de K2 de punta a punta (preregistro configs/explain_k2.yaml): reentrena y
                          verifica los folds, V1-V4, criterios, elección, mensajes al cliente (configs/explain_texts.yaml)
                          y casos → experiments/explain-k2/; scripts/explain_k2_report.py hace las figuras y cases.md

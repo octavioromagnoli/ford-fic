@@ -1,0 +1,97 @@
+run: f11-seeds3-gru-ref-conf
+logged_on: '2026-09-28'
+note: 'F11: REFERENCIA de la confirmación. La GRU de hoy (label), semillas 101-103,
+  folds de confirmación (semilla 2026). 24,0 / 42,0 / 51,6 / 57,5% al 5/10/15/20%.
+  Reentrenada en audit_model: (a0) PASS, (a'') -0,0093, (b) +0,012. docs/memoria/f11-gru-objetivo-suave.md'
+source:
+  config_path: configs\exp_f11_seeds3_gru_ref_conf.yaml
+  config_versioned: false
+  branch: exp/gru-objetivo-suave
+  commit: 426066a
+  note: rama y commit del checkout donde se anotó, no necesariamente donde se entrenó
+summary:
+  model: rank_ensemble
+  pr_auc: 0.15447397336840263
+  cohort_ceiling: 0.1766839378238342
+  cohort_lift: 3.0318652849740935
+  within_failed: 0.257299580230429
+  within_failed_lift: 1.456270351450815
+  when_delta: 0.005095602323628434
+  vehicle_agg: mean
+  vehicle_pr_auc: 0.653525040535652
+  vehicle_lift: 2.0622345723569464
+  vehicle_base_rate: 0.31690140845070425
+  pr_auc_lo: null
+  pr_auc_hi: null
+  base_rate: 0.058275655814748355
+  lift: 2.650746202830522
+  roc_auc: 0.7271883109850803
+  brier: 0.29394834147983323
+  detection_rate: 0.32592592592592595
+  median_lead_km: 6805.805572755418
+  budget: 50.0
+  panel: null
+  panel_generation: '2026-09-27'
+  splits: null
+  n_positive: 682
+  cost_per_1000: null
+  cost_best_ratio: null
+  cost_best_savings_frac: null
+  cost_matrix: null
+  landmark_score_column: null
+  d1: null
+  d1_std: null
+  d1_lo: null
+  d1_hi: null
+  d2: null
+  d2_std: null
+  d2_lo: null
+  d2_hi: null
+  d2_lead_days: null
+config:
+  name: f11-seeds3-gru-ref-conf
+  seed: 101
+  ensemble:
+    method: rank_mean
+    members:
+    - run: f11-gru-ref-conf-s101
+      config: configs/exp_f11_gru_ref_conf_s101.yaml
+      weight: 0.3333
+    - run: f11-gru-ref-conf-s102
+      config: configs/exp_f11_gru_ref_conf_s102.yaml
+      weight: 0.3333
+    - run: f11-gru-ref-conf-s103
+      config: configs/exp_f11_gru_ref_conf_s103.yaml
+      weight: 0.3333
+  eval:
+    k_consecutive: 2
+    n_thresholds: 50
+    max_false_alarms_per_1000: 50
+    bootstrap_by_vehicle: true
+    bootstrap_n_boot: 1000
+  wandb:
+    enabled: true
+    project: ford-fic
+    entity: oromagnoli-
+    group: f11-objetivo-suave
+    job_type: ensemble
+    tags:
+    - f11
+    - v2
+    - r3
+    - ref
+    - conf
+    - semillas
+    mode: online
+    log_artifacts: false
+  output_dir: experiments
+  compare:
+    reference: f11-gru-ref-conf-s101
+    against: []
+  _config_path: configs\exp_f11_seeds3_gru_ref_conf.yaml
+  model:
+    name: rank_ensemble
+    members:
+    - f11-gru-ref-conf-s101
+    - f11-gru-ref-conf-s102
+    - f11-gru-ref-conf-s103

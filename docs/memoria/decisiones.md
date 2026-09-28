@@ -5,6 +5,34 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-09-28 · La GRU con etiqueta suave lejos del evento pasa a ser el mejor modelo sobre dev v2
+
+**Decidió:** el preregistro de F11 (commit 426066a, antes de toda corrida de confirmación). **Configs:**
+`configs/exp_f11_*.yaml`, `configs/report_f11*.yaml`. Detalle: [f11-gru-objetivo-suave.md](f11-gru-objetivo-suave.md).
+
+**Qué se midió:** la GRU + trips + estática de hoy, entrenada con `far_soft_label` (0,15 en los cortes de
+autos que fallan con el evento a más de `G + H`), contra la misma GRU entrenada con `label`. Folds nuevos
+(semilla 2026), semillas 101–103, ensamble por rango de 3 para los dos, bootstrap pareado por vehículo
+de 2.000 réplicas. **Primario (detección media al 5–20%): +9,6 puntos, IC95 [3,0; 14,4], p = 0,0015.**
+Con los folds de la exploración y las mismas semillas: +10,7 [3,6; 16,0].
+
+**Por qué:**
+- Gana el criterio primario y pasa las dos compuertas: auditorías ((a0) aprueba, (a′) +0,0006, (b)
+  +0,004) y azar (entre 2,6× y 3,6× el p95 del nulo al 5–20%).
+- Es el primer modelo que le gana con evidencia a la tasa de la celda mercado × motor (+14,6 [3,7; 22,5]),
+  y sube el AUC dentro de la celda (0,645 → 0,689).
+- Con `label` a secas, el corte lejano de un auto que falla se entrena como uno sano, y eso castiga la
+  señal de *qué auto* que la detección por auto necesita. Con τ = 1 (la cohorte) la ganancia se cae.
+
+**Consecuencias:**
+- Las cifras del pitch sobre dev pasan a ser ~35 · 49 · 60 · 70% al 5 · 10 · 15 · 20% (fuera de muestra:
+  34 · 49 · 69% al 5 · 10 · 20%). La anticipación mediana no cambia (~8.300 km, ~3 meses).
+- Una parte de la ganancia es composición: el modelo se apoya más en el país (19,5% del |Δlogit|
+  contra 11,4%). Contra la GRU de hoy recalibrada por celda, la ventaja baja a +5,1 [−0,1; 10,0].
+- **El test sigue sin tocar.** Medirlo es el paso siguiente y lo decide el equipo.
+- Lo explorado que no sirvió (suavizar el score, historia completa, más canales, MIL encima) está en
+  el preregistro §0: no volver a probarlo sin una razón nueva.
+
 ## 2026-09-27 · El sweep de la GRU no cambia la configuración: se queda la de hoy, con las semillas 42, 1 y 2
 
 **Decidió:** el equipo, después de la confirmación con semillas nuevas. **Configs:**
