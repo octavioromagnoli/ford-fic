@@ -1,10 +1,12 @@
-"""Lo compartido entre las páginas de la demo: configs, bundle, eventos, semana elegida y formato."""
+"""Lo compartido entre las páginas de la demo: configs, bundle, eventos, semana y punto de operación elegidos y formato."""
 
 from __future__ import annotations
 
 import hmac
 import os
+import re
 from collections import Counter
+from html import escape
 
 import pandas as pd
 import streamlit as st
@@ -18,6 +20,7 @@ from src.agents.triage import load_triage
 from src.config import load_config
 
 from scripts.demo_app.presentation import brand_block
+from scripts.demo_app.wording import budget_label, operating_line
 
 DEMO_CONFIG = os.environ.get("DEMO_CONFIG", "configs/demo.yaml")
 AGENTS_CONFIG = os.environ.get("AGENTS_CONFIG", "configs/agents.yaml")
@@ -47,28 +50,65 @@ def agents_cfg() -> dict:
 
 
 @st.cache_resource(show_spinner="Cargando el bundle de la demo…")
+def _bundle(budget: float | None) -> Bundle:
+    """El bundle en un punto de operación (`None`: el que abre la demo). Uno por punto, cargado una vez."""
+    return load_bundle(bundle_dir(cfg()), budget)
+
+
 def bundle() -> Bundle:
-    return load_bundle(bundle_dir(cfg()))
+    """El bundle en el punto de operación que eligió la perilla: umbral, alertas, hábitos y triage de ese punto."""
+    return _bundle(current_budget())
 
 
 @st.cache_resource(show_spinner=False)
+def _events(budget: float) -> list[Event]:
+    return events_for(_bundle(budget), agents_cfg())
+
+
 def events() -> list[Event]:
-    return events_for(bundle(), agents_cfg())
+    return _events(current_budget())
 
 
 @st.cache_resource(show_spinner=False)
 def llm() -> LLM:
-    b = bundle()
-    return LLM(agents_cfg()["llm"], b.root / agents_cfg()["llm"]["cache_subdir"])
+    # La caché del LLM es una sola para todos los puntos de operación.
+    return LLM(agents_cfg()["llm"], _bundle(None).root / agents_cfg()["llm"]["cache_subdir"])
 
 
 def all_weeks() -> list[pd.Timestamp]:
     return weeks(bundle().meta)
 
 
-# La semana vive en una clave que no es de un widget: Streamlit descarta el estado de los widgets al cambiar
-# de página con st.switch_page («Ver ficha»), y la ficha abría en la primera semana. Los controles (el
-# calendario y el dock) solo reflejan esta clave.
+# La semana y el punto de operación viven en claves que no son de un widget: Streamlit descarta el estado de los
+# widgets al cambiar de página con st.switch_page («Ver ficha»), y la ficha abría en la primera semana. Los controles
+# (el calendario, el dock y la perilla) solo reflejan estas claves.
+
+def current_budget() -> float:
+    """Falsas alarmas toleradas cada 1.000 sanos: arranca en el punto que abre la demo. Al cambiarlo, la semana se
+    queda: se ve qué cambia en la misma semana."""
+    if "_budget" not in st.session_state:
+        st.session_state["_budget"] = _bundle(None).budget
+    return float(st.session_state["_budget"])
+
+
+def set_budget(budget: float) -> None:
+    st.session_state["_budget"] = float(budget)
+
+
+def budget_knob() -> None:
+    """La perilla: cuántas falsas alarmas tolerar. Mueve el umbral y, con él, las alertas, la bandeja, las fichas y la
+    temporada. Al lado, lo que se anticipa en ese punto: el número oficial, que no cambia con la semana."""
+    st.session_state["budget_pick"] = current_budget()
+    with st.container(horizontal=True, vertical_alignment="center", gap=None, key="opbar"):
+        st.markdown('<span class="opbar-label" aria-hidden="true">Falsas alarmas toleradas</span>',
+                    unsafe_allow_html=True)
+        st.segmented_control("Falsas alarmas toleradas", _bundle(None).budgets, format_func=budget_label,
+                             key="budget_pick", required=True, label_visibility="collapsed",
+                             on_change=lambda: set_budget(st.session_state["budget_pick"]))
+        # Los dos porcentajes, en blanco: es lo que se mueve con la perilla.
+        readout = re.sub(r"(\d+(?:,\d+)?%)", r"<strong>\1</strong>", escape(operating_line(bundle().meta)))
+        st.markdown(f'<p class="opbar-readout">{readout}</p>', unsafe_allow_html=True)
+
 
 def current_week() -> pd.Timestamp:
     if "_week" not in st.session_state:
@@ -114,13 +154,13 @@ def timeline_data(current: pd.Timestamp) -> dict:
 
 
 def triage_for(week: pd.Timestamp) -> dict | None:
-    """El triage de la semana: el que se corrió en esta sesión o el que viaja en el bundle."""
-    key = f"triage:{pd.Timestamp(week).date()}"
+    """El triage de la semana en el punto de operación elegido: el que se corrió en esta sesión o el del bundle."""
+    key = f"triage:{current_budget():g}:{pd.Timestamp(week).date()}"
     return st.session_state.get(key) or load_triage(bundle(), week)
 
 
 def store_triage(result: dict) -> None:
-    st.session_state[f"triage:{result['week']}"] = result
+    st.session_state[f"triage:{float(result['budget_per_1000']):g}:{result['week']}"] = result
 
 
 def check_password() -> bool:

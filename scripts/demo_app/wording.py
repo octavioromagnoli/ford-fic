@@ -31,6 +31,21 @@ def model_name(meta: dict[str, Any]) -> str:
     return str(meta["model"]["name"])
 
 
+def budget_label(budget_per_1000: float) -> str:
+    """Un punto de operación como lo muestra la perilla: 50 falsas alarmas cada 1.000 sanos es `5%`."""
+    return f"{float(budget_per_1000) / 10:g}%"
+
+
+def operating_line(meta: dict[str, Any]) -> str:
+    """Lo que la perilla cambia, dicho en el punto elegido: cuánto se anticipa (el número oficial, promedio de las
+    repeticiones) y cuántos sanos reciben una alerta de más (el umbral exacto deja a lo sumo esa parte)."""
+    point = _curve(meta).get(round(float(meta["budget_per_1000"])))
+    if point is None:
+        return ""
+    return (f"Anticipa el {_pct(point['detection'])} de las fallas, medido en desarrollo. Hasta el "
+            f"{budget_label(meta['budget_per_1000'])} de los autos sanos recibe una alerta de más.")
+
+
 def model_note(meta: dict[str, Any], llm_model: str, llm_mode: str) -> str:
     m = meta["model"]
     return (f"Modelo: {m['name']} ({m['family']}) · umbral al {meta['budget_per_1000'] / 10:g}% de falsas alarmas · "
@@ -42,15 +57,22 @@ def _pct(x: float) -> str:
 
 
 def _curve(meta: dict[str, Any]) -> dict[int, dict[str, Any]]:
-    return {int(p["budget_per_1000"]): p for p in meta["official"]["curve"]}
+    return {round(float(p["budget_per_1000"])): p for p in meta["official"]["curve"]}
 
 
-def detection_line(meta: dict[str, Any], budgets: tuple[int, ...] = (50, 100)) -> str:
-    """La detección oficial a cada presupuesto, dentro de muestra y con el umbral fijado fuera de muestra."""
+def _operating_budgets(meta: dict[str, Any]) -> list[int]:
+    """El punto elegido primero y después los otros de la perilla (o el 10%, en un bundle de un solo punto)."""
+    op = round(float(meta["budget_per_1000"]))
+    offered = [round(float(p["budget_per_1000"])) for p in meta.get("operating_points") or []] or [op, 100]
+    return [op] + [b for b in offered if b != op]
+
+
+def detection_line(meta: dict[str, Any], budgets: tuple[int, ...] | None = None) -> str:
+    """La detección oficial en el punto elegido (y con el umbral fijado fuera de muestra) y en los otros de la perilla."""
     curve = _curve(meta)
     held = {round(float(h["alpha"]) * 1000): h for h in meta["official"]["holdout"] if h["method"] == "empirical"}
     parts = []
-    for i, b in enumerate(x for x in budgets if x in curve):
+    for i, b in enumerate(x for x in (budgets or _operating_budgets(meta)) if x in curve):
         out = held.get(b)
         oos = "" if out is None else (f" ({_pct(out['detection'])} con el umbral fijado fuera de muestra)" if i == 0
                                       else f" ({_pct(out['detection'])} fuera de muestra)")
@@ -62,7 +84,7 @@ def detection_line(meta: dict[str, Any], budgets: tuple[int, ...] = (50, 100)) -
 
 def chance_line(meta: dict[str, Any]) -> str:
     """Contra el azar que conserva el largo de cada historial (regla 6), en el punto de la demo y alrededor."""
-    name, curve, op = model_name(meta), _curve(meta), int(meta["budget_per_1000"])
+    name, curve, op = model_name(meta), _curve(meta), round(float(meta["budget_per_1000"]))
     point = curve.get(op)
     if point is None:
         return ""
@@ -78,8 +100,8 @@ def chance_line(meta: dict[str, Any]) -> str:
 
 def composition_line(meta: dict[str, Any]) -> str:
     """Cuánto detecta la composición sola (la tasa de fallas de la celda mercado × motor, sin mirar un viaje)."""
-    floor = {int(p["budget_per_1000"]): p["detection"] for p in meta["official"].get("cell_floor", [])}
-    op = int(meta["budget_per_1000"])
+    floor = {round(float(p["budget_per_1000"])): p["detection"] for p in meta["official"].get("cell_floor", [])}
+    op = round(float(meta["budget_per_1000"]))
     if op not in floor:
         return ""
     return (f"- **Parte de lo que detecta es la composición de la muestra.** La tasa de fallas de la celda mercado × "

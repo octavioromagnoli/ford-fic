@@ -170,7 +170,8 @@ st.markdown("### Acciones de la semana")
 for card_index, rec in enumerate(result["events"]):
     ev, facts, draft = rec["event"], rec["facts"], rec["draft"]
     vid = ev["vehicle_id"]
-    key = f"{result['week']}:{vid}:{ev['kind']}"
+    # Con otro punto de operación la bandeja es otra: las decisiones se guardan por punto.
+    key = f"{b.budget:g}:{result['week']}:{vid}:{ev['kind']}"
     decided = approvals.get(key)
     collapsed = bool(decided) and key not in expanded
     with st.container(key=f"alertcard_{card_index}_{ev['kind']}"):

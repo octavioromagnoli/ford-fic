@@ -80,14 +80,17 @@ curve = pd.DataFrame(meta["official"]["curve"])
 hold = pd.DataFrame(meta["official"]["holdout"])
 emp = hold.loc[hold["method"].eq("empirical")].set_index("alpha")
 points = []
-shown = curve.loc[curve["budget_per_1000"].isin([50, 100])]
-# El total de autos que fallan es el mismo en las dos columnas: va en la etiqueta, y los valores entran en un celular.
+# Una columna por punto de la perilla, con el elegido marcado: la tabla es la misma en los cuatro, lo que cambia arriba
+# es el replay.
+shown = curve.loc[curve["budget_per_1000"].isin(b.budgets)].sort_values("budget_per_1000")
+current = 1 + list(shown["budget_per_1000"]).index(b.budget)
+# El total de autos que fallan es el mismo en todas las columnas: va en la etiqueta, y los valores entran en un celular.
 n_failed = int(shown["n_event_vehicles"].iloc[0])
 for _, p in shown.iterrows():
     alpha = p["budget_per_1000"] / 1000
     h = emp.loc[alpha] if alpha in emp.index else None
     points.append({
-        "Falsas alarmas toleradas": format_value(alpha, "pct"),
+        "Falsas alarmas toleradas": format_value(alpha, "pct") + (" · elegido" if p["budget_per_1000"] == b.budget else ""),
         "Detección (3 repeticiones)": f"{number(100 * p['detection'], 1)}% ± {number(100 * p['detection_sd'], 1)}",
         f"Detectados por repetición (de {n_failed})": p["detected"],
         "Anticipación mediana": format_value(p["lead_km"], "int") + " km",
@@ -95,14 +98,15 @@ for _, p in shown.iterrows():
         "Fuera de muestra: detección / falsas alarmas": (f"{number(100 * h['detection'], 1)}% / "
                                                          f"{number(100 * h['fa_heldout'], 1)}%") if h is not None else "—",
     })
-# Una columna por punto de operación y una fila por medida: entra en el ancho de un celular.
+# Una columna por punto de operación y una fila por medida; en un celular, cada medida se apila con sus cuatro valores.
 measures = [k for k in points[0] if k != "Falsas alarmas toleradas"]
 with official:
     table(["Falsas alarmas toleradas"] + [p["Falsas alarmas toleradas"] for p in points],
-          [[m] + [p[m] for p in points] for m in measures], nowrap_values=True)
+          [[m] + [p[m] for p in points] for m in measures], nowrap_values=True, stack=True, current=current)
 official.caption(f"Muestra de desarrollo: {meta['counts']['failed']} autos que fallaron y {meta['counts']['healthy']} sanos. "
-           f"La demo muestra la repetición {meta['repeat'] + 1}; la tabla, el promedio de las "
-           f"{meta['official']['n_repeats']}. «Azar» es un score permutado que conserva el largo de cada historial.")
+           f"La demo muestra la repetición {meta['repeat'] + 1} en el punto elegido con la perilla; la tabla, el promedio "
+           f"de las {meta['official']['n_repeats']} en cada punto. «Azar» es un score permutado que conserva el largo de "
+           "cada historial.")
 
 with st.expander("Qué no promete esta demo", icon=":material/info:"):
     st.markdown(promises(meta))

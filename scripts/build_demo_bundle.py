@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """Bundle de la demo de producto: lo que la app y los agentes leen, precalculado y solo de dev.
 
-    FORD_DATA_DIR=$PWD/data/rebuild-0921 python scripts/build_demo_bundle.py --config configs/demo.yaml
+    FORD_DATA_DIR=$PWD/data/v2 python scripts/build_demo_bundle.py --config configs/demo.yaml
     python scripts/build_demo_bundle.py --config configs/demo.yaml --publish-only   # wandb Artifact
 
 La app desplegada no importa torch ni sklearn: lee este directorio. Acá se hace todo lo que necesita el stack
 completo (la corrida de `model.run_config`, que puede ser un ensamble) y nada se recalcula distinto:
 - el umbral es el **exacto** de `scripts/report_v2_models.py` (el menor que deja ≤ b de los sanos con alerta), en la
-  repetición elegida, y la alerta es la de `src/eval/dashboard_data.py::vehicle_alerts` (k cortes seguidos);
+  repetición elegida, y la alerta es la de `src/eval/dashboard_data.py::vehicle_alerts` (k cortes seguidos). Hay uno
+  por punto de operación (`operating_points`, lo que elige la perilla de la app), y el replay de cada uno tiene que
+  reproducir esa repetición del reporte;
 - los números oficiales salen de `report_v2_models.measure`, la misma cuenta que el reporte v2 y el sweep (umbral
   exacto por presupuesto, nulo de bolsa, fuera de muestra), promediados entre repeticiones;
 - el mensaje sale del mismo render que la explicabilidad (`src/eval/explain.py::render_vehicle_message`).
@@ -19,15 +21,15 @@ no lo que el modelo usó (`docs/memoria/f9-demo-gru.md`).
 Deja en `bundle.dir`:
 - cuts.parquet        una fila por corte de dev evaluable con la etiqueta elegida: score de la repetición, fecha,
                       mercado y perfil de uso
-- vehicles.parquet    una fila por auto: evento (fecha y odómetro), alerta de la repetición, hábitos que se apartan
-                      de la flota sana y mensaje, señales del filtro contra la flota sana (taller)
-- deviations.parquet  una fila por (auto, hábito nombrable): valor, mediana de los sanos del mercado, qué parte de
-                      esos sanos supera hacia el lado riesgoso y si se nombra
-- meta.json           modelo y tipo de "por qué", umbral, regla, números oficiales, ventana del replay, textos fijos
-                      y procedencia (commit y hash de cada insumo)
+- vehicles.parquet    una fila por (auto, punto de operación): evento (fecha y odómetro), alerta de la repetición,
+                      hábitos que se apartan de la flota sana y mensaje, señales del filtro contra la flota sana (taller)
+- deviations.parquet  una fila por (auto, hábito nombrable, punto de operación): valor, mediana de los sanos del
+                      mercado, qué parte de esos sanos supera hacia el lado riesgoso y si se nombra
+- meta.json           modelo y tipo de "por qué", puntos de operación (umbral y conteos de cada uno), regla, números
+                      oficiales, ventana del replay, textos fijos y procedencia (commit y hash de cada insumo)
 
-Un directorio `llm_cache/` o `triage/` que ya esté en `bundle.dir` (lo deja `scripts/warm_demo_cache.py`) se
-conserva y viaja con `--publish-only`.
+Un directorio `llm_cache/` o `triage/` que ya esté en `bundle.dir` (lo deja `scripts/warm_demo_cache.py`, con un
+`triage/faNNN/` por punto de operación) se conserva y viaja con `--publish-only`.
 """
 
 from __future__ import annotations
@@ -52,7 +54,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from scripts.audit_detection_null import vehicle_levels  # noqa: E402
 from scripts.report_v2_models import cell_rate_scores, exact_tau, measure  # noqa: E402
-from src.agents.bundle import FLEET_PROFILE, REQUIRED  # noqa: E402
+from src.agents.bundle import BUDGET, FLEET_PROFILE, REQUIRED  # noqa: E402
 from src.agents.formatting import format_value  # noqa: E402
 from src.agents.policy import monday  # noqa: E402
 from src.config import ensure_dir, load_config, repo_root, resolve_path  # noqa: E402
@@ -218,78 +220,69 @@ def official_numbers(rows: pd.DataFrame, n_repeats: int, ocfg: dict[str, Any], k
     return official, by_repeat
 
 
-def build(cfg: dict[str, Any], out_dir: Path) -> dict[str, Any]:
-    mcfg, ecfg = cfg["model"], cfg["explanation"]
-    if ecfg.get("type") != FLEET_PROFILE:
-        raise ValueError(f"`explanation.type` tiene que ser `{FLEET_PROFILE}` (es `{ecfg.get('type')}`): el modelo de "
-                         "la demo no tiene atribución, el porqué es una comparación con la flota sana")
-    run_cfg = load_config(mcfg["run_config"])
-    label, repeat, budget = cfg["label"], int(cfg["repeat"]), float(cfg["budget_per_1000"])
-    profile = list(dict.fromkeys(cfg["profile_features"]))
-    if KM_PER_DAY not in profile:
-        raise ValueError(f"`profile_features` tiene que traer `{KM_PER_DAY}`: pasa el horizonte a semanas")
-    ocfg = cfg["official"]
-    cell_columns = list(ocfg["cell_columns"])
-    d = load_run(mcfg["run_config"], columns=[*profile, *cfg["technician_signals"], *cell_columns],
-                 columns_panel=mcfg.get("profile_panel"))
-    k = int(d.eval_cfg.get("k_consecutive", 2))
-    rows = rows_for(d, label)
+def operating_points(cfg: dict[str, Any], official_budgets: list[float]) -> tuple[list[float], float]:
+    """Los presupuestos de falsas alarmas (cada 1.000 sanos) que ofrece la perilla de la app, y el que abre la demo.
+    Cada uno tiene que estar entre los de los números oficiales: el replay de cada punto se valida contra el reporte."""
+    budgets = sorted({float(b) for b in cfg["operating_points"]})
+    default = float(cfg["default_budget_per_1000"])
+    if default not in budgets:
+        raise ValueError(f"`default_budget_per_1000` ({default:g}) no está entre los `operating_points` {budgets}")
+    official = {round(1000.0 * float(b), 6) for b in official_budgets}
+    missing = [b for b in budgets if round(b, 6) not in official]
+    if missing:
+        raise ValueError(f"Los puntos de operación {missing} no están en `official.budgets`: no habría contra qué validar "
+                         "su replay")
+    return budgets, default
 
-    # -- el umbral y la alerta: umbral exacto en la repetición elegida, alerta con k cortes seguidos ---
+
+def build_point(rows: pd.DataFrame, budget: float, *, repeat: int, k: int, by_repeat: pd.DataFrame,
+                shared: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any]:
+    """Un punto de operación: umbral exacto, alerta, cuándo se confirma, el porqué y el mensaje de cada auto.
+
+    Lo que no depende del umbral (la referencia de los sanos, los hábitos nombrables, los textos, las fechas de los
+    eventos) llega en `shared`. El replay tiene que reproducir la repetición `repeat` del reporte en este presupuesto.
+    """
+    ecfg = cfg["explanation"]
     levels, event, _ = vehicle_levels(rows, rows[f"score_r{repeat}"].to_numpy(dtype=float), k)
     threshold = exact_tau(levels[event == 0], budget / 1000.0)
     if not np.isfinite(threshold):
         raise RuntimeError(f"Con {budget:g} falsas alarmas cada 1.000 alertarían todos los sanos en R{repeat + 1}")
     alerts = vehicle_alerts(rows, repeat, threshold, k)
     timing = alert_timing(rows, repeat, threshold, k)
-    logger.info("%s · R%d · %s · %.0f‰ | umbral exacto %.4f | %s", run_cfg["name"], repeat + 1, label, budget,
-                threshold, alerts["outcome"].value_counts().to_dict())
+    logger.info("R%d · %.0f‰ | umbral exacto %.4f | %s", repeat + 1, budget, threshold,
+                alerts["outcome"].value_counts().to_dict())
 
-    # -- números oficiales: la cuenta del reporte v2, y el replay tiene que coincidir con su repetición --
-    official, by_repeat = official_numbers(rows, d.n_repeats, ocfg, k, name=run_cfg["name"], cell_columns=cell_columns)
     point = by_repeat.loc[by_repeat["repeat"].eq(repeat) & np.isclose(by_repeat["budget"], budget / 1000.0)].iloc[0]
     replay_detected = int((alerts["failed"] & alerts["alerted"]).sum())
     replay_false = int((~alerts["failed"] & alerts["alerted"]).sum())
     if replay_detected != int(point["n_detected"]) or replay_false != round(float(point["fa_realized"]) * int(point["n_healthy"])):
-        raise RuntimeError(f"El replay ({replay_detected} detectados, {replay_false} falsas alarmas) no reproduce la "
-                           f"repetición {repeat + 1} del reporte ({int(point['n_detected'])}, "
+        raise RuntimeError(f"El replay al {budget:g}‰ ({replay_detected} detectados, {replay_false} falsas alarmas) no "
+                           f"reproduce la repetición {repeat + 1} del reporte ({int(point['n_detected'])}, "
                            f"{float(point['fa_realized']) * int(point['n_healthy']):.0f})")
 
-    # -- cortes: score de la repetición + perfil de uso --------------------------------------------
-    cuts = rows[KEY + ["cut_date", "static_SalesCountry_cd", "event_observed", "time_to_event_km"] + profile].copy()
-    cuts["score"] = rows[f"score_r{repeat}"].to_numpy()
-    cuts = cuts.rename(columns={"static_SalesCountry_cd": "market"}).sort_values(KEY, ignore_index=True)
-
-    # -- el porqué: en qué hábitos se aparta de los sanos de su mercado (no lo que usó el modelo) --
-    gap_km, horizon_km = float(rows["gap_km"].iloc[0]), float(rows["horizon_km"].iloc[0])
-    classification = load_config(ecfg["classification"])
-    texts = load_config(ecfg["texts"])
-    habits = fp.nameable_habits(profile, classification["features"], texts)
-    if not habits:
-        raise ValueError("Ningún hábito de `profile_features` es accionable, con signo físico y con texto")
+    # -- el porqué: en qué hábitos se aparta de los sanos de su mercado en los cortes de la alerta --
+    habits, texts = shared["habits"], shared["texts"]
     explained = ex.explained_cuts(rows, repeat, threshold, k)
-    per_vehicle, reference = fp.healthy_market_reference(rows, list(habits))
     values = fp.window_values(rows, explained, [*habits, KM_PER_DAY])
     deviations = fp.fleet_factors(
-        fp.fleet_deviations(values, per_vehicle, reference, habits, min_healthy=int(ecfg["min_healthy_vehicles"])),
+        fp.fleet_deviations(values, shared["per_vehicle"], shared["reference"], habits,
+                            min_healthy=int(ecfg["min_healthy_vehicles"])),
         min_share=float(ecfg["min_healthy_share"]), max_factors=int(ecfg["max_factors"]))
     deviations = describe_deviations(deviations, texts)
     signals = technician_signals(rows, explained, cfg["technician_signals"])
-    specs = ex.feature_specs(classification, {})
-    message_texts = {**texts, **ecfg["message"]}
     risk = explained.groupby("vehicle_id")["risk_level"].first()
 
-    events = event_calendar(cfg, alerts["vehicle_id"])
+    gap_km, horizon_km = shared["gap_km"], shared["horizon_km"]
     vehicles = alerts.merge(timing, on="vehicle_id", how="left")
-    vehicles["event_date"] = vehicles["vehicle_id"].map(events)
+    vehicles["event_date"] = vehicles["vehicle_id"].map(shared["events"])
     records = []
     for vid in vehicles["vehicle_id"]:
         named = deviations.loc[deviations["vehicle_id"].eq(vid) & deviations["named"]].sort_values("rank")
         kmpd = float(values.loc[vid, KM_PER_DAY])
         weeks = ex.horizon_weeks(gap_km, horizon_km, kmpd)
         message = ex.render_vehicle_message(
-            risk_level=risk[vid], specs=specs, texts=message_texts, k=k, gap_km=gap_km, horizon_km=horizon_km,
-            km_per_day=kmpd, symptom_contribution=None,
+            risk_level=risk[vid], specs=shared["specs"], texts=shared["message_texts"], k=k, gap_km=gap_km,
+            horizon_km=horizon_km, km_per_day=kmpd, symptom_contribution=None,
             factors=[ex.MessageFactor(r.feature, float(r.share), float(r.value), float(r.reference))
                      for r in named.itertuples()])
         records.append({
@@ -300,6 +293,57 @@ def build(cfg: dict[str, Any], out_dir: Path) -> dict[str, Any]:
             "technician_signals": json.dumps(signals.get(str(vid), []), ensure_ascii=False),
         })
     vehicles = vehicles.merge(pd.DataFrame(records), on="vehicle_id", how="left", validate="one_to_one")
+    counts = {"outcomes": {k_: int(v) for k_, v in vehicles["outcome"].value_counts().items()},
+              "alerted": int(vehicles["alerted"].sum()),
+              "alerted_with_habits": int((vehicles["alerted"] & vehicles["n_factors"].gt(0)).sum())}
+    return {"budget_per_1000": budget, "threshold": threshold, "counts": counts,
+            "vehicles": vehicles.assign(**{BUDGET: budget}), "deviations": deviations.assign(**{BUDGET: budget}),
+            "weeks_with_alerts": weeks_with_alerts(vehicles)}
+
+
+def build(cfg: dict[str, Any], out_dir: Path) -> dict[str, Any]:
+    mcfg, ecfg = cfg["model"], cfg["explanation"]
+    if ecfg.get("type") != FLEET_PROFILE:
+        raise ValueError(f"`explanation.type` tiene que ser `{FLEET_PROFILE}` (es `{ecfg.get('type')}`): el modelo de "
+                         "la demo no tiene atribución, el porqué es una comparación con la flota sana")
+    run_cfg = load_config(mcfg["run_config"])
+    label, repeat = cfg["label"], int(cfg["repeat"])
+    profile = list(dict.fromkeys(cfg["profile_features"]))
+    if KM_PER_DAY not in profile:
+        raise ValueError(f"`profile_features` tiene que traer `{KM_PER_DAY}`: pasa el horizonte a semanas")
+    ocfg = cfg["official"]
+    budgets, default_budget = operating_points(cfg, ocfg["budgets"])
+    cell_columns = list(ocfg["cell_columns"])
+    d = load_run(mcfg["run_config"], columns=[*profile, *cfg["technician_signals"], *cell_columns],
+                 columns_panel=mcfg.get("profile_panel"))
+    k = int(d.eval_cfg.get("k_consecutive", 2))
+    rows = rows_for(d, label)
+
+    # -- números oficiales: la cuenta del reporte v2; el replay de cada punto tiene que coincidir con su repetición --
+    official, by_repeat = official_numbers(rows, d.n_repeats, ocfg, k, name=run_cfg["name"], cell_columns=cell_columns)
+
+    # -- cortes: score de la repetición + perfil de uso (no dependen del punto de operación) ---------
+    cuts = rows[KEY + ["cut_date", "static_SalesCountry_cd", "event_observed", "time_to_event_km"] + profile].copy()
+    cuts["score"] = rows[f"score_r{repeat}"].to_numpy()
+    cuts = cuts.rename(columns={"static_SalesCountry_cd": "market"}).sort_values(KEY, ignore_index=True)
+
+    # -- lo que el porqué y el mensaje necesitan y no depende del umbral --------------------------
+    classification = load_config(ecfg["classification"])
+    texts = load_config(ecfg["texts"])
+    habits = fp.nameable_habits(profile, classification["features"], texts)
+    if not habits:
+        raise ValueError("Ningún hábito de `profile_features` es accionable, con signo físico y con texto")
+    per_vehicle, reference = fp.healthy_market_reference(rows, list(habits))
+    message_texts = {**texts, **ecfg["message"]}
+    shared = {"habits": habits, "texts": texts, "per_vehicle": per_vehicle, "reference": reference,
+              "specs": ex.feature_specs(classification, {}), "message_texts": message_texts,
+              "gap_km": float(rows["gap_km"].iloc[0]), "horizon_km": float(rows["horizon_km"].iloc[0]),
+              "events": event_calendar(cfg, rows["vehicle_id"].drop_duplicates())}
+
+    # -- un replay por punto de operación: lo que la perilla de la app elige ---------------------
+    points = [build_point(rows, b, repeat=repeat, k=k, by_repeat=by_repeat, shared=shared, cfg=cfg) for b in budgets]
+    vehicles = pd.concat([p["vehicles"] for p in points], ignore_index=True)
+    deviations = pd.concat([p["deviations"] for p in points], ignore_index=True)
 
     guard = dev_guard(pd.concat([cuts["vehicle_id"], vehicles["vehicle_id"], deviations["vehicle_id"]]),
                       resolve_path(d.test_split))
@@ -314,6 +358,7 @@ def build(cfg: dict[str, Any], out_dir: Path) -> dict[str, Any]:
     if mcfg.get("profile_panel"):
         inputs["profile_panel"] = resolve_path(mcfg["profile_panel"])
     replay = cfg["replay"]
+    one_point = vehicles.loc[vehicles[BUDGET].eq(default_budget)]
     meta = {
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git_commit": git_commit(),
@@ -328,17 +373,18 @@ def build(cfg: dict[str, Any], out_dir: Path) -> dict[str, Any]:
             "cuts": "los cortes que dispararon la alerta; el de score máximo si el auto no alertó",
         },
         "run": run_cfg["name"],
-        "label": label, "repeat": repeat, "budget_per_1000": budget,
-        "threshold": threshold, "threshold_rule": "exacto: el menor umbral que deja ≤ el presupuesto de los sanos con alerta",
-        "k_consecutive": k, "gap_km": gap_km, "horizon_km": horizon_km,
+        "label": label, "repeat": repeat,
+        # La perilla: cada punto trae su umbral y sus conteos; `load_bundle` los pone arriba del que se elige.
+        "default_budget_per_1000": default_budget,
+        "operating_points": [{"budget_per_1000": p["budget_per_1000"], "threshold": p["threshold"],
+                              "counts": p["counts"]} for p in points],
+        "threshold_rule": "exacto: el menor umbral que deja ≤ el presupuesto de los sanos con alerta",
+        "k_consecutive": k, "gap_km": shared["gap_km"], "horizon_km": shared["horizon_km"],
         "replay": {"start": replay["start"], "end": replay["end"], "first_week": replay["first_week"],
                    "description": replay["description"]},
         "counts": {
-            "vehicles": int(len(vehicles)), "failed": int(vehicles["failed"].sum()),
-            "healthy": int((~vehicles["failed"]).sum()),
-            "outcomes": {k_: int(v) for k_, v in vehicles["outcome"].value_counts().items()},
-            "cuts": int(len(cuts)),
-            "alerted_with_habits": int((vehicles["alerted"] & vehicles["n_factors"].gt(0)).sum()),
+            "vehicles": int(len(one_point)), "failed": int(one_point["failed"].sum()),
+            "healthy": int((~one_point["failed"]).sum()), "cuts": int(len(cuts)),
         },
         "official": official,
         "texts": {"recommendations": texts["recommendations"], "disclaimer": message_texts["disclaimer"],
@@ -364,7 +410,7 @@ def build(cfg: dict[str, Any], out_dir: Path) -> dict[str, Any]:
     vehicles.to_parquet(out_dir / "vehicles.parquet", index=False)
     deviations.to_parquet(out_dir / "deviations.parquet", index=False)
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-    meta["_weeks_with_alerts"] = weeks_with_alerts(vehicles)
+    meta["_weeks_with_alerts"] = {p["budget_per_1000"]: p["weeks_with_alerts"] for p in points}
     return meta
 
 
@@ -383,7 +429,8 @@ def publish(cfg: dict[str, Any], out_dir: Path) -> str:
                               description="Bundle de la demo de producto (solo dev): scripts/build_demo_bundle.py",
                               metadata={"model": meta["model"]["name"], "run": meta["run"],
                                         "explanation": meta["explanation"]["type"], "label": meta["label"],
-                                        "repeat": meta["repeat"], "threshold": meta["threshold"],
+                                        "repeat": meta["repeat"],
+                                        "operating_points": [p["budget_per_1000"] for p in meta["operating_points"]],
                                         "git_commit": meta["git_commit"], "created_at": meta["created_at"]})
     artifact.add_dir(str(out_dir))
     logged = run.log_artifact(artifact)
@@ -404,16 +451,19 @@ def main() -> int:
     c = meta["counts"]
     print(f"\n== Bundle de la demo ({meta['product_name']}) ==")
     print(f"modelo         : {meta['model']['name']} ({meta['model']['family']}) · corrida {meta['run']}")
-    print(f"punto          : R{meta['repeat'] + 1} · {meta['label']} · {meta['budget_per_1000']:g}‰ · "
-          f"umbral exacto {meta['threshold']:.4f} · k = {meta['k_consecutive']}")
+    print(f"replay         : R{meta['repeat'] + 1} · {meta['label']} · k = {meta['k_consecutive']} · abre en el "
+          f"{meta['default_budget_per_1000']:g}‰")
     for p_ in meta["official"]["curve"]:
         print(f"  oficial {p_['budget_per_1000'] / 10:>4g}% : detección {100 * p_['detection']:.1f}% ± "
               f"{100 * p_['detection_sd']:.1f} ({p_['detected']} de {p_['n_event_vehicles']}) · nulo "
               f"{100 * p_['null']:.1f}% · anticipación {p_['lead_km']:.0f} km")
     print(f"autos          : {c['vehicles']} ({c['failed']} fallan, {c['healthy']} sanos) · {c['cuts']} cortes")
-    print(f"desenlaces     : {c['outcomes']}")
-    print(f"porqué         : {meta['explanation']['type']} · alertas con hábitos que nombrar: {c['alerted_with_habits']}")
-    print(f"alertas nuevas por semana: {meta['_weeks_with_alerts'] or 'ninguna'} "
+    for p_ in meta["operating_points"]:
+        pc = p_["counts"]
+        print(f"  punto {p_['budget_per_1000'] / 10:>4g}% : umbral exacto {p_['threshold']:.4f} · desenlaces "
+              f"{pc['outcomes']} · alertas con hábitos que nombrar {pc['alerted_with_habits']} de {pc['alerted']}")
+    weeks = meta["_weeks_with_alerts"][meta["default_budget_per_1000"]]
+    print(f"alertas nuevas por semana en el punto que abre: {weeks or 'ninguna'} "
           f"(first_week = {meta['replay']['first_week']})")
     print(f"solo dev       : {meta['audit']['dev_guard']}")
     print(f"escrito        : {out_dir}")

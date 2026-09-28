@@ -105,6 +105,24 @@ h4{font-size:var(--fs-title)!important;font-weight:700!important;letter-spacing:
 [data-testid="stElementContainer"]:has(>iframe[data-testid="stIFrame"]){height:auto!important}
 iframe[data-testid="stIFrame"]{background:transparent;color-scheme:dark}
 
+/* ---- The knob (common.budget_knob): how many false alarms to tolerate. It moves the threshold, so it sits above
+   everything it changes, on every page; beside it, the measured detection at that point. ------------------------ */
+.st-key-opbar{gap:10px 20px!important;flex-wrap:wrap!important;margin-bottom:12px;padding:10px 12px 10px 20px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+.st-key-opbar>[data-testid="stElementContainer"]{width:auto!important}
+.st-key-opbar>[data-testid="stElementContainer"]:last-child{flex:1 1 260px!important;min-width:0!important}
+.st-key-opbar [data-testid="stMarkdownContainer"]{margin-bottom:0}
+.st-key-opbar [data-testid="stMarkdownContainer"] p{margin:0}
+.opbar-label{display:block;font-size:var(--fs-label);font-weight:800;letter-spacing:.1em;line-height:1;text-transform:uppercase;color:#9cbbdf;white-space:nowrap}
+.st-key-opbar p.opbar-readout{margin:0;font-size:14px;line-height:1.45;color:var(--muted)}
+.st-key-opbar p.opbar-readout strong{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+/* The segments are radios (role="radio", aria-checked): the picked one takes the navigation's active surface. */
+.st-key-opbar [role="radiogroup"] button{min-width:56px;min-height:36px;background:var(--control);border-color:var(--control-line)}
+.st-key-opbar [role="radiogroup"] button p{font-weight:700;font-variant-numeric:tabular-nums;color:#b9cde6}
+.st-key-opbar [role="radiogroup"] button[aria-checked="true"]{background:var(--active);border-color:var(--active-line)}
+.st-key-opbar [role="radiogroup"] button[aria-checked="true"] p{color:var(--text)}
+@media(hover:hover){.st-key-opbar [role="radiogroup"] button[aria-checked="false"]:hover{background:#142b4a}}
+@media(pointer:coarse){.st-key-opbar [role="radiogroup"] button{min-height:44px}}
+
 /* ---- Fleet calendar (timeline.js): one column per week, its bar the alerts; the segment under it is the
    replay's progress and the ringed column is the week on screen. ---------------------------------------------- */
 .st-key-weekbar{margin-bottom:12px}
@@ -296,6 +314,9 @@ label:has(input[type="checkbox"]:focus-visible){outline:2px solid var(--focus);o
 .data-table thead th{font-size:var(--fs-label);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--panel-head)}
 .data-table tbody th{font-weight:600;color:var(--text)}
 .data-table tbody tr:last-child>*{border-bottom:0}
+/* The column of the operating point the knob picked. */
+.data-table :is(th,td).is-current{background:var(--active)}
+.data-table thead th.is-current{color:var(--accent-text)}
 /* A phone: tighter cells, so the value columns of the official table fit without scrolling sideways. */
 @container (max-width:400px){
   .data-table table :is(th,td){padding:10px 8px}
@@ -310,6 +331,8 @@ label:has(input[type="checkbox"]:focus-visible){outline:2px solid var(--focus);o
   .data-table.stack :is(th,td){padding:0;border:0}
   .data-table.stack td{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;margin-top:4px}
   .data-table.stack td::before{content:attr(data-label);color:var(--muted);font-size:12px}
+  .data-table.stack td.is-current{margin-left:-8px;margin-right:-8px;padding:2px 8px;border-radius:6px}
+  .data-table.stack td.is-current::before{color:var(--accent-text)}
 }
 
 /* ---- Login ------------------------------------------------------------------------------------------------- */

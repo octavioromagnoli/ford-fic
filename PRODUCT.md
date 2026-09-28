@@ -28,7 +28,7 @@ en el lugar de esa persona.
 
 ## Product Purpose
 
-Ford DPF convierte una alerta temprana de la GRU (el modelo final sobre la entrega v2) sobre la
+Ford DPF convierte una alerta temprana de la GRU (la de etiqueta suave de F11, el mejor modelo sobre la entrega v2) sobre la
 degradación del filtro de partículas diésel en una acción de posventa: quién se entera, con qué texto
 y qué revisa el taller.
 
@@ -55,9 +55,9 @@ El éxito es que el jurado se vaya habiendo visto tres cosas:
 - Un verificador en código rechaza los números que no están en los hechos, el lenguaje causal, las
   certezas, las promesas de que el riesgo baja y los síntomas del filtro que le llegarían al conductor.
 
-**Anticipa, no reacciona.** Ford ya tiene detección reactiva. Ford DPF alerta con una mediana de
-15 semanas (~7.000 km) entre la alerta confirmada y la falla, a partir de datos que terminan antes
-del evento (el gap de blanking).
+**Anticipa, no reacciona.** Ford ya tiene detección reactiva. Al 5% de falsas alarmas, Ford DPF alerta con una
+mediana de 16 semanas (~7.200 km) entre la alerta confirmada y la falla, a partir de datos que terminan antes del
+evento (el gap de blanking). Con más tolerancia el margen crece: 21 semanas (~8.700 km) al 20%.
 
 ## Operating Context
 
@@ -73,7 +73,11 @@ del evento (el gap de blanking).
   - **Qué pasó después:** el replay al lado de los números oficiales.
 - **El ritual es semanal.** Se elige la semana en el calendario de la flota, arriba de la Bandeja y
   del Vehículo: una columna por semana con sus alertas. Se salta a la próxima con alertas y la demo
-  abre en la del 29-09-2025.
+  abre en la del 25-08-2025.
+- **La perilla de falsas alarmas** (arriba de toda pantalla, desde el 28-09): 5, 10, 15 o 20% de los
+  autos sanos con una alerta de más. Mueve el umbral, y con él el calendario, la bandeja, las fichas y
+  la temporada; al lado dice cuánto se anticipa en ese punto. Abre en 5%, y la semana elegida se queda
+  al moverla. Dónde operar lo decide Ford: la perilla muestra qué cambia.
 - **«Cómo usar»** (arriba a la derecha) recorre la pantalla abierta paso a paso, en la notebook y en
   el celular.
 - **Lo que pasó después no se mezcla con la semana.** La Bandeja y el Vehículo muestran solo lo
@@ -85,9 +89,9 @@ del evento (el gap de blanking).
 
   Se escala si el score sigue sobre el umbral 2 revisiones después del aviso. Una revisión es un
   corte cada 500 km.
-- **Agentes:** `cache_first` por defecto. Las 36 semanas con eventos del replay están precalentadas: 302
-  respuestas en la caché del bundle v1, con `gpt-5.4-mini-2026-03-17`. «Regenerar en vivo» llama a la API y no
-  pisa la versión guardada. `cache_only` sirve para ensayar sin red.
+- **Agentes:** `cache_first` por defecto. Las semanas con eventos de los cuatro puntos de la perilla (42, 53, 55
+  y 61) están precalentadas: 1.870 respuestas en la caché del bundle, con `gpt-5.4-mini-2026-03-17`. «Regenerar en
+  vivo» llama a la API y no pisa la versión guardada. `cache_only` sirve para ensayar sin red.
 
 ## Capabilities and Constraints
 
@@ -98,28 +102,35 @@ del evento (el gap de blanking).
 - **Deploy:**
   - Dockerfile y `railway.json`.
   - La imagen lleva solo `src/`, `scripts/demo_app/` y dos configs.
-  - La app baja el bundle `demo-bundle-gru` en la versión fijada en `configs/demo.yaml` y no importa
+  - La app baja el bundle `demo-bundle-gru-suave` en la versión fijada en `configs/demo.yaml` y no importa
     torch, LightGBM ni sklearn.
 - **Dispositivos:** tiene que funcionar bien **en celular** y en notebook o desktop (1366–1920 px).
 - **Datos:** solo dev de la entrega v2. Son 426 autos: 135 con falla registrada y 291 sanos. El test no se muestra
   nunca, y el bundle falla si aparece un vehículo de test. La muestra está enriquecida en fallas,
   así que los conteos de la bandeja no se trasladan a una flota real.
 - **Números que no se pueden contradecir:**
-  - **Replay** (R1, etiqueta dura, 5%, umbral exacto): 53 alertas y 7 escalamientos, entre las
-    semanas del 30-06-2025 y del 27-07-2026. De los 135 autos que fallan, 39 reciben la alerta antes
-    y 96 no se ven. 14 de los 291 sanos reciben una alerta de más.
-  - **Oficiales:** 28,1% ± 2,8 de detección al 5% de falsas alarmas (27,9% fuera de muestra) y
-    42,5% al 10%. La tabla del equipo da 27,4% y 42,5%, y el pitch cita ~27–29% al 5%. La celda
-    mercado × motor sola, sin mirar un viaje, detecta 18,0% al 5%.
+  - **Replay** (R1, etiqueta dura, umbral exacto), de los 135 autos que fallan y los 291 sanos:
 
-  Las fuentes son `docs/memoria/f9-demo-gru.md` y `docs/memoria/f10-sweep-gru.md`.
+    | punto | alertas / escalamientos | fallas anticipadas | sanos con alerta de más |
+    |---|---|---|---|
+    | 5% | 58 / 9 | 44 | 14 |
+    | 10% | 90 / 13 | 61 | 29 |
+    | 15% | 121 / 30 | 78 | 43 |
+    | 20% | 153 / 43 | 95 | 58 |
+  - **Oficiales (promedio de 3 repeticiones):** 34,8 · 48,6 · 60,5 · 70,4% de detección al
+    5 · 10 · 15 · 20% de falsas alarmas (34,6 · 49,4 · 59,3 · 69,6% fuera de muestra). La tabla del
+    equipo da 34,6 · 48,6 · 60,2 · 70,1% (la GRU no es bit a bit entre plataformas). La celda
+    mercado × motor sola, sin mirar un viaje, detecta 14,6 · 30,4 · 48,1 · 62,0%.
+
+  Las fuentes son `docs/memoria/f9-demo-gru-suave.md` y `docs/memoria/f11-gru-objetivo-suave.md`.
 - **Terminología:**
   - **alerta:** confirmada en el `k`-ésimo corte seguido sobre el umbral;
   - **escalamiento:** el paso al concesionario;
   - **revisión:** un corte, cada 500 km;
   - **hábitos:** lo que el conductor puede cambiar;
   - **señales del filtro:** síntomas, solo para el taller;
-  - **umbral:** al 5% de falsas alarmas;
+  - **umbral:** el del punto de operación que elige la perilla (5, 10, 15 o 20% de falsas alarmas);
+  - **perilla:** el control de falsas alarmas toleradas;
   - **replay:** la flota reproducida en el calendario.
 - **Reglas de texto (`configs/agents.yaml`, `verifier`):**
   - nada causal: «porque», «causa», «provoca», «debido a»;
@@ -132,8 +143,8 @@ del evento (el gap de blanking).
 
   Los textos al conductor tutean. Toda la interfaz está en español.
 - **Decisiones que no son nuestras:** la política de acción y los chequeos del taller son de
-  ejemplo, y los define Ford (viven en `configs/agents.yaml`). Dónde operar, entre el 5% y el 10%,
-  es una decisión de costo de Ford.
+  ejemplo, y los define Ford (viven en `configs/agents.yaml`). Dónde operar es una decisión de costo
+  de Ford: la perilla deja ver el 5, 10, 15 y 20%.
 - **Sin medir:** si un conductor cambia de hábitos al recibir el aviso.
 
 ## Brand Commitments
@@ -165,13 +176,16 @@ del evento (el gap de blanking).
 
 ## Evidence on Hand
 
-- **Bundle:** `oromagnoli-/ford-fic/demo-bundle-gru` en wandb (la versión fijada en `configs/demo.yaml`),
-  con la copia local en `experiments/demo-bundle-gru/`. Trae los cortes, las alertas, los hábitos que
-  se apartan de la flota sana, los mensajes, las señales del filtro, los números oficiales, el triage
-  de las semanas con eventos y la caché del LLM. La demo anterior, con K2, sigue en `demo-bundle:v0`.
-- **Textos reales:** los agentes redactaron los 60 textos y los 36 resúmenes, todos aprobados por
-  el verificador (14 reintentos en el camino, en la v1). Lo que se corrigió después de revisar a mano la
-  primera semana está en `docs/memoria/f9-demo-gru.md`.
+- **Bundle:** `oromagnoli-/ford-fic/demo-bundle-gru-suave` en wandb (la versión fijada en `configs/demo.yaml`),
+  con la copia local en `experiments/demo-bundle-gru-suave/`. Trae los cortes, los números oficiales y,
+  por cada punto de la perilla, las alertas, los hábitos que se apartan de la flota sana, los mensajes,
+  las señales del filtro y el triage de las semanas con eventos; la caché del LLM es una sola. Las demos
+  anteriores siguen en wandb: la GRU con `label` a secas en `demo-bundle-gru:v1` y K2 en `demo-bundle:v0`.
+- **Textos reales:** en los cuatro puntos, los agentes redactaron 515 de los 517 textos y los 211 resúmenes,
+  todos aprobados por el verificador (106 intentos rechazados en el camino). Los dos que quedaron en plantilla
+  son del mismo auto (VEH_0001, 04-08-2025, al 15 y al 20%): el verificador rechazó los tres intentos. Lo que se
+  corrigió después de revisar a mano la primera semana está en `docs/memoria/f9-demo-gru.md`, y el precalentado
+  por punto, en `docs/memoria/f9-demo-gru-suave.md`.
 - **El porqué:** una comparación con los autos sanos de dev del mismo mercado (`src/eval/fleet_profile.py`).
   No es atribución: la GRU no la tiene.
 - **Revisión visual previa:** capturas a 1440×900 y 1920×1080 en `experiments/demo-ui-review/`

@@ -30,6 +30,14 @@ def tour_steps(page: str) -> list[dict]:
         f"Estás en el lugar de quien gestiona la posventa. {name} revisa cada auto cada 500 km y, cuando el riesgo del "
         "filtro de partículas se sostiene, lo alerta. Los agentes convierten cada alerta en una acción lista para "
         "aprobar. Este recorrido te muestra cada parte.")
+    offered = [f"{x / 10:g}" for x in b.budgets]
+    knob = _step(
+        "Cuántas falsas alarmas tolerar",
+        f"La perilla fija el umbral: qué parte de los autos sanos puede recibir una alerta de más "
+        f"({', '.join(offered[:-1])} o {offered[-1]}%). Con más tolerancia se anticipan más fallas, a costa de más "
+        "alertas a autos sanos. La bandeja, las fichas y la temporada cambian con ella. <b>Dónde operar es una "
+        "decisión de costo de Ford.</b>",
+        ".st-key-opbar")
     calendar = _step(
         "El calendario de la flota",
         f"La demo reproduce la flota de desarrollo semana a semana, del {start} al {end}: "
@@ -111,4 +119,4 @@ def tour_steps(page: str) -> list[dict]:
     }
     # «Qué pasó después» muestra la temporada entera: ahí no hay calendario.
     week_steps = [] if page == "resultados" else [calendar, moving]
-    return [intro, *week_steps, *by_page[page], pages, done]
+    return [intro, knob, *week_steps, *by_page[page], pages, done]

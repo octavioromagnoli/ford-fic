@@ -1,5 +1,9 @@
 # Demo de producto con la GRU final (v2): el porqué pasa a ser una comparación con la flota
 
+> **Reemplazada el 28-09** por [f9-demo-gru-suave.md](f9-demo-gru-suave.md): la demo usa la GRU con etiqueta suave
+> de F11 y tiene una perilla de falsas alarmas. Lo de acá (el porqué descriptivo, los agentes, la revisión visual)
+> sigue valiendo; los números y la semana de apertura son de la GRU anterior.
+
 **Fecha:** 2026-09-27 (revisión visual y bundle v1: 28-09) · **Fase:** F9 (producto, para el pitch del 02-10) ·
 **Rama:** `feat/demo-gru`
 **Alcance:** entrega v2, solo dev (426 autos: 135 fallan, 291 sanos), ensamble por rango de la GRU +

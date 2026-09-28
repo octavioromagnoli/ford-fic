@@ -63,8 +63,8 @@ def fleet_facts(bundle: Bundle, events: list[Event], week: pd.Timestamp) -> dict
     seen = bundle.cuts.loc[bundle.cuts["cut_date"] < end, "vehicle_id"].nunique()
     past = [e for e in events if e.date < end]
     this_week = [e for e in past if e.week == pd.Timestamp(week)]
-    curve = {int(p["budget_per_1000"]): p for p in bundle.meta["official"]["curve"]}
-    point = curve.get(int(bundle.meta["budget_per_1000"]), {})
+    curve = {round(float(p["budget_per_1000"])): p for p in bundle.meta["official"]["curve"]}
+    point = curve.get(round(float(bundle.meta["budget_per_1000"])), {})
     return {
         "semana": long_date(week),
         "autos_monitoreados_hasta_hoy": int(seen),

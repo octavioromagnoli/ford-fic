@@ -20,8 +20,8 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 import streamlit as st  # noqa: E402
 
-from scripts.demo_app.common import (all_weeks, bundle, cfg, check_password, current_week, events,  # noqa: E402
-                                     llm, set_week, timeline_data, week_label_short)
+from scripts.demo_app.common import (all_weeks, budget_knob, bundle, cfg, check_password, current_week,  # noqa: E402
+                                     events, llm, set_week, timeline_data, week_label_short)
 from scripts.demo_app.guide import tour_steps  # noqa: E402
 from scripts.demo_app.wording import model_note  # noqa: E402
 
@@ -88,15 +88,17 @@ with st.sidebar:
     st.caption(FLEET_NOTE)
     st.caption(MODEL_NOTE)
 
-# Arriba de toda página: qué es esto y cómo se recorre («Cómo usar»), y el calendario de la flota, que es el control
-# que más cambia lo que se ve. «Qué pasó después» muestra la temporada entera, así que ahí no va. La marca solo
-# aparece acá cuando la barra lateral está colapsada (celular).
+# Arriba de toda página: qué es esto y cómo se recorre («Cómo usar»), la perilla de falsas alarmas y el calendario de
+# la flota, los dos controles que más cambian lo que se ve. La perilla va en las tres pantallas (también cambia la
+# temporada); el calendario no va en «Qué pasó después», que muestra la temporada entera. La marca solo aparece acá
+# cuando la barra lateral está colapsada (celular).
 page_id = {"vehiculo": "vehiculo", "resultados": "resultados"}.get(page.url_path, "bandeja")
 with st.container(horizontal=True, vertical_alignment="center", key="topbar"):
     st.markdown('<div class="topbar-lead">' + brand_html(cfg()["brand"]["team"], "masthead-brand") +
                 '<div class="status">Replay · muestra de desarrollo</div></div>', unsafe_allow_html=True)
     with st.container(key="tour", width="content"):
         tour(tour_steps(page_id))
+budget_knob()
 if page_id != "resultados":
     with st.container(key="weekbar"):
         timeline(timeline_data(week), on_week=_from_timeline)

@@ -49,7 +49,8 @@ TOOLS = [
 
 
 def triage_path(bundle: Bundle, week: pd.Timestamp) -> Path:
-    return bundle.root / "triage" / f"{pd.Timestamp(week).date().isoformat()}.json"
+    """Uno por semana y por punto de operación: con otro presupuesto de falsas alarmas cambian las alertas."""
+    return bundle.triage_dir / f"{pd.Timestamp(week).date().isoformat()}.json"
 
 
 def load_triage(bundle: Bundle, week: pd.Timestamp) -> dict[str, Any] | None:
@@ -184,6 +185,7 @@ def run_triage(bundle: Bundle, events: list[Event], week: pd.Timestamp, agents_c
 
     return {
         "week": week.date().isoformat(),
+        "budget_per_1000": bundle.budget,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "mode": mode,
         "model": llm.model if llm is not None and mode == "agente" else None,

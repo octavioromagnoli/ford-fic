@@ -108,15 +108,19 @@ def agent_trace(steps, lead="", note=""):
     st.html(f'<div class="agent-trace">{body}</div>')
 
 
-def table(columns, rows, first_is_header=True, nowrap_values=False, stack=False):
+def table(columns, rows, first_is_header=True, nowrap_values=False, stack=False, current=None):
     """A static HTML table: it wraps its text instead of scrolling sideways like st.dataframe on a phone.
 
     `nowrap_values` keeps short values ("17,0% ± 3,8") on one line and lets the row labels wrap instead;
-    `stack` turns each row into label/value pairs when the table is narrow (long cells, like the agent trace)."""
-    head = "".join(f'<th scope="col">{escape(str(c))}</th>' for c in columns)
+    `stack` turns each row into label/value pairs when the table is narrow (long cells, like the agent trace);
+    `current` is the index of a column to mark (the operating point the knob picked)."""
+    def mark(i):
+        return ' class="is-current"' if current is not None and i == current else ""
+
+    head = "".join(f'<th scope="col"{mark(i)}>{escape(str(c))}</th>' for i, c in enumerate(columns))
     body = "".join("<tr>" + "".join(
         f'<th scope="row">{escape(str(v))}</th>' if i == 0 and first_is_header
-        else f'<td data-label="{escape(str(columns[i]))}">{escape(str(v))}</td>'
+        else f'<td data-label="{escape(str(columns[i]))}"{mark(i)}>{escape(str(v))}</td>'
         for i, v in enumerate(row)) + "</tr>" for row in rows)
     cls = "data-table" + (" nowrap-values" if nowrap_values else "") + (" stack" if stack else "")
     st.html(f'<div class="{cls}"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>')

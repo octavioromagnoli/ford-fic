@@ -47,7 +47,8 @@ fallan, invalidan todo lo que venga después:
     verificador rechaza números inventados, causas, síntomas al conductor y textos que contradicen la
     acción, el redactor reintenta y cae a la plantilla, el triage completa lo que el agente no hizo y la
     caché del LLM reproduce un pedido sin red. Con un LLM de mentira: no necesita key ni datos.
-17. La demo con la GRU (F9): el bundle funciona sin la explicabilidad del modelo y rechaza uno viejo, la app
+17. La demo con la GRU (F9): el bundle funciona sin la explicabilidad del modelo y rechaza uno viejo, trae un
+    replay por punto de operación (la perilla de falsas alarmas) con su umbral, sus conteos y su triage, la app
     lee el modelo y los números de la meta (ningún string suyo nombra un modelo), el "por qué" descriptivo
     solo nombra hábitos accionables del lado riesgoso y nunca síntomas ni causas, el verificador rechaza el
     marco viejo y la atribución sin perder ninguna regla, y el panel con las aux_ de la ventana verifica sus
@@ -2040,6 +2041,33 @@ def _demo_bundle():
     return Bundle(cuts=cuts, vehicles=vehicles, deviations=pd.DataFrame(), meta=meta, root=Path("."))
 
 
+def _write_demo_bundle(root: Path, bundle, points: dict[float, dict]) -> None:
+    """Escribe `bundle` con el formato del builder: un replay por punto de operación. `points` da, por presupuesto,
+    el umbral y los autos que alertan en ese punto (los demás quedan sin alerta)."""
+    import json
+
+    vehicles, deviations, meta_points = [], [], []
+    base = bundle.vehicles.reset_index(drop=True)
+    # Un auto que solo alerta con más tolerancia confirma en su tercera revisión, como los demás.
+    third = base["vehicle_id"].map(lambda v: bundle.vehicle_cuts(v)["cut_date"].iloc[2])
+    for budget, point in points.items():
+        alerted = base["vehicle_id"].isin(point["alerted"])
+        vehicles.append(base.assign(
+            alerted=alerted, alert_confirm_date=base["alert_confirm_date"].fillna(third).where(alerted),
+            factors=base["factors"].map(json.dumps), technician_signals=base["technician_signals"].map(json.dumps),
+            alert_first_date=base["alert_confirm_date"].where(alerted), budget_per_1000=budget))
+        deviations.append(pd.DataFrame({"vehicle_id": ["VEH_A"], "feature": ["feat_speed_kmh_mean"], "share": [0.9],
+                                        "risky": [True], "named": [True], "budget_per_1000": [budget]}))
+        meta_points.append({"budget_per_1000": budget, "threshold": point["threshold"],
+                            "counts": {"alerted": int(alerted.sum())}})
+    bundle.cuts.to_parquet(root / "cuts.parquet", index=False)
+    pd.concat(vehicles, ignore_index=True).to_parquet(root / "vehicles.parquet", index=False)
+    pd.concat(deviations, ignore_index=True).to_parquet(root / "deviations.parquet", index=False)
+    meta = {k: v for k, v in bundle.meta.items() if k not in ("threshold", "budget_per_1000")}
+    meta |= {"operating_points": meta_points, "default_budget_per_1000": min(points), "counts": {"vehicles": len(base)}}
+    (root / "meta.json").write_text(json.dumps(meta, default=str), encoding="utf-8")
+
+
 class _ScriptedLLM:
     """Un LLM de mentira que devuelve respuestas en orden: prueba la lógica sin red."""
 
@@ -2222,12 +2250,14 @@ def demo_gru_checks() -> None:
     import re
     import tempfile
 
+    from scripts.build_demo_bundle import operating_points
     from scripts.demo_app.wording import (HABITS_CAPTION, WHY_CAPTION, WHY_CHART_CAPTION, WHY_CHART_TITLE, WHY_INTRO,
-                                          WHY_NONE, chance_line, detection_line, model_note, promises)
+                                          WHY_NONE, chance_line, detection_line, model_note, operating_line, promises)
     from scripts.join_window_columns import join_by_key
     from src.agents.bundle import load_bundle
     from src.agents.facts import driver_view, vehicle_facts
     from src.agents.policy import all_events
+    from src.agents.triage import load_triage, save_triage
     from src.agents.verifier import banned_problems, verify_drafts, verify_text
     from src.config import repo_root
     from src.eval import fleet_profile as fp
@@ -2240,22 +2270,34 @@ def demo_gru_checks() -> None:
     bundle = _demo_bundle()
 
     # -- un bundle sin la explicabilidad del modelo ---------------------------------------------------------
+    points = {50.0: {"threshold": 0.5, "alerted": ["VEH_A", "VEH_B"]},
+              100.0: {"threshold": 0.15, "alerted": ["VEH_A", "VEH_B", "VEH_C"]}}
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        bundle.cuts.to_parquet(root / "cuts.parquet", index=False)
-        bundle.vehicles.reset_index(drop=True).assign(
-            factors=lambda f: f["factors"].map(json.dumps),
-            technician_signals=lambda f: f["technician_signals"].map(json.dumps),
-            alert_first_date=lambda f: f["alert_confirm_date"]).to_parquet(root / "vehicles.parquet", index=False)
-        pd.DataFrame({"vehicle_id": ["VEH_A"], "feature": ["feat_speed_kmh_mean"], "share": [0.9], "risky": [True],
-                      "named": [True]}).to_parquet(root / "deviations.parquet", index=False)
-        (root / "meta.json").write_text(json.dumps(bundle.meta, default=str), encoding="utf-8")
+        _write_demo_bundle(root, bundle, points)
+        written = json.loads((root / "meta.json").read_text(encoding="utf-8"))
         loaded = load_bundle(root)
         loads = loaded.model["name"] == "Modelo de prueba" and len(loaded.deviations) == 1
-        old = {k: v for k, v in bundle.meta.items() if k not in ("model", "explanation")} | {"explain_variant": "V3"}
+        # -- la perilla: un punto a la vez, con su umbral, sus alertas, sus conteos y su triage ---------------
+        wide = load_bundle(root, 100)
+        knob = (loaded.budget == 50 and loaded.threshold == 0.5 and int(loaded.vehicles["alerted"].sum()) == 2
+                and wide.budget == 100 and wide.threshold == 0.15 and int(wide.vehicles["alerted"].sum()) == 3
+                and wide.meta["counts"] == {"vehicles": 3, "alerted": 3} and wide.budgets == [50.0, 100.0]
+                and len(wide.vehicles) == len(loaded.vehicles) == 3
+                and [len(e) for e in (all_events(loaded, acfg["policy"]), all_events(wide, acfg["policy"]))] == [3, 4]
+                and loaded.triage_dir.name == "fa050" and wide.triage_dir.name == "fa100"
+                and _raises(lambda: load_bundle(root, 70), ValueError))
+        saved = [save_triage(bx, {"week": "2025-09-29", "budget_per_1000": bx.budget, "summary": bx.budget})
+                 for bx in (loaded, wide)]
+        triage_apart = (saved[0] != saved[1] and load_triage(loaded, pd.Timestamp("2025-09-29"))["summary"] == 50
+                        and load_triage(wide, pd.Timestamp("2025-09-29"))["summary"] == 100)
+        single = {k: v for k, v in written.items() if k not in ("operating_points", "default_budget_per_1000")}
+        (root / "meta.json").write_text(json.dumps(single | {"threshold": 0.5, "budget_per_1000": 50}), encoding="utf-8")
+        single_rejected = _raises(lambda: load_bundle(root), ValueError)
+        old = {k: v for k, v in written.items() if k not in ("model", "explanation")} | {"explain_variant": "V3"}
         (root / "meta.json").write_text(json.dumps(old, default=str), encoding="utf-8")
         old_rejected = _raises(lambda: load_bundle(root), ValueError)
-        (root / "meta.json").write_text(json.dumps(bundle.meta, default=str), encoding="utf-8")
+        (root / "meta.json").write_text(json.dumps(written, default=str), encoding="utf-8")
         (root / "deviations.parquet").unlink()
         incomplete = _raises(lambda: load_bundle(root), FileNotFoundError)
     events = all_events(bundle, acfg["policy"])
@@ -2292,6 +2334,28 @@ def demo_gru_checks() -> None:
         and chance_line(wins) == "Por debajo del 5%, Modelo X no le gana al azar."
         and "Modelo X" in promises(loses) and not named_models,
         f"{named_models[:3]}",
+    )
+
+    # -- la perilla: el punto elegido manda en lo que se lee, y el builder solo ofrece puntos validables -------
+    knob_meta = dict(loses, budget_per_1000=100, operating_points=[{"budget_per_1000": 50}, {"budget_per_1000": 100}])
+    reading = operating_line(knob_meta)
+    official = {"budgets": [0.05, 0.10, 0.15, 0.20]}
+    builder = (operating_points({"operating_points": [100, 50], "default_budget_per_1000": 50}, official["budgets"])
+               == ([50.0, 100.0], 50.0)
+               and _raises(lambda: operating_points({"operating_points": [50], "default_budget_per_1000": 100},
+                                                    official["budgets"]), ValueError)
+               and _raises(lambda: operating_points({"operating_points": [50, 300], "default_budget_per_1000": 50},
+                                                    official["budgets"]), ValueError))
+    check(
+        "demo GRU · perilla de falsas alarmas: el bundle trae un replay por punto de operación y carga uno a la vez, con "
+        "su umbral, sus alertas, sus conteos y su triage aparte; un punto que no trae o un bundle de un solo punto "
+        "fallan, la app lee primero el punto elegido y el builder no ofrece un punto sin su número oficial",
+        knob and triage_apart and single_rejected and builder
+        and reading.startswith("Anticipa el 23,0% de las fallas") and "Hasta el 10% de los autos sanos" in reading
+        and detection_line(knob_meta).startswith("Al 10% de falsas alarmas anticipa 23,0%")
+        and "al 5%, 7,4%" in detection_line(knob_meta)
+        and model_note(knob_meta, "llm", "cache_only").startswith("Modelo: Modelo X (familia Y) · umbral al 10%"),
+        f"{knob} / {triage_apart} / {single_rejected} / {builder} / {reading[:40]}",
     )
 
     # -- el porqué descriptivo: solo hábitos accionables, del lado riesgoso, sin síntomas ni causas ----------
