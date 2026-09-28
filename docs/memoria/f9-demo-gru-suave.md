@@ -82,6 +82,8 @@ igual en dos puntos) se sirven una vez.
 - **Las decisiones de la bandeja** (aprobar, descartar) se guardan por punto.
 - **La tabla oficial** de «Qué pasó después» muestra los cuatro puntos, con el elegido marcado. En el celular se
   apila: cada medida con sus cuatro valores.
+- **«Qué no promete esta demo» se sacó** de «Qué pasó después» (pedido del usuario, 28-09), con `wording.promises`
+  y las funciones que solo la armaban.
 
 **Una sola semana de apertura:** la del 25-08-2025, la primera con al menos 3 alertas nuevas al 5%. Son 4 avisos
 al conductor: tres de autos que fallaron después (VEH_0072, VEH_0451, VEH_0452) y uno de un auto sano (VEH_0427).

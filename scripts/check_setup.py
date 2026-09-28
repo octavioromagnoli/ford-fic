@@ -2252,7 +2252,7 @@ def demo_gru_checks() -> None:
 
     from scripts.build_demo_bundle import operating_points
     from scripts.demo_app.wording import (HABITS_CAPTION, WHY_CAPTION, WHY_CHART_CAPTION, WHY_CHART_TITLE, WHY_INTRO,
-                                          WHY_NONE, chance_line, detection_line, model_note, operating_line, promises)
+                                          WHY_NONE, model_note, operating_line)
     from scripts.join_window_columns import join_by_key
     from src.agents.bundle import load_bundle
     from src.agents.facts import driver_view, vehicle_facts
@@ -2312,13 +2312,8 @@ def demo_gru_checks() -> None:
 
     # -- la app lee el modelo y los números de la meta --------------------------------------------------------
     meta = dict(bundle.meta, model={"name": "Modelo X", "family": "familia Y", "run": "stub"})
-    hold = [{"alpha": 0.05, "method": "empirical", "detection": 0.096},
-            {"alpha": 0.10, "method": "empirical", "detection": 0.215}]
-    loses = dict(meta, official={"n_repeats": 3, "holdout": hold, "curve": [
-        {"budget_per_1000": 20, "detection": 0.030, "null": 0.028}, {"budget_per_1000": 50, "detection": 0.074, "null": 0.077},
-        {"budget_per_1000": 100, "detection": 0.230, "null": 0.166}]})
-    wins = dict(meta, official={"n_repeats": 3, "holdout": hold, "curve": [
-        {"budget_per_1000": 20, "detection": 0.022, "null": 0.027}, {"budget_per_1000": 50, "detection": 0.170, "null": 0.075}]})
+    measured = dict(meta, official={"n_repeats": 3, "curve": [
+        {"budget_per_1000": 50, "detection": 0.074, "null": 0.077}, {"budget_per_1000": 100, "detection": 0.230, "null": 0.166}]})
     named_models = []
     for path in sorted((repo_root() / "scripts" / "demo_app").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -2326,18 +2321,15 @@ def demo_gru_checks() -> None:
                          if isinstance(n, ast.Constant) and isinstance(n.value, str)
                          and re.search(r"\b(K2|GRU)\b|survival stacking|red recurrente", n.value)]
     check(
-        "demo GRU · la app lee el modelo de la meta del bundle: la nota del modelo y los números del pitch salen de ahí "
-        "(también cuando el punto de la demo no le gana al azar) y ningún string de scripts/demo_app nombra un modelo",
+        "demo GRU · la app lee el modelo de la meta del bundle: la nota del modelo y la lectura de la perilla salen de "
+        "ahí y ningún string de scripts/demo_app nombra un modelo",
         model_note(meta, "llm", "cache_only").startswith("Modelo: Modelo X (familia Y) · umbral al 5%")
-        and "7,4%" in detection_line(loses) and "9,6%" in detection_line(loses) and "23,0%" in detection_line(loses)
-        and "Modelo X detecta 7,4%" in chance_line(loses) and "no le gana al azar" in chance_line(loses)
-        and chance_line(wins) == "Por debajo del 5%, Modelo X no le gana al azar."
-        and "Modelo X" in promises(loses) and not named_models,
+        and operating_line(measured).startswith("Anticipa el 7,4% de las fallas") and not named_models,
         f"{named_models[:3]}",
     )
 
     # -- la perilla: el punto elegido manda en lo que se lee, y el builder solo ofrece puntos validables -------
-    knob_meta = dict(loses, budget_per_1000=100, operating_points=[{"budget_per_1000": 50}, {"budget_per_1000": 100}])
+    knob_meta = dict(measured, budget_per_1000=100, operating_points=[{"budget_per_1000": 50}, {"budget_per_1000": 100}])
     reading = operating_line(knob_meta)
     official = {"budgets": [0.05, 0.10, 0.15, 0.20]}
     builder = (operating_points({"operating_points": [100, 50], "default_budget_per_1000": 50}, official["budgets"])
@@ -2352,8 +2344,6 @@ def demo_gru_checks() -> None:
         "fallan, la app lee primero el punto elegido y el builder no ofrece un punto sin su número oficial",
         knob and triage_apart and single_rejected and builder
         and reading.startswith("Anticipa el 23,0% de las fallas") and "Hasta el 10% de los autos sanos" in reading
-        and detection_line(knob_meta).startswith("Al 10% de falsas alarmas anticipa 23,0%")
-        and "al 5%, 7,4%" in detection_line(knob_meta)
         and model_note(knob_meta, "llm", "cache_only").startswith("Modelo: Modelo X (familia Y) · umbral al 10%"),
         f"{knob} / {triage_apart} / {single_rejected} / {builder} / {reading[:40]}",
     )

@@ -8,7 +8,7 @@ from scripts.demo_app.common import EVENT_COLOR, MODEL_COLOR, MUTED, bundle
 from src.agents.formatting import format_value, number, short_date
 
 from scripts.demo_app.presentation import heading, chart_style, table
-from scripts.demo_app.wording import model_name, promises
+from scripts.demo_app.wording import model_name
 
 b = bundle()
 meta = b.meta
@@ -107,6 +107,3 @@ official.caption(f"Muestra de desarrollo: {meta['counts']['failed']} autos que f
            f"La demo muestra la repetición {meta['repeat'] + 1} en el punto elegido con la perilla; la tabla, el promedio "
            f"de las {meta['official']['n_repeats']} en cada punto. «Azar» es un score permutado que conserva el largo de "
            "cada historial.")
-
-with st.expander("Qué no promete esta demo", icon=":material/info:"):
-    st.markdown(promises(meta))
