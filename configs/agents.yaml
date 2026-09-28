@@ -84,6 +84,11 @@ verifier:
     # Sin hábitos en los hechos, ninguno se aparta de los sanos: la comparación se hizo. (Revisando la semana de apertura, un
     # resumen del taller decía "no hay hábitos que se puedan comparar con autos sanos".)
     - {pattern: '\bse\s+pued\w*\s+comparar\b|\bpara\s+comparar\b|\bh[aá]bitos\s+comparables\b', why: "los hábitos siempre se comparan con los sanos de su mercado: lo que puede pasar es que ninguno se aparte"}
+    # Un hábito tampoco es el motivo de una acción: un resumen decía "VEH_0563 va con aviso por temperatura media del
+    # motor de 58 °C", sin la comparación con los sanos. ("viajes" en plural: "por viaje" es "en cada viaje".)
+    - {pattern: '\bpor\s+(?:su\s+|sus\s+|tu\s+|tus\s+|la\s+|el\s+|los\s+|las\s+)?(?:temperatura|velocidad|viajes|arranques?|motor\s+encendido)\b', why: "atribuye la acción o la alerta a un hábito: los hábitos se nombran como una comparación con autos sanos de su mercado"}
+    # Los ids de los hechos y de la política no son para leer: dos resúmenes proponían "turno_concesionario".
+    - {pattern: '\b(?!(?:VEH|CNTRY)_)[a-z]+_[a-z_]+\b', why: "identificador interno: el texto usa el nombre (p. ej. «Contacto del concesionario»), no el id"}
   # Además, en el mensaje al conductor: nada de síntomas del filtro ni de jerga del modelo.
   driver_banned:
     - {pattern: '\bcarga\b', why: "síntoma del filtro: es para el taller"}

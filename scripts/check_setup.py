@@ -2228,7 +2228,7 @@ def demo_gru_checks() -> None:
     from src.agents.bundle import load_bundle
     from src.agents.facts import driver_view, vehicle_facts
     from src.agents.policy import all_events
-    from src.agents.verifier import banned_problems, verify_drafts
+    from src.agents.verifier import banned_problems, verify_drafts, verify_text
     from src.config import repo_root
     from src.eval import fleet_profile as fp
     from src.eval.explain import MessageFactor, feature_specs, render_vehicle_message
@@ -2367,16 +2367,20 @@ def demo_gru_checks() -> None:
     not_comparable["taller"]["resumen"] = ("Alerta de VEH_A. No hay hábitos del conductor que se puedan comparar con autos "
                                            "sanos de su mercado.")
     not_comparable = verify_drafts(not_comparable, facts, dview, acfg)
+    # El resumen de la semana: un hábito como motivo de la acción y el id de la acción en vez de su nombre.
+    summary_problems = verify_text("Esta semana hay 1 alerta nueva. VEH_A va con aviso por velocidad media en viaje de 16 km/h; "
+                                   "propongo turno_concesionario.", facts, acfg, field="resumen")
     current = {r["pattern"] for r in acfg["verifier"]["banned"]} | {r["pattern"] for r in acfg["verifier"]["driver_banned"]}
     check(
         "demo GRU · el verificador rechaza el marco viejo («se parece a autos que fallaron»), la atribución («lo marcó por "
-        "tu…»), un aviso que no dice que la comparación es con autos sanos y que los hábitos «no se puedan comparar», sin "
-        "perder ninguna regla anterior",
+        "tu…», «aviso por velocidad…»), un aviso que no dice que la comparación es con autos sanos, que los hábitos «no se "
+        "puedan comparar» y los ids internos, sin perder ninguna regla anterior",
         verify_drafts(good, facts, dview, acfg) == []
         and any("se parece" in p for p in similar) and any("marcó tu auto por tu" in p for p in attributed)
         and any("falta decirlo" in p for p in no_healthy) and any("se puedan comparar" in p for p in not_comparable)
+        and any("por velocidad" in p for p in summary_problems) and any("turno_concesionario" in p for p in summary_problems)
         and set(_VERIFIER_FLOOR) <= current,
-        f"{similar[:1]} · {attributed[:1]} · {no_healthy[:1]} · {not_comparable[:1]}",
+        f"{similar[:1]} · {attributed[:1]} · {no_healthy[:1]} · {not_comparable[:1]} · {summary_problems[:2]}",
     )
 
     # -- el modelo de la demo es un ensamble sin ventana del registro, con el umbral exacto del reporte v2 ------
