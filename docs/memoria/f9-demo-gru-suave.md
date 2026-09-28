@@ -148,7 +148,9 @@ de entrada y 0,24 M de salida.
 3. **La lectura de la perilla usa el número oficial,** no el del replay: es el que no depende de la repetición.
    La ficha, la bandeja y la temporada siguen mostrando la repetición 1, como antes.
 4. **Un bundle nuevo, `demo-bundle-gru-suave`.** El formato cambió, y el de la GRU anterior
-   (`demo-bundle-gru:v1`) sigue sirviendo a su código: no se pisa.
+   (`demo-bundle-gru:v1`) sigue sirviendo a su código: no se pisa. **`demo-bundle-gru-suave:v0`** está publicado y
+   fijado en `configs/demo.yaml`; se probó bajándolo como el contenedor (`fetch_bundle.py`) y cargando los cuatro
+   puntos. Falta el deploy en Railway.
 
 ## Límites
 

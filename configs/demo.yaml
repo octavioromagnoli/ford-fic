@@ -127,6 +127,8 @@ bundle:
   # wandb Artifact que baja la app desplegada. La versión se fija acá (`v0`, `v1`…) para que la demo no cambie
   # sola: publicar y cambiar el pin es una decisión. Los bundles anteriores no se tocan: `demo-bundle` (K2) y
   # `demo-bundle-gru` (la GRU con `label` a secas, un solo punto de operación; su v1 es la del 28-09).
+  # v0 (28-09): la GRU con etiqueta suave de F11, los cuatro puntos de la perilla, triage de 211 semanas y 1.870
+  # respuestas en la caché (docs/memoria/f9-demo-gru-suave.md).
   artifact: demo-bundle-gru-suave
   version: v0
   entity: oromagnoli-
