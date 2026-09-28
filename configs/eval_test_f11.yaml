@@ -1,0 +1,28 @@
+# Medición en TEST de F11 (docs/memoria/f11-preregistro-test.md): la GRU con etiqueta suave contra la
+# GRU de hoy, semillas 101-103, cada una entrenada con todo dev. Un solo tiro.
+#
+#   WANDB_MODE=disabled python scripts/eval_test.py --config configs/eval_test_f11.yaml --fit configs/exp_f11_gru_{suave,ref}_conf_s{101,102,103}.yaml
+#   python scripts/eval_test.py --config configs/eval_test_f11.yaml --report
+seed: 28
+output_name: test-f11
+experiments_dir: experiments
+
+k_consecutive: 2
+budgets: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+primary_budgets: [0.05, 0.10, 0.15, 0.20]
+operating_budgets: [0.05, 0.10, 0.20]
+null_permutations: 200
+n_boot: 2000
+cell_columns: [static_SalesCountry_cd, static_Engine]
+
+candidate: candidato
+reference: referencia
+groups:
+  candidato:
+    - configs/exp_f11_gru_suave_conf_s101.yaml
+    - configs/exp_f11_gru_suave_conf_s102.yaml
+    - configs/exp_f11_gru_suave_conf_s103.yaml
+  referencia:
+    - configs/exp_f11_gru_ref_conf_s101.yaml
+    - configs/exp_f11_gru_ref_conf_s102.yaml
+    - configs/exp_f11_gru_ref_conf_s103.yaml

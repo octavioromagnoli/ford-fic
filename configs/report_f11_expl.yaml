@@ -1,0 +1,32 @@
+# F11 (docs/memoria/f11-preregistro-objetivo-suave.md): confirmación de la GRU con etiqueta suave
+# contra la GRU de hoy, con folds nuevos (semilla 2026) y semillas del modelo 101-103.
+#
+#   python scripts/report_v2_models.py --explig configs/report_f11.yaml
+seed: 11
+output_name: report-f11-expl
+experiments_dir: experiments
+strata_panel: ${DATA_DIR}/processed/panel.parquet
+
+k_consecutive: 2
+n_thresholds: 50
+budgets: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+primary_budgets: [0.05, 0.10, 0.15, 0.20]   # el criterio primario del preregistro
+null_permutations: 200
+n_boot: 2000
+reference: f11-seeds3-gru-ref-expl           # la GRU de hoy, semillas 101-103, folds de la exploración (splits_r3), secundario
+extra_references: [piso-celda]
+
+bag_diag:
+  healthy_cuts: 9
+
+runs:
+  - {run: f11-seeds3-gru-ref-expl, label: "GRU de hoy ×3 (101-103)", family: referencia}
+  - {run: f11-seeds3-gru-suave-expl, label: "GRU con etiqueta suave ×3 (101-103)", family: candidato}
+  - {run: f11-gru-ref-expl-s101, label: "GRU de hoy (101)", family: semilla}
+  - {run: f11-gru-ref-expl-s102, label: "GRU de hoy (102)", family: semilla}
+  - {run: f11-gru-ref-expl-s103, label: "GRU de hoy (103)", family: semilla}
+  - {run: f11-gru-suave-expl-s101, label: "GRU suave (101)", family: semilla}
+  - {run: f11-gru-suave-expl-s102, label: "GRU suave (102)", family: semilla}
+  - {run: f11-gru-suave-expl-s103, label: "GRU suave (103)", family: semilla}
+
+rank_mixes: []

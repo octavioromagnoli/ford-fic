@@ -162,6 +162,7 @@ class GRUSeqClassifier(ClassifierMixin, BaseEstimator):
     | `class_weight` | `balanced` | `pos_weight` = negativos/positivos **del train del fold**. Nunca re-muestreo |
     | `device` | `cpu` | determinista y sobra para este tamaño |
     | `random_state` | 42 | la semilla sale del YAML. Una sola semilla no es un resultado: la varianza de inicialización es ±0,01 de PR-AUC |
+    | `soft_labels` | False | acepta `y` en [0, 1] (el target `far_soft_label`). El `pos_weight` se sigue contando con los positivos duros (`y == 1`), así el peso de las filas de la ventana no cambia al sumar las suaves |
     """
 
     def __init__(
@@ -185,6 +186,7 @@ class GRUSeqClassifier(ClassifierMixin, BaseEstimator):
         grad_clip: float | None = 1.0,
         device: str = "cpu",
         random_state: int = 42,
+        soft_labels: bool = False,
     ) -> None:
         self.sequence_meta = sequence_meta
         self.seq_len = seq_len
@@ -204,6 +206,7 @@ class GRUSeqClassifier(ClassifierMixin, BaseEstimator):
         self.grad_clip = grad_clip
         self.device = device
         self.random_state = random_state
+        self.soft_labels = soft_labels
 
     # ------------------------------------------------------------------ forma del tensor
     def _resolve_shape(self) -> tuple[int, int]:
@@ -252,8 +255,11 @@ class GRUSeqClassifier(ClassifierMixin, BaseEstimator):
         seq, static = self._split(X)
         y = np.asarray(y).astype(np.float32)
         self.classes_ = np.array([0, 1])
-        if not set(np.unique(y)) <= {0.0, 1.0}:
-            raise ValueError("`gru_seq` es binario: `y` tiene que ser 0/1")
+        if self.soft_labels:
+            if not ((y >= 0.0) & (y <= 1.0)).all():
+                raise ValueError("`soft_labels: true` pide `y` en [0, 1]")
+        elif not set(np.unique(y)) <= {0.0, 1.0}:
+            raise ValueError("`gru_seq` es binario: `y` tiene que ser 0/1 (o `soft_labels: true`)")
         self.n_features_in_ = seq.shape[1] * seq.shape[2] + static.shape[1]
         self.n_static_ = static.shape[1]
 
@@ -269,7 +275,7 @@ class GRUSeqClassifier(ClassifierMixin, BaseEstimator):
 
         # Desbalance: peso de los positivos = negativos/positivos del train del fold
         # (el equivalente de `class_weight="balanced"`; nunca re-muestreo, plan §6).
-        n_pos = float(y.sum())
+        n_pos = float((y == 1.0).sum()) if self.soft_labels else float(y.sum())
         pos_weight = None
         if self.class_weight == "balanced" and 0 < n_pos < len(y):
             pos_weight = torch.tensor((len(y) - n_pos) / n_pos, device=device)

@@ -1,4 +1,21 @@
-# El mejor modelo al 22-09: survival stacking con la ventana del registro (K2)
+# El mejor modelo a la fecha
+
+## Hoy (desde el 28-09-2026, entrega v2): la GRU con etiqueta suave lejos del evento (F11)
+
+**El mejor modelo actual es la GRU + TripSummary + estática completa entrenada con `far_soft_label`
+(0,15)**, ensamble por rango de las semillas 101, 102 y 103:
+- configs `configs/exp_f11_gru_suave_conf_s{101,102,103}.yaml` + `configs/exp_f11_seeds3_gru_suave_conf.yaml`;
+- sobre dev v2 detecta **34,6 · 48,6 · 60,2 · 70,1%** de los autos que fallan al 5 · 10 · 15 · 20% de
+  sanos con falsa alarma, con ~8.300 km (~3 meses) de anticipación mediana;
+- le gana a la GRU anterior con confirmación preregistrada (+9,6 puntos de detección media al 5–20%,
+  IC95 [3,0; 14,4]) y es el primero que le gana con evidencia a la celda mercado × motor.
+
+Evidencia: [f11-gru-objetivo-suave.md](f11-gru-objetivo-suave.md). La medición en test tiene su
+propio preregistro: [f11-preregistro-test.md](f11-preregistro-test.md).
+
+Lo que sigue es la historia de la entrega 1.
+
+## Al 22-09 (entrega 1): survival stacking con la ventana del registro (K2)
 
 > **Entrega v2 (26-09-2026):** todo lo de abajo es de la entrega 1. Sobre v2 no hay finalista elegido: K2 perdió su corrección (la ventana) y su variante sin ventana no aprueba (a′). Survival stacking sí la aprueba, y sobre dev v2 detecta ~11–14% al 5% de falsas alarmas; el 15–17% de abajo es de la entrega 1 ([f9-remedicion-v2.md](f9-remedicion-v2.md) § K2 sobre v2).
 

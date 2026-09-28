@@ -1,0 +1,41 @@
+# F11: promedio por rango de las semillas 101, 102 y 103 (suave, folds conf).
+#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_f11_seeds3_gru_suave_conf.yaml
+name: f11-seeds3-gru-suave-conf
+seed: 101
+ensemble:
+  method: rank_mean
+  members:
+  - run: f11-gru-suave-conf-s101
+    config: configs/exp_f11_gru_suave_conf_s101.yaml
+    weight: 0.3333
+  - run: f11-gru-suave-conf-s102
+    config: configs/exp_f11_gru_suave_conf_s102.yaml
+    weight: 0.3333
+  - run: f11-gru-suave-conf-s103
+    config: configs/exp_f11_gru_suave_conf_s103.yaml
+    weight: 0.3333
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f11-objetivo-suave
+  job_type: ensemble
+  tags:
+  - f11
+  - v2
+  - r3
+  - suave
+  - conf
+  - semillas
+  mode: online
+  log_artifacts: false
+output_dir: experiments
+compare:
+  reference: f11-gru-suave-conf-s101
+  against: []

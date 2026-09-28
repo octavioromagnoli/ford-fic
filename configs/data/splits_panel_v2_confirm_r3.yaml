@@ -1,0 +1,23 @@
+# Folds de CONFIRMACIÓN de F11 (docs/memoria/f11-preregistro-objetivo-suave.md): el mismo
+# reparto que splits_panel_v2_r3.yaml (R = 3, label por vehículo × mercado × motor) con otra
+# semilla, para medir al candidato y a la referencia en folds que la exploración no vio.
+#
+#   python scripts/make_splits.py --config configs/data/splits_panel_v2_confirm_r3.yaml
+seed: 2026
+
+test_split: ${DATA_DIR}/processed/test_split.json
+
+splits:
+  n_splits: 5
+  seed: 2026
+  stratify:
+    column: label
+    level: vehicle
+    extra_columns: [static_SalesCountry_cd, aux_static_Engine]
+    min_stratum_size: 5
+  min_valid_positives: 5
+  n_repeats: 3
+
+output:
+  panel: ${DATA_DIR}/processed/panel.parquet
+  splits: ${DATA_DIR}/processed/splits_confirm_r3.json
