@@ -149,54 +149,75 @@ if not week_events:
 # Colores de los badges, uno por significado: ámbar/rojo el tipo de evento, azul la acción de la política,
 # verde lo que pasó un control (verificador, aprobación), gris lo neutro.
 approvals = st.session_state.setdefault("approvals", {})
+# Una tarjeta decidida se contrae a su encabezado y su estado; «Desplegar» la vuelve a abrir sin deshacer nada.
+expanded = st.session_state.setdefault("expanded_cards", set())
 disclaimer = b.meta["texts"]["disclaimer"]
+
+
+def _decide(key: str, state: str | None) -> None:
+    if state:
+        approvals[key] = state
+    else:
+        approvals.pop(key, None)
+    expanded.discard(key)
+
+
+def _toggle(key: str) -> None:
+    expanded.symmetric_difference_update({key})
+
+
 st.markdown("### Acciones de la semana")
 for card_index, rec in enumerate(result["events"]):
     ev, facts, draft = rec["event"], rec["facts"], rec["draft"]
     vid = ev["vehicle_id"]
     key = f"{result['week']}:{vid}:{ev['kind']}"
+    decided = approvals.get(key)
+    collapsed = bool(decided) and key not in expanded
     with st.container(key=f"alertcard_{card_index}_{ev['kind']}"):
         with st.container(horizontal=True, vertical_alignment="center", key=f"cardhead_{card_index}"):
             st.markdown(f"#### {vid}")
             st.badge(KIND_LABELS[ev["kind"]], color="red" if ev["kind"] == "persistencia" else "orange")
             st.badge(facts["accion"]["nombre"], icon=ACTION_ICONS.get(ev["action"]), color="blue")
             st.caption(f"{facts['mercado']} · {facts['fecha']}")
-        st.markdown(f'<p class="card-lead">{escape(draft["drafts"]["linea_bandeja"])}</p>', unsafe_allow_html=True)
-        if facts["habitos"]:
-            st.caption(HABITS_CAPTION + " · ".join(
-                f"{h['nombre']} {h['tu_valor']} (sanos {h['autos_sanos_comparables']})" for h in facts["habitos"]))
-        tab_driver, tab_shop, tab_check = st.tabs(["Al conductor", "Al taller", "Hechos y verificador"])
-        with tab_driver:
-            message(draft["driver_text"], subject=True, note=disclaimer)
-        with tab_shop:
-            message(draft["workshop_text"])
-        with tab_check:
-            if draft["source"] == "agente":
-                st.success(f"Redactado por el agente y aprobado por el verificador (intento {draft['attempts']}).",
-                           icon=":material/verified:")
-            else:
-                st.info(draft["note"] or "Plantilla del bundle.", icon=":material/description:")
-            for i, probs in enumerate(draft["problems"], start=1):
-                if probs:
-                    st.warning(f"Intento {i}, rechazado:\n\n" + "\n".join(f"- {p}" for p in probs))
-            st.caption("Los hechos que recibió el agente (lo único que puede citar):")
-            st.json(facts, expanded=1)
+        if not collapsed:
+            st.markdown(f'<p class="card-lead">{escape(draft["drafts"]["linea_bandeja"])}</p>',
+                        unsafe_allow_html=True)
+            if facts["habitos"]:
+                st.caption(HABITS_CAPTION + " · ".join(
+                    f"{h['nombre']} {h['tu_valor']} (sanos {h['autos_sanos_comparables']})"
+                    for h in facts["habitos"]))
+            tab_driver, tab_shop, tab_check = st.tabs(["Al conductor", "Al taller", "Hechos y verificador"])
+            with tab_driver:
+                message(draft["driver_text"], subject=True, note=disclaimer)
+            with tab_shop:
+                message(draft["workshop_text"])
+            with tab_check:
+                if draft["source"] == "agente":
+                    st.success(f"Redactado por el agente y aprobado por el verificador (intento {draft['attempts']}).",
+                               icon=":material/verified:")
+                else:
+                    st.info(draft["note"] or "Plantilla del bundle.", icon=":material/description:")
+                for i, probs in enumerate(draft["problems"], start=1):
+                    if probs:
+                        st.warning(f"Intento {i}, rechazado:\n\n" + "\n".join(f"- {p}" for p in probs))
+                st.caption("Los hechos que recibió el agente (lo único que puede citar):")
+                st.json(facts, expanded=1)
         # Decidir a la izquierda; ir a la ficha, que no decide nada, a la derecha y sin peso de botón.
         with st.container(horizontal=True, vertical_alignment="center", key=f"cardactions_{card_index}"):
-            decided = approvals.get(key)
             if decided:
-                st.badge(decided, icon=":material/task_alt:" if decided == "Aprobado" else ":material/block:",
+                st.badge("Enviado" if decided == "Aprobado" else "Descartado",
+                         icon=":material/task_alt:" if decided == "Aprobado" else ":material/block:",
                          color="green" if decided == "Aprobado" else "gray")
-                if st.button("Deshacer", key=f"undo:{key}", icon=":material/undo:", type="tertiary"):
-                    approvals.pop(key)
-                    st.rerun()
+                st.button("Desplegar" if collapsed else "Contraer", key=f"fold:{key}",
+                          icon=":material/expand_more:" if collapsed else ":material/expand_less:",
+                          type="tertiary", on_click=_toggle, args=(key,))
+                st.button("Deshacer", key=f"undo:{key}", icon=":material/undo:", type="tertiary",
+                          on_click=_decide, args=(key, None))
             else:
-                if st.button("Aprobar y enviar", key=f"ok:{key}", icon=":material/send:", type="primary"):
-                    approvals[key] = "Aprobado"
-                    st.rerun()
-                if st.button("Descartar", key=f"no:{key}", icon=":material/close:"):
-                    approvals[key] = "Descartado"
-                    st.rerun()
+                st.button("Aprobar y enviar", key=f"ok:{key}", icon=":material/send:", type="primary",
+                          on_click=_decide, args=(key, "Aprobado"))
+                st.button("Descartar", key=f"no:{key}", icon=":material/close:",
+                          on_click=_decide, args=(key, "Descartado"))
             if st.button("Ver ficha", key=f"go:{key}", icon=":material/directions_car:", type="tertiary"):
                 st.session_state["vehicle"] = vid
                 st.switch_page("app_pages/vehiculo.py")

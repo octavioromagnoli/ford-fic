@@ -215,6 +215,9 @@ iframe[data-testid="stIFrame"]{background:transparent;color-scheme:dark}
 [class*="st-key-alertcard_"] [data-testid="stCaptionContainer"]{max-width:92ch}
 [class*="st-key-cardactions_"]{gap:8px!important;align-items:center}
 [class*="st-key-cardactions_"]>:last-child{margin-left:auto}
+/* Tarjeta decidida y contraída: encabezado y estado, sin el cuerpo */
+[class*="st-key-alertcard_"]:not(:has(.card-lead)){background:var(--surface);gap:10px!important;padding-block:var(--s2)}
+[class*="st-key-alertcard_"]:not(:has(.card-lead)) h4:before{background:var(--muted)}
 
 /* ---- Messages: a preview of what the driver or the workshop receives, text untouched ----------------------- */
 .message-body{max-width:72ch;overflow-wrap:anywhere;font:400 var(--fs-body)/1.65 Manrope,Arial,sans-serif;color:#d8e5f6;background:var(--inset);border:1px solid var(--line-soft);border-radius:var(--radius-sm);padding:20px 24px}
