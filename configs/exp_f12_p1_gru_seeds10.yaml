@@ -1,0 +1,59 @@
+# F12 (P1: GRU ×10 semillas), preregistrado en docs/memoria/f12-preregistro-deteccion.md.
+#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_f12_p1_gru_seeds10.yaml
+name: f12-p1-gru-seeds10
+seed: 42
+ensemble:
+  method: rank_mean
+  members:
+  - run: v2all-gru-trips-estaticas-r3
+    config: configs/exp_v2all_gru_trips_estaticas_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s1-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s1_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s2-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s2_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s3-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s3_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s4-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s4_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s5-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s5_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s6-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s6_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s7-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s7_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s8-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s8_r3.yaml
+    weight: 0.1
+  - run: v2all-gru-trips-estaticas-s9-r3
+    config: configs/exp_v2all_gru_trips_estaticas_s9_r3.yaml
+    weight: 0.1
+compare:
+  reference: v2all-seeds3-gru-trips-estaticas
+  against: []
+eval:
+  k_consecutive: 2
+  n_thresholds: 50
+  max_false_alarms_per_1000: 50
+  bootstrap_by_vehicle: true
+  bootstrap_n_boot: 1000
+wandb:
+  enabled: true
+  project: ford-fic
+  entity: oromagnoli-
+  group: f12-deteccion
+  job_type: ensemble
+  tags:
+  - f12
+  - v2
+  - r3
+  mode: online
+  log_artifacts: false
+output_dir: experiments
