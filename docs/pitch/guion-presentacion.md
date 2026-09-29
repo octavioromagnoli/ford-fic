@@ -1,5 +1,10 @@
 # Guion de la presentación — Ford Innovation Challenge III
 
+> **Reemplazado el 29-09-2026 por [`presentacion-contenido.md`](presentacion-contenido.md)**, que es la foto
+> del doc vivo con el guion de 30 minutos por orador y el respaldo de cada bloque. Este archivo queda como
+> registro: sus números son anteriores a F11 (la GRU de F9 con 27% al 5%, K2 y sus costos) y **no se citan
+> más**.
+
 **Estado:** borrador de contenido (28-09). No es el deck: es lo que el deck tiene que decir, en qué
 orden y con qué número. La versión marketinera (§8) se arma después, sobre este guion.
 
