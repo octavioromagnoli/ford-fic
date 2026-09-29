@@ -40,6 +40,8 @@ Los rangos salen de precios públicos de EE. UU. El detalle y las URL están en
 
 `e` ∈ {0,5; 0,8} y `π` ∈ {2%, 5%, 10%}. Son supuestos: ni Ford ni los datos los dan.
 
+**La grúa es un supuesto pesimista (nota del 29-09).** Los escenarios bajo, medio y alto la suman a toda falla, pero en modo de protección el auto suele llegar andando al taller, y los datos no dicen cómo llegó ninguno. Sin la grúa, `C_fail` baja ~110 por escenario. La tabla no se rehízo porque no se cita en el pitch.
+
 ## Lo que da
 
 La tabla completa está en `experiments/decision-k2/cost_scenarios.csv`. Una selección:

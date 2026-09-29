@@ -42,7 +42,7 @@ Total: 29,5 min de exposición (Gonzalo 11,5 · Santino 9 · Octavio 9, con cuat
 
 No vendemos un modelo que predice fallas: vendemos que el cliente sienta que su Ford lo cuida. La confianza entre el cliente y Ford es el producto; la GRU, los agentes y la telemetría son cómo se cumple.
 
-**La gran idea:** *"Tu Ford te avisa antes."* Hoy el auto avisa cuando ya es tarde, con un testigo que nadie explica. Mañana avisa con tiempo, en lenguaje humano y con algo concreto para hacer.
+**La gran idea:** *"Tu Ford te avisa antes."* Hoy el auto avisa cuando el filtro ya no da más, con un testigo que nadie explica. Mañana avisa con tiempo, en lenguaje humano y con algo concreto para hacer.
 
 **Nombre y tagline (a elegir):**
 
@@ -57,7 +57,7 @@ Recomendación: **Ford Early Care** para el cliente particular. Habla de cuidado
 
 **Los tres pilares de la confianza.** Cada decisión técnica del proyecto se cuenta como uno de ellos:
 
-1. **Te aviso a tiempo.** \~3,5 meses de margen, no el testigo de último momento. (Sale del modelo y del gap de 500 km.)
+1. **Te aviso a tiempo.** Más de tres meses de margen (mediana de los autos detectados), no el testigo de último momento. (Sale del modelo y del gap de 500 km.)
 2. **Te explico por qué y qué hacer.** Un hábito concreto, nunca un código de error ni una amenaza. (Sale del porqué contra la flota sana y de los agentes con verificador.)
 3. **No te asusto de más.** Primero un consejo, después un turno solo si hace falta. Ford elige cuántas falsas alarmas tolera, y ninguna cuesta caro al cliente. (Sale del dial y de la política.)
 
@@ -67,7 +67,7 @@ Recomendación: **Ford Early Care** para el cliente particular. Habla de cuidado
 
 | bloque | frase ancla |
 | --- | --- |
-| Apertura | "El auto avisa cuando ya es tarde. Y el cliente se entera solo." |
+| Apertura | "El auto avisa cuando el filtro ya no da más. Y el cliente se entera solo." |
 | EDA | "La forma de manejar deja huella meses antes." |
 | Modelo | "1 de cada 3, tres meses antes, con 5% de falsas alarmas." |
 | Producto | "El modelo decide. El agente habla como una persona. El código cuida lo que dice." |
@@ -90,13 +90,13 @@ El filtro de partículas (DPF) de los diésel de Ford se tapa por cómo se usa e
 
 **Slide 1 · Portada.** Ford × SOG (marca temporal, igual que la demo; el nombre del producto se elige después) + "Tu Ford te avisa antes". Equipo SOG.
 
-**Slide 2 · Una historia, no un gráfico.** Un conductor hace 4 km por día en ciudad. El motor casi nunca llega a temperatura y el filtro no termina de regenerar. En tres meses el testigo se prende, el auto entra en modo de protección y va en grúa al concesionario. Nadie le avisó. No pierde solo la reparación: pierde la confianza en su Ford. Auto ficticio, armado con el perfil real de un fallado del dataset. Ponerle nombre (por ejemplo, Laura) y volver a ella en el cierre.
+**Slide 2 · Una historia, no un gráfico.** Un conductor hace viajes cortos en ciudad. El motor casi nunca llega a temperatura y el filtro no termina de regenerar. Durante meses el filtro se carga; un día se prende el testigo y, si sigue así, el auto limita la potencia para protegerse y termina en el taller sin haberlo planeado. Nadie le avisó. No pierde solo la reparación: pierde la confianza en su Ford. Auto ficticio, armado con los hábitos que distinguen a los fallados del dataset. **Sin grúa:** en modo de protección el auto suele llegar andando al taller, y los datos no dicen cómo llegó ninguno. Ponerle nombre (por ejemplo, Laura) y volver a ella en el cierre.
 
 **Slide 3 · Por qué duele.**
 
-- Para el cliente: durante meses gasta más gasoil sin saberlo y, al final, auto parado, grúa y días sin vehículo.
+- Para el cliente: un testigo sin explicación y una visita al taller que no esperaba. El consumo extra es física conocida, pero con estos datos no lo medimos: no se dice.
 - Para Ford: un cliente que siente que nadie le avisó, además del costo de garantía.
-- Para flotas (Ford Pro): un vehículo de trabajo parado cuesta mucho más que la reparación.
+- Para flotas (Ford Pro): un vehículo de trabajo en el taller es trabajo que no se hace.
 - Hoy la detección es reactiva: el aviso llega cuando el filtro ya está saturado.
 
 **Slide 4 · La promesa.** Con la telemetría que Ford ya recibe del auto conectado, sin sensores nuevos:
@@ -111,23 +111,23 @@ El filtro de partículas (DPF) de los diésel de Ford se tapa por cómo se usa e
 
 **[Portada, \~15 s]** Buenas. Somos Gonzalo, Santino y Octavio, el equipo SOG. Les venimos a contar cómo un Ford diésel puede avisarle a su dueño que algo no anda bien, meses antes de que se prenda un testigo.
 
-**[Laura, \~60 s]** Les presento a Laura. Vive en la ciudad y usa su camioneta para lo de todos los días: llevar a los chicos al colegio, ir al trabajo, hacer las compras. Viajes cortos, de cuatro o cinco kilómetros, muchas veces con el motor en marcha y parada en el tráfico.
+**[Laura, \~60 s]** Les presento a Laura. Vive en la ciudad y usa su camioneta para lo de todos los días: llevar a los chicos al colegio, ir al trabajo, hacer las compras. Viajes cortos, de pocos kilómetros, muchas veces con el motor en marcha y parada en el tráfico.
 
-Laura no lo sabe, pero con ese uso el motor casi nunca llega a temperatura. Y durante tres meses, algo se va tapando sin que nadie lo note.
+Laura no lo sabe, pero con ese uso el motor casi nunca llega a temperatura. Y durante meses, algo se va tapando sin que nadie lo note.
 
-Un día se prende un testigo. Al otro, la camioneta pierde potencia. Termina arriba de una grúa, camino al concesionario. Laura no pierde solo una reparación: pierde días sin auto y la sensación de que su Ford la cuidaba. Lo que más le molesta es que nadie le avisó.
+Un día se prende un testigo. Al tiempo, la camioneta pierde fuerza: se protege a sí misma. Y Laura termina con un turno en el taller que no tenía planeado. No pierde solo una reparación: pierde la sensación de que su Ford la cuidaba. Lo que más le molesta es que nadie le avisó.
 
-Laura no existe. Pero su historia sí: la armamos con el uso de un auto real de los datos que nos dio Ford.
+Laura no existe. Pero sus hábitos sí: son los que encontramos, en los datos de Ford, en los autos que fallaron.
 
 **[Qué es el DPF, \~40 s]** Lo que se tapó es el filtro de partículas, el DPF. Atrapa el hollín del escape, y para limpiarse lo tiene que quemar: eso se llama regenerar. Para regenerar hace falta temperatura, un tramo de ruta, un motor caliente.
 
-Con viajes cortos, la regeneración empieza y no termina. El hollín se acumula y el motor gasta más combustible, sin que el conductor lo note. El filtro no falla de golpe: falla por cómo se usa el auto. Y eso, como vamos a ver, deja huella.
+Con viajes cortos, la regeneración empieza y no termina. El hollín se acumula en silencio. El filtro no falla de golpe: falla por cómo se usa el auto. Y eso, como vamos a ver, deja huella.
 
-**[Por qué duele, \~35 s]** Hoy Ford se entera cuando el testigo ya se prendió. Para el cliente son meses de gastar de más, un auto parado y una visita que no esperaba. Para Ford, un cliente que siente que nadie le avisó, además del costo de garantía. Y si es un vehículo de trabajo, cada día parado cuesta más que la reparación.
+**[Por qué duele, \~35 s]** Hoy Ford se entera cuando el testigo ya se prendió. Para el cliente es un testigo que nadie le explicó, el auto en el taller y un día perdido. Para Ford, un cliente que siente que nadie le avisó, además del costo de garantía. Y si es un vehículo de trabajo, cada día en el taller es trabajo que no se hace.
 
-**[La promesa, \~30 s]** Lo que proponemos usa solo la telemetría que Ford ya recibe de sus autos conectados, sin sensores nuevos. Con eso hacemos tres cosas. Marcamos los autos que van camino a la falla con más de tres meses de margen. Le decimos al conductor por qué, en hábitos que puede cambiar. Y Ford decide cuántas falsas alarmas está dispuesto a tolerar.
+**[La promesa, \~30 s]** Lo que proponemos usa solo la telemetría que Ford ya recibe de sus autos conectados, sin sensores nuevos. Con eso hacemos tres cosas. Marcamos los autos que van camino a la falla con una mediana de más de tres meses de margen. Le decimos al conductor por qué, en hábitos que puede cambiar. Y Ford decide cuántas falsas alarmas está dispuesto a tolerar.
 
-Hoy el auto avisa cuando ya es tarde. Nosotros queremos que tu Ford te avise antes.
+Hoy el auto avisa cuando el filtro ya no da más. Nosotros queremos que tu Ford te avise antes.
 
 **[Puente al EDA, \~10 s]** Para cumplir esa promesa, primero había que escuchar a los datos. Y la primera sorpresa fue que los datos, a veces, mienten.
 
@@ -189,7 +189,7 @@ Y en el medio del proyecto nos llegó una segunda entrega, con más países y m�
 
 *El contador que se apagó.* Al principio, la mejor señal del análisis era el contador de regeneraciones. Hasta que vimos que el 25 de mayo de 2026 se apaga para toda la flota. Lo que medía no era el filtro, era el calendario: qué parte de la historia de cada auto caía antes de esa fecha. Lo descartamos y reconstruimos las regeneraciones desde el nivel del filtro, que sí se registra hasta el final.
 
-*La fecha del taller.* En las dos semanas previas a la fecha de la falla, los autos pasaban horas parados con el motor en marcha. No era el conductor: era el taller haciendo la regeneración forzada. La fecha que registra Ford llega unas dos semanas después de la intervención. Si no la corríamos, el modelo aprendía a ver el taller, no la falla. La corrimos 21 días.
+*La fecha del taller.* En las dos semanas previas a la fecha de la falla ya aparecen el cambio de aceite y más ralentís largos, con el auto parado y el motor en marcha: la huella del taller y su regeneración forzada. La fecha que registra Ford llega unas dos semanas después de la intervención. Si no la corríamos, el modelo aprendía a ver el taller, no la falla. La corrimos 21 días.
 
 *Dos listas que no se parecen.* Los autos que fallaron y los que no vienen de períodos de producción distintos. Tanto, que la fecha de fabricación sola ya separaba a unos de otros. Eso no es predecir, es reconocer la lista.
 
@@ -207,11 +207,11 @@ Probamos ventanas de 1.000, 2.000 y 3.000 km: rinden lo mismo, y cada 500 km de 
 
 **[La huella de Laura, \~1 min]** Entonces sí, la pregunta de fondo: ¿el uso anticipa la falla?
 
-Sí. Comparando con autos sanos del mismo país y el mismo kilometraje, los que van a fallar pasan cada vez más tiempo parados con el motor en marcha, y terminan los viajes con el motor más frío. La huella crece a medida que se acerca la falla. Es exactamente la física del filtro que les contamos con Laura.
+Sí. Comparando con autos sanos del mismo país y el mismo kilometraje, los que van a fallar pasan cada vez más tiempo parados con el motor en marcha, y terminan los viajes con el motor más frío. La huella crece a medida que se acerca la falla. Es la física del filtro que les contamos con Laura, escrita en los datos.
 
 También nos llevamos una sorpresa. La velocidad, que al principio parecía la señal más fuerte, desapareció al comparar dentro de cada país. No era la falla, era Colombia contra Chile.
 
-Y lo más importante: la huella se ve temprano. A los 60 días de la venta, el uso ya distingue a los autos que van a fallar.
+Y lo más importante: la huella se ve temprano. A los 60 días de la venta, la huella ya asoma: tenue, pero está.
 
 **[Puente a Santino, \~10 s]** La huella existe, pero es tenue: mirando una sola señal, acertamos un poco más que tirando una moneda. ¿Puede un modelo juntar todas y leerlas a tiempo? Eso se los cuenta Santino.
 
@@ -373,7 +373,7 @@ Le gana a nuestro modelo anterior por casi 10 puntos [dev], con evidencia estad�
 
 **[Cuánto antes, \~20 s]** La primera alerta llega con una mediana de **más de tres meses de margen [dev]**. Y el puntaje sube a medida que se acerca la falla: el modelo no solo sabe qué auto, también nota que el momento se acerca.
 
-**[En qué se apoya, \~30 s]** Si le escondemos al modelo el estado del filtro, pierde 38 puntos de detección. Si le escondemos los hábitos de manejo, 23; el que más pesa es la duración de los viajes. Es la misma física que les contó Gonzalo: viajes cortos que no dejan terminar la limpieza del filtro. El modelo no inventó nada: encontró lo que un ingeniero de Ford esperaría.
+**[En qué se apoya, \~30 s]** Si le escondemos al modelo el estado del filtro, pierde 38 puntos de detección. Si le escondemos los hábitos de manejo, 23; el que más pesa es la duración de los viajes. Es la misma física que les contó Gonzalo: viajes cortos que no dejan terminar la limpieza del filtro. Nadie le explicó al modelo la física del filtro. La encontró solo.
 
 **[Puente a Octavio, \~10 s]** Ahora sabemos que el auto de Laura va camino a la falla, con tres meses de margen. Pero una alerta en un servidor no le sirve a Laura. ¿Qué le decimos, y cómo, sin asustarla? Eso se los cuenta Octavio.
 
@@ -760,11 +760,11 @@ El costo en dólares está en el bloque 6. **El costo real no es la computadora:
 
 ## 6 · Costos: lo que pierde el cliente y lo que cuesta el producto
 
-El costo principal no es la reparación. Es lo que el cliente pierde mientras su motor pierde eficiencia sin que nadie le avise: gasoil, rendimiento y confianza. Evitarlo cuesta \~USD 0,10 por auto y por año.
+El costo principal no es la reparación. Es lo que el cliente pierde cuando la falla lo toma por sorpresa: una visita que no planeaba, días de uso y confianza. Evitarlo cuesta \~USD 0,10 por auto y por año.
 
 **Slide 28 · Lo que paga el cliente hoy, sin saberlo.** La degradación es silenciosa durante meses:
 
-- **Más gasoil.** El hollín acumulado sube la contrapresión del escape, y cada regeneración activa quema combustible extra. Sin número: no lo medimos y las fuentes no están verificadas.
+- **Probablemente más gasoil.** El hollín acumulado sube la contrapresión del escape, y cada regeneración activa quema combustible extra. Con estos datos no lo pudimos medir (el consumo no separa fallados de sanos), así que no va en el pitch.
 - **Menos rendimiento.** Regeneraciones interrumpidas y, al final, el modo de protección con potencia limitada.
 - **Un testigo sin explicación** en el tablero y una visita al taller que no estaba en los planes.
 - **La sensación de "nadie me avisó"**, que es lo que termina pesando en la relación con la marca.
@@ -773,9 +773,9 @@ El costo principal no es la reparación. Es lo que el cliente pierde mientras su
 
 | momento | hoy | con el producto |
 | --- | --- | --- |
-| \~3,5 meses antes | nada: el consumo sube y no se nota | aviso en la app con un hábito concreto ("un tramo de ruta de 20 minutos por semana") |
-| mientras se degrada | gasta de más cada semana | corrige el hábito y el filtro se limpia en uso normal |
-| si el riesgo sigue | testigo, modo de protección, grúa | el concesionario lo llama y le ofrece un turno |
+| \~3,5 meses antes | nada: el filtro se carga y no se nota | aviso en la app con un hábito concreto ("un tramo de ruta de 20 minutos por semana") |
+| mientras se degrada | el filtro sigue cargándose | corrige el hábito y el filtro se limpia en uso normal |
+| si el riesgo sigue | testigo, modo de protección, visita al taller sin planificar | el concesionario lo llama y le ofrece un turno |
 | la relación | reclamo | "mi Ford me avisó a tiempo" |
 
 **Slide 30 · Por qué una falsa alarma casi no le cuesta al cliente.** La primera acción es un consejo de manejo, no una visita. Si el auto no iba a fallar, el cliente recibió un consejo que igual le ahorra combustible. Por eso se puede operar con un presupuesto de falsas alarmas más alto que si cada alerta fuera un turno.
@@ -809,9 +809,9 @@ Fuentes de la penalidad de consumo, por si se verifica más adelante (resultados
 
 **El eje del bloque (decidido el 29-09):** el costo real no es la reparación, que no conocemos. Es la fricción con el cliente y el riesgo de perderlo. Por eso el bloque pone en la balanza el costo de los avisos contra la confianza del cliente. Que además ayuda a prevenir averías va después, como ganancia extra. **No se cita ningún costo de falla en dólares.**
 
-**[El costo que no está en la factura, \~40 s]** Volvamos a Laura. ¿Cuánto le costó a Ford su falla? La reparación tiene un precio, y Ford lo conoce mejor que nosotros. Pero hay un costo que no aparece en ninguna factura: lo que Laura dijo al bajar de la grúa. *"Nadie me avisó."*
+**[El costo que no está en la factura, \~40 s]** Volvamos a Laura. ¿Cuánto le costó a Ford su falla? La reparación tiene un precio, y Ford lo conoce mejor que nosotros. Pero hay un costo que no aparece en ninguna factura: lo que Laura dijo al retirar su camioneta del taller. *"Nadie me avisó."*
 
-Ese es el costo que nos importa. Un cliente que siente que su auto lo dejó a pie sin aviso es un cliente que la próxima vez mira otra marca. Hoy, cada falla del filtro se paga en confianza.
+Ese es el costo que nos importa. Un cliente que se enteró tarde se pregunta si su Ford lo cuida, y eso no aparece en ninguna factura. Cada falla sin aviso se paga en confianza.
 
 **[Avisar es barato, \~40 s]** La buena noticia es que avisar cuesta muy poco. Con la telemetría que Ford ya tiene, operar esto para un millón de autos cuesta alrededor de **10 centavos de dólar por auto y por año**: las computadoras, los agentes que escriben los mensajes y una persona que lo opera.
 
@@ -825,11 +825,11 @@ Diseñamos todo para que el aviso de más pese lo menos posible. El primer conta
 
 Y el que decide cuánto pesa cada plato es Ford, con la perilla. Al 5%, uno de cada veinte autos sanos recibe un consejo de más, y avisamos a un tercio de las fallas. Al 20%, avisamos a siete de cada diez [dev], con cuatro veces más consejos de más. No hay un número correcto: hay un punto que Ford elige según cuánto confía en sus clientes y cuánto le duele una falla.
 
-**[Y encima previene averías, \~40 s]** Todo esto sin contar lo que ya les conté: un filtro que se tapa hace gastar más combustible durante meses, y termina en un auto parado, una grúa y una visita que nadie planificó. Cada aviso a tiempo es una oportunidad de evitarlo: un hábito que cambia, o un turno programado en vez de una urgencia. Para una flota de trabajo de Ford Pro, cada día que el vehículo no para vale todavía más.
+**[Y encima, una chance de esquivar la avería, \~40 s]** Todo esto sin contar lo que ya les conté: un filtro que se tapa termina en el modo de protección y en una visita que nadie planificó. Cada aviso a tiempo es una oportunidad de evitarlo: un hábito que cambia, o un turno programado en vez de una urgencia. Cuántas esquiva, lo va a decir el piloto. Para una flota de trabajo de Ford Pro, cada día que el vehículo no para vale todavía más.
 
 **[Lo que vamos a medir, \~30 s]** No les pedimos que nos crean. En el piloto medimos exactamente esto, con un grupo que recibe avisos y otro que no: si los clientes avisados confían más en Ford, si cambian el hábito, si vuelven al concesionario, y cuántas fallas se evitan.
 
-**[Puente a Santino, \~10 s]** Un producto barato, que cuida la confianza del cliente y encima previene averías. ¿Qué le pedimos a Ford para empezar? Eso se los cuenta Santino.
+**[Puente a Santino, \~10 s]** Un producto barato, que cuida la confianza del cliente y encima le da una chance de esquivar la avería. ¿Qué le pedimos a Ford para empezar? Eso se los cuenta Santino.
 
 ### Respaldo del bloque 6 (no se dice, se responde)
 
@@ -886,7 +886,7 @@ Por eso el primer contacto tiene que ser un consejo que le sirva a cualquiera, y
 - **Fricción:** tasa de apertura de los avisos, bajas de notificaciones y quejas por aviso.
 - **Retención:** vuelta a la red de servicio de Ford.
 - **Hábito:** cuántos conductores cambian el hábito recomendado (se ve en la misma telemetría).
-- **Averías:** modos de protección, grúas y visitas no planificadas evitadas; consumo antes y después del aviso.
+- **Averías:** modos de protección y visitas no planificadas evitadas; consumo antes y después del aviso.
 - **Costo:** costo por alerta y por falla evitada, ya con los costos reales de Ford.
 
 **El consumo, lo que sabemos:** con estos datos no se puede medir bien. El nivel de combustible solo permite estimarlo en el 33% de los viajes y no separa fallados de sanos. Por eso es una métrica del piloto y no un número del pitch.
@@ -927,10 +927,10 @@ El pedido a Ford es concreto: un piloto en sombra de 3 meses en un mercado, con 
 **Slide 35 · Conclusiones.** Las tres frases:
 
 1. El DPF falla por cómo se usa el auto, y hoy Ford se entera tarde.
-2. Con la telemetría que ya recibe, detectamos 1 de cada 3 autos que van a fallar, \~3,5 meses antes, con 5% de falsas alarmas.
+2. Con la telemetría que ya recibe, detectamos 1 de cada 3 autos que van a fallar, más de tres meses antes, con 5% de falsas alarmas.
 3. Cada alerta se convierte en un consejo al conductor antes de que pierda eficiencia, o en un turno si el riesgo sigue, por \~USD 0,10 por auto y por año.
 
-**Última slide, el arco cerrado.** Laura otra vez, tres meses antes. En la app le llega: "Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo". Hace el tramo. El testigo nunca se prende. Pantalla final: *"Tu Ford te avisa antes."* Ford Early Care.
+**Última slide, el arco cerrado.** Laura otra vez, tres meses antes. En la app le llega: "Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo". Hace el tramo. El filtro respira. Y si algún día se prende el testigo, ya no la toma por sorpresa. Pantalla final: *"Tu Ford te avisa antes."* Ford Early Care.
 
 **Límites que decimos antes de que los pregunten:** no predecimos la fecha exacta, la prevalencia real de la flota se mide en el piloto, y dentro de un mismo mercado y motor el orden entre autos es moderado (AUC 0,69).
 
@@ -967,11 +967,11 @@ El filtro de partículas falla por cómo se usa el auto, y hoy Ford se entera ta
 
 Con la telemetría que ya recibe, avisamos a uno de cada tres autos que van a fallar, más de tres meses antes, con 5% de falsas alarmas [dev].
 
-Y cada aviso se convierte en un consejo que cuida al cliente antes de que el auto lo deje a pie, por unos centavos por auto y por año.
+Y cada aviso se convierte en un consejo que cuida al cliente antes de que termine en el taller, por unos centavos por auto y por año.
 
 **[Laura, otra vez, \~40 s]** Volvamos a Laura. Mismo auto, misma ciudad, mismos viajes cortos al colegio. Pero esta vez, tres meses antes, le llega un mensaje a la app de su Ford: *"Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo."*
 
-El sábado, Laura va a visitar a su mamá por la ruta. El filtro se limpia. El testigo nunca se prende. Laura no se entera de la falla que no tuvo. Pero sí se queda con algo: su Ford le avisó.
+El sábado, Laura va a visitar a su mamá por la ruta. El filtro respira. Y si algún día se prende el testigo, ya no la toma por sorpresa. Su Ford le avisó.
 
 *(Pantalla final.)* **Tu Ford te avisa antes.** Gracias.
 
