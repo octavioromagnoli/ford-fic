@@ -261,7 +261,7 @@ html[data-dir="back"]::view-transition-new(root){animation-name:drive-in-back}
 .mrow.fin .bar i{background:linear-gradient(90deg,var(--guardsman-hi),var(--ford-soft),var(--white));box-shadow:0 0 30px rgba(127,178,255,.5)}
 .mrow.fin .val{color:var(--white);font:700 30px var(--display);font-stretch:112%}
 
-/* gauges de Laura */
+/* gauges del conductor */
 .cluster{border:1px solid var(--line-strong);background:radial-gradient(420px 260px at 50% 30%,rgba(28,58,158,.14),transparent 70%),rgba(8,9,11,.9);
   border-radius:26px;padding:28px 30px;position:relative;box-shadow:0 40px 100px rgba(0,0,0,.6)}
 .soot{height:18px;border-radius:9px;background:rgba(255,255,255,.06);overflow:hidden;position:relative}
@@ -360,14 +360,14 @@ table.t td .mono{font-size:15px}
   <div class="wrap" style="display:grid;grid-template-columns:1fr 560px;gap:80px">
     <div style="display:flex;flex-direction:column">
       <p class="kicker f" data-step="0"><i></i>Una historia, no un gráfico</p>
-      <h2 class="title f" data-step="0" data-d="1">Les presento a Laura.</h2>
+      <h2 class="title f" data-step="0" data-d="1">Pensemos en un conductor cualquiera.</h2>
       <div style="margin-top:34px;display:flex;flex-direction:column;gap:22px;max-width:760px">
-        <p class="body f" data-step="1" data-dim="4">Vive en la ciudad. Colegio, trabajo, compras: <b>viajes cortos</b>, muchas veces parada en el tráfico con el motor en marcha.</p>
+        <p class="body f" data-step="1" data-dim="4">Vive en la ciudad. Colegio, trabajo, compras: <b>viajes cortos</b>, muchas veces quieto en el tráfico con el motor en marcha.</p>
         <p class="body f" data-step="2" data-dim="4">Con ese uso, el motor <b>casi nunca llega a temperatura</b>. Durante meses, algo se va tapando sin que nadie lo note.</p>
         <p class="body f" data-step="3" data-dim="4">Un día se prende un testigo. Al tiempo, la camioneta pierde fuerza. <b>Termina con un turno en el taller que no tenía planeado.</b></p>
       </div>
       <div class="quote f" data-step="4" style="margin-top:auto;font-size:96px">Nadie le <em>avisó.</em></div>
-      <p class="note f" data-step="5" style="margin-top:18px">Laura no existe. Sus hábitos sí: son los que encontramos en los autos que fallaron.</p>
+      <p class="note f" data-step="5" style="margin-top:18px">No es un cliente real. Sus hábitos sí: son los que encontramos en los autos que fallaron.</p>
     </div>
     <div class="f right" data-step="0" data-d="2" style="align-self:center">
       <div class="cluster">
@@ -394,10 +394,10 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~60 s">
-    <p>Les presento a Laura. Vive en la ciudad y usa su camioneta para lo de todos los días: llevar a los chicos al colegio, ir al trabajo, hacer las compras. Viajes cortos, de pocos kilómetros, muchas veces con el motor en marcha y parada en el tráfico.</p>
-    <p>Laura no lo sabe, pero con ese uso el motor casi nunca llega a temperatura. Y durante meses, algo se va tapando sin que nadie lo note.</p>
-    <p>Un día se prende un testigo. Al tiempo, la camioneta pierde fuerza: se protege a sí misma. Y Laura termina con un turno en el taller que no tenía planeado. No pierde solo una reparación: pierde la sensación de que su Ford la cuidaba. <b>Lo que más le molesta es que nadie le avisó.</b></p>
-    <p>Laura no existe. Pero sus hábitos sí: son los que encontramos, en los datos de Ford, en los autos que fallaron.</p>
+    <p>Pensemos en un conductor cualquiera. Vive en la ciudad y usa su camioneta para lo de todos los días: llevar a los chicos al colegio, ir al trabajo, hacer las compras. Viajes cortos, de pocos kilómetros, muchas veces con el motor en marcha y quieto en el tráfico.</p>
+    <p>No lo sabe, pero con ese uso el motor casi nunca llega a temperatura. Y durante meses, algo se va tapando sin que nadie lo note.</p>
+    <p>Un día se prende un testigo. Al tiempo, la camioneta pierde fuerza: se protege a sí misma. Y termina con un turno en el taller que no tenía planeado. No pierde solo una reparación: pierde la sensación de que su Ford lo cuidaba. <b>Lo que más le molesta es que nadie le avisó.</b></p>
+    <p>No es un cliente real. Pero sus hábitos sí: son los que encontramos, en los datos de Ford, en los autos que fallaron.</p>
   </aside>
 </section>
 
@@ -619,7 +619,7 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~1 min + puente">
-    <p>Entonces sí, la pregunta de fondo: ¿el uso anticipa la falla? <b>Sí.</b> Comparando con autos sanos del mismo país y el mismo kilometraje, los que van a fallar pasan cada vez más tiempo parados con el motor en marcha, y terminan los viajes con el motor más frío. La huella crece a medida que se acerca la falla. Es la física del filtro que les contamos con Laura, escrita en los datos.</p>
+    <p>Entonces sí, la pregunta de fondo: ¿el uso anticipa la falla? <b>Sí.</b> Comparando con autos sanos del mismo país y el mismo kilometraje, los que van a fallar pasan cada vez más tiempo parados con el motor en marcha, y terminan los viajes con el motor más frío. La huella crece a medida que se acerca la falla. Es la física del filtro que les contamos al principio, escrita en los datos.</p>
     <p>También nos llevamos una sorpresa. La velocidad, que al principio parecía la señal más fuerte, desapareció al comparar dentro de cada país. No era la falla, era Colombia contra Chile.</p>
     <p>Y lo más importante: la huella se ve temprano. A los 60 días de la venta, la huella ya asoma: tenue, pero está.</p>
     <p><b>[Puente a Santino]</b> La huella existe, pero es tenue: mirando una sola señal, acertamos un poco más que tirando una moneda. ¿Puede un modelo juntar todas y leerlas a tiempo? Eso se los cuenta Santino.</p>
@@ -713,13 +713,13 @@ table.t td .mono{font-size:15px}
     </div>
     <svg id="gru" viewBox="0 0 1380 420" width="1380" style="align-self:center;margin-top:14px" class="f fade" data-step="0" data-d="2"></svg>
     <div class="cols" style="grid-template-columns:repeat(3,1fr)">
-      <div class="cell f" data-step="2" style="min-height:0;box-shadow:inset 0 2px 0 var(--tail)"><span class="lbl" style="color:var(--tail-soft);margin-bottom:0">Antes</span><p style="font-size:19px;color:#b3b3b8">Lejos de la falla, al auto de Laura le enseñábamos <b style="color:var(--white)">"sano": 0</b>. Lo castigábamos cada vez que sospechaba.</p></div>
+      <div class="cell f" data-step="2" style="min-height:0;box-shadow:inset 0 2px 0 var(--tail)"><span class="lbl" style="color:var(--tail-soft);margin-bottom:0">Antes</span><p style="font-size:19px;color:#b3b3b8">Lejos de la falla, a ese auto le enseñábamos <b style="color:var(--white)">"sano": 0</b>. Lo castigábamos cada vez que sospechaba.</p></div>
       <div class="cell f" data-step="3" style="min-height:0;box-shadow:inset 0 2px 0 var(--ford-soft);background:linear-gradient(180deg,rgba(28,58,158,.2),transparent)"><span class="lbl" style="color:var(--ford-soft);margin-bottom:0">Ahora</span><p style="font-size:19px;color:#b3b3b8">Esos cortes valen <b style="color:var(--white)">0,15: "un poco sospechoso"</b>. Misma red, mismos datos, mismos ajustes.</p></div>
       <div class="cell f" data-step="4" style="min-height:0"><span class="lbl" style="margin-bottom:0">De dónde viene</span><p style="font-size:19px;color:#b3b3b8">Inspirada en el mantenimiento predictivo de <b style="color:var(--white)">motores de avión</b> (Heimes, PHM 2008). Regla escrita <b style="color:var(--white)">antes</b> de medir.</p></div>
     </div>
   </div>
   <aside class="notes" data-time="~1 min">
-    <p>Miren a Laura. Tres meses antes de la falla, su auto ya tiene la huella: más tiempo parado con el motor en marcha, motor frío. Pero como la falla todavía queda lejos, <b>al modelo le enseñábamos que en ese momento el auto de Laura estaba perfectamente sano.</b> Y lo castigábamos cada vez que sospechaba.</p>
+    <p>Volvamos a nuestro conductor. Tres meses antes de la falla, su auto ya tiene la huella: más tiempo parado con el motor en marcha, motor frío. Pero como la falla todavía queda lejos, <b>al modelo le enseñábamos que en ese momento su auto estaba perfectamente sano.</b> Y lo castigábamos cada vez que sospechaba.</p>
     <p>Entonces cambiamos una sola cosa. Esos momentos lejanos de un auto que termina fallando ya no valen 0, "sano", sino <b>0,15: "un poco sospechoso"</b>. Misma red, mismos datos, mismos ajustes. Es una idea inspirada en el mantenimiento predictivo de motores de avión, adaptada a nuestro problema.</p>
     <p>Y como ya habíamos visto demasiados números bonitos, escribimos la regla antes de medir: folds nuevos, semillas nuevas, una sola confirmación.</p>
   </aside>
@@ -824,7 +824,7 @@ table.t td .mono{font-size:15px}
   <aside class="notes" data-time="~50 s + puente">
     <p><b>[Cuánto antes]</b> La primera alerta llega con una mediana de <b>más de tres meses de margen [dev]</b>. Y el puntaje sube a medida que se acerca la falla: el modelo no solo sabe qué auto, también nota que el momento se acerca.</p>
     <p><b>[En qué se apoya]</b> Si le escondemos al modelo el estado del filtro, pierde 38 puntos de detección. Si le escondemos los hábitos de manejo, 23; el que más pesa es la duración de los viajes. Es la misma física que les contó Gonzalo. No le dimos ninguna regla del filtro: esa relación la aprendió de los datos.</p>
-    <p><b>[Puente a Octavio]</b> Ahora el modelo marcó el auto de Laura, con meses de margen. Pero una alerta en un servidor no le sirve a Laura. ¿Qué le decimos, y cómo, sin asustarla? Eso se los cuenta Octavio.</p>
+    <p><b>[Puente a Octavio]</b> Ahora el modelo marcó el auto de nuestro conductor, con meses de margen. Pero una alerta en un servidor no le sirve al conductor. ¿Qué le decimos, y cómo, sin asustarlo? Eso se los cuenta Octavio.</p>
   </aside>
 </section>
 
@@ -859,7 +859,7 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~1 min 45 s">
-    <p><b>[Retomar]</b> Santino nos dejó con una alerta: el auto de Laura parece ir camino a la falla. Pero una alerta en un servidor no evita nada. Para tener una chance de evitarla, alguien tiene que hacer algo. Y eso es lo que construimos.</p>
+    <p><b>[Retomar]</b> Santino nos dejó con una alerta: el auto de nuestro conductor parece ir camino a la falla. Pero una alerta en un servidor no evita nada. Para tener una chance de evitarla, alguien tiene que hacer algo. Y eso es lo que construimos.</p>
     <p><b>[El principio]</b> El modelo decide, el agente comunica, y el código cuida lo que se dice. Usamos IA generativa para escribir los mensajes, porque escribe como una persona. Pero nunca le dejamos decidir nada: el LLM no produce un número, ni un puntaje, ni un diagnóstico.</p>
     <p><b>[El circuito]</b> Todos los días llega la telemetría. Cada 500 km, la red le pone un puntaje a cada auto. Si queda dos veces seguidas sobre el umbral que eligió Ford, hay alerta. Después buscamos el porqué: en qué hábitos este auto se aparta de los sanos de su país. La política la define Ford: con hábito, consejo al conductor; sin hábito, lo llama el concesionario; si dos revisiones después sigue alto, escalamos. Recién ahí entran los agentes, y un verificador escrito en código revisa cada texto.</p>
   </aside>
@@ -872,7 +872,7 @@ table.t td .mono{font-size:15px}
         <div class="clock">8:14</div><div class="date">sábado 23 de agosto</div>
         <div class="notif f fade" data-step="1">
           <div class="app"><i><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5h8M5 1v8" stroke="#fff" stroke-width="1.6"/></svg></i>Tu Ford<small>ahora</small></div>
-          <p id="laura-msg" data-full="Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo."></p>
+          <p id="driver-msg" data-full="Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo."></p>
         </div>
       </div></div>
     </div>
@@ -896,7 +896,7 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~1 min 10 s">
-    <p>Cada persona recibe lo suyo. Laura recibe esto en la app de su Ford: <b>"Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo."</b> Sin códigos de error, sin porcentajes, sin miedo. Algo que puede hacer el sábado.</p>
+    <p>Cada persona recibe lo suyo. El conductor recibe esto en la app de su Ford: <b>"Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo."</b> Sin códigos de error, sin porcentajes, sin miedo. Algo que puede hacer el sábado.</p>
     <p>El taller recibe las señales técnicas del filtro y qué revisar. Y la persona de posventa de Ford recibe, cada lunes, una bandeja con todo priorizado y redactado.</p>
     <p><b>[Por qué es confiable]</b> En toda la temporada, los agentes escribieron 517 textos. El verificador rechazó 106 intentos en el camino: frases causales, promesas, atribuciones. Los agentes corrigieron. En dos casos no lo lograron, y el sistema no forzó nada: usó una plantilla aprobada.</p>
   </aside>
@@ -1020,7 +1020,7 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~1 min 20 s">
-    <p>Volvamos a Laura. ¿Cuánto le costó a Ford su falla? La reparación tiene un precio, y Ford lo conoce mejor que nosotros. Pero hay un costo que no aparece en ninguna factura: lo que Laura dijo al retirar su camioneta del taller. <b>"Nadie me avisó."</b></p>
+    <p>Volvamos a nuestro conductor. ¿Cuánto le costó a Ford su falla? La reparación tiene un precio, y Ford lo conoce mejor que nosotros. Pero hay un costo que no aparece en ninguna factura: lo que dijo al retirar su camioneta del taller. <b>"Nadie me avisó."</b></p>
     <p>Un cliente que se enteró tarde se pregunta si su Ford lo cuida, y eso no aparece en ninguna factura. Cada falla sin aviso se paga en confianza.</p>
     <p>La buena noticia es que avisar cuesta muy poco: operar esto para un millón de autos cuesta alrededor de <b>10 centavos de dólar por auto y por año</b>. Entonces la pregunta no es cuánto cuesta avisar. Es otra: <b>¿cuántos avisos soporta la confianza de un cliente?</b></p>
     <p class="note">No citar el costo de una falla en dólares ni la penalidad de consumo. Implementación: ~USD 70–110 mil una vez (3 personas × 6 meses, incluye la sombra).</p>
@@ -1057,7 +1057,7 @@ table.t td .mono{font-size:15px}
       <div style="display:flex;flex-direction:column;gap:22px">
         <div class="f" data-step="2"><span class="lbl">El primer contacto, casi siempre, es un consejo y no un turno</span>
           <div style="display:flex;align-items:baseline;gap:14px;margin-top:6px"><span style="font:800 84px/.9 var(--display);font-stretch:115%;color:var(--white)"><span data-count="97">0</span>%</span><span class="note" style="max-width:220px">de las alertas al 5% llevan un hábito para nombrar <span class="dev">dev</span></span></div>
-          <p class="body" style="font-size:18px;margin-top:8px">Si el auto no iba a fallar, Laura recibió un consejo que igual le hace bien a su motor.</p></div>
+          <p class="body" style="font-size:18px;margin-top:8px">Si el auto no iba a fallar, el conductor recibió un consejo que igual le hace bien a su motor.</p></div>
         <div class="f" data-step="3" style="border-top:1px solid var(--line);padding-top:16px"><span class="lbl">Y el que decide cuánto pesa cada plato es Ford</span>
           <p class="body" style="font-size:18px;margin-top:8px">Al <b>5%</b>: 1 de cada 20 sanos recibe un consejo de más, y avisamos a <b>1 de cada 3</b> fallas. Al <b>20%</b>: <b>7 de cada 10</b> fallas <span class="dev">dev</span>, con cuatro veces más consejos de más.</p></div>
       </div>
@@ -1071,18 +1071,18 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~2 min 30 s + puente">
-    <p>Un aviso también puede gastar confianza. Si le avisamos a Laura y su auto no iba a fallar, eso es fricción. Y si mandáramos el mismo consejo a toda la flota, nadie lo leería, y el día que importa tampoco.</p>
+    <p>Un aviso también puede gastar confianza. Si le avisamos a un conductor y su auto no iba a fallar, eso es fricción. Y si mandáramos el mismo consejo a toda la flota, nadie lo leería, y el día que importa tampoco.</p>
     <p>En un plato está el aviso de menos: la falla sin aviso. En el otro, el aviso de más: un mensaje que no hacía falta. Diseñamos todo para que el aviso de más pese lo menos posible. Casi siempre, el primer contacto no es "lleve su auto al taller": es un consejo. Si no hay un hábito para nombrar, o el riesgo sigue, la llama el concesionario.</p>
     <p>Y el que decide cuánto pesa cada plato es Ford, con la perilla. No hay un número correcto: hay un punto que Ford elige según cuánto confía en sus clientes y cuánto le duele una falla.</p>
     <p><b>[Y encima, una chance de esquivar la avería]</b> Un filtro que se tapa termina en el modo de protección y en una visita al taller que nadie planificó. Cada aviso a tiempo es una chance de esquivarla. Cuántas esquiva, lo va a decir el piloto. Para Ford Pro, cada día que el vehículo no para vale todavía más.</p>
     <p><b>[Lo que vamos a medir]</b> No les pedimos que nos crean. En el piloto medimos esto, con un grupo que recibe avisos y otro que no.</p>
-    <p><b>[Puente a Santino]</b> Un producto barato, que cuida la confianza del cliente y encima le da una chance de esquivar la avería. ¿Qué le pedimos a Ford para empezar?</p>
+    <p><b>[Puente a Octavio]</b> Un producto barato, que cuida la confianza del cliente y encima le da una chance de esquivar la avería. ¿Qué le pedimos a Ford para empezar?</p>
   </aside>
 </section>
 
 <!-- ═════════════════ 07 · CIERRE ═════════════════ -->
 
-<section class="slide" data-block="07 · Cierre" data-who="Santino" data-bg=".5">
+<section class="slide" data-block="07 · Cierre" data-who="Octavio" data-bg=".5">
   <div class="wrap" style="display:grid;grid-template-rows:auto auto 1fr">
     <div>
       <p class="kicker blue f" data-step="0"><i></i>Por qué es distinto</p>
@@ -1118,38 +1118,12 @@ table.t td .mono{font-size:15px}
   </aside>
 </section>
 
-<section class="slide" data-block="07 · Cierre" data-who="Santino" data-bg="1" data-stripes-at="6">
-  <div class="wrap" style="display:grid;grid-template-columns:1fr 340px;gap:80px">
-    <div style="display:flex;flex-direction:column;justify-content:center;position:relative">
-      <div data-until="3">
-        <p class="kicker f" data-step="0"><i></i>Si se llevan tres cosas</p>
-        <div style="margin-top:34px;display:flex;flex-direction:column;gap:26px">
-          <p class="f" data-step="1" data-dim="3" style="margin:0;font-size:36px;line-height:1.15;font-weight:600;font-stretch:104%;color:var(--white)"><span class="mono" style="font-size:14px;color:var(--ford-soft);margin-right:14px">01</span>El filtro se tapa con el uso, eso deja huella, y hoy Ford se entera tarde.</p>
-          <p class="f" data-step="2" data-dim="3" style="margin:0;font-size:36px;line-height:1.15;font-weight:600;font-stretch:104%;color:var(--white)"><span class="mono" style="font-size:14px;color:var(--ford-soft);margin-right:14px">02</span>Avisamos a <em style="color:var(--ford-soft)">1 de cada 3</em> autos que van a fallar, más de tres meses antes, con 5% de falsas alarmas <span class="dev">dev</span></p>
-          <p class="f" data-step="3" style="margin:0;font-size:36px;line-height:1.15;font-weight:600;font-stretch:104%;color:var(--white)"><span class="mono" style="font-size:14px;color:var(--ford-soft);margin-right:14px">03</span>Cada aviso es un consejo que le llega al cliente antes del taller, por centavos por auto y por año.</p>
-        </div>
-      </div>
-      <div class="f" data-step="5" style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%)">
-        <p class="kicker blue"><i></i>Laura, tres meses antes</p>
-        <p class="lede" style="max-width:640px">El sábado va a visitar a su mamá por la ruta. El filtro respira. <b>Y si algún día se prende el testigo, ya no la toma por sorpresa.</b> Su Ford le avisó.</p>
-        <h1 class="display f" data-step="6" style="font-size:120px;margin-top:40px">Tu Ford<br>te avisa <em>antes.</em></h1>
-        <p class="f" data-step="6" data-d="2" style="margin-top:30px;font:500 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)">Gracias · Equipo SOG</p>
-      </div>
-    </div>
-    <div class="f right" data-step="4" data-until="5" style="align-self:center;view-transition-name:phone">
-      <div class="phone"><div class="screen">
-        <div class="clock">8:14</div><div class="date">sábado 23 de agosto</div>
-        <div class="notif">
-          <div class="app"><i><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5h8M5 1v8" stroke="#fff" stroke-width="1.6"/></svg></i>Tu Ford<small>ahora</small></div>
-          <p>Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo.</p>
-        </div>
-      </div></div>
-    </div>
+<section class="slide" data-block="07 · Cierre" data-who="Octavio" data-bg="1" data-stripes="hero">
+  <div class="wrap" style="display:flex;flex-direction:column;justify-content:center;padding-bottom:40px">
+    <h1 class="display f" data-step="0" style="font-size:150px">Tu Ford<br>te avisa <em>antes.</em></h1>
+    <p class="f" data-step="0" data-d="2" style="margin-top:40px;font:500 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)">Gracias · Equipo SOG</p>
   </div>
-  <aside class="notes" data-time="~1 min 10 s">
-    <p><b>[Las tres frases]</b> Si se llevan tres cosas, que sean estas. El filtro de partículas se tapa con el uso, eso deja huella en los datos, y hoy Ford se entera tarde. Con la telemetría que ya recibe, avisamos a uno de cada tres autos que van a fallar, más de tres meses antes, con 5% de falsas alarmas. Y cada aviso se convierte en un consejo que le llega al cliente antes del taller, por unos centavos por auto y por año.</p>
-    <p><b>[Laura, otra vez]</b> Volvamos a Laura. Mismo auto, misma ciudad, mismos viajes cortos al colegio. Pero esta vez, tres meses antes, le llega un mensaje a la app de su Ford: <i>"Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo."</i></p>
-    <p>El sábado, Laura va a visitar a su mamá por la ruta. El filtro respira. Y si algún día se prende el testigo, ya no la toma por sorpresa. Su Ford le avisó.</p>
+  <aside class="notes" data-time="~10 s">
     <p><b>Tu Ford te avisa antes.</b> Gracias.</p>
   </aside>
 </section>
@@ -1183,7 +1157,7 @@ function countUp(el){
 function onReveal(el){
   const counts = el.matches('[data-count]') ? [el] : [...el.querySelectorAll('[data-count]')];
   counts.forEach(countUp);
-  if (el.querySelector('#laura-msg')) typeMsg(el.querySelector('#laura-msg'));
+  if (el.querySelector('#driver-msg')) typeMsg(el.querySelector('#driver-msg'));
   if (el.querySelector('.sweep')) requestAnimationFrame(()=>el.querySelector('.sweep').style.width='88%');
   el.querySelectorAll('.vbar').forEach(b=>{ const h=b.style.height; b.style.height='0'; b.style.transition='height 1.1s var(--ease)'; requestAnimationFrame(()=>requestAnimationFrame(()=>b.style.height=h)); });
 }
