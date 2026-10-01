@@ -109,7 +109,7 @@ El filtro de partículas (DPF) de los diésel de Ford se tapa por cómo se usa e
 
 ### Guion · Gonzalo · 3 min
 
-**[Portada, \~15 s]** Buenas. Somos Gonzalo, Santino y Octavio, el equipo SOG. Les venimos a contar cómo un Ford diésel puede avisarle a su dueño que algo no anda bien, meses antes de que se prenda un testigo.
+**[Portada, \~15 s]** Buenas. Somos Gonzalo, Santino y Octavio, el equipo SOG. Les venimos a contar cómo un Ford diésel puede avisarle a su dueño que algo no anda bien, meses antes de que tenga que ir al taller.
 
 **[Laura, \~60 s]** Les presento a Laura. Vive en la ciudad y usa su camioneta para lo de todos los días: llevar a los chicos al colegio, ir al trabajo, hacer las compras. Viajes cortos, de pocos kilómetros, muchas veces con el motor en marcha y parada en el tráfico.
 
@@ -121,7 +121,7 @@ Laura no existe. Pero sus hábitos sí: son los que encontramos, en los datos de
 
 **[Qué es el DPF, \~40 s]** Lo que se tapó es el filtro de partículas, el DPF. Atrapa el hollín del escape, y para limpiarse lo tiene que quemar: eso se llama regenerar. Para regenerar hace falta temperatura, un tramo de ruta, un motor caliente.
 
-Con viajes cortos, la regeneración empieza y no termina. El hollín se acumula en silencio. El filtro no falla de golpe: falla por cómo se usa el auto. Y eso, como vamos a ver, deja huella.
+Con viajes cortos, la regeneración empieza y no termina. El hollín se acumula en silencio. El filtro no falla de golpe: se tapa de a poco, según cómo se usa el auto. Y eso, como vamos a ver, deja huella.
 
 **[Por qué duele, \~35 s]** Hoy Ford se entera cuando el testigo ya se prendió. Para el cliente es un testigo que nadie le explicó, el auto en el taller y un día perdido. Para Ford, un cliente que siente que nadie le avisó, además del costo de garantía. Y si es un vehículo de trabajo, cada día en el taller es trabajo que no se hace.
 
@@ -363,17 +363,17 @@ Pero nos llevamos un golpe de humildad. Hicimos la prueba más simple: sin mirar
 
 **[La idea que hizo la diferencia, \~1 min]** Miren a Laura. Tres meses antes de la falla, su auto ya tiene la huella: más tiempo parado con el motor en marcha, motor frío. Pero como la falla todavía queda lejos, al modelo le enseñábamos que en ese momento el auto de Laura estaba perfectamente sano. Y lo castigábamos cada vez que sospechaba.
 
-Entonces cambiamos una sola cosa. Esos momentos lejanos de un auto que termina fallando ya no valen 0, "sano", sino 0,15: "un poco sospechoso". Misma red, mismos datos, mismos ajustes. Es una idea que viene del mantenimiento predictivo de motores de avión, llevada a nuestro problema.
+Entonces cambiamos una sola cosa. Esos momentos lejanos de un auto que termina fallando ya no valen 0, "sano", sino 0,15: "un poco sospechoso". Misma red, mismos datos, mismos ajustes. Es una idea inspirada en el mantenimiento predictivo de motores de avión, adaptada a nuestro problema.
 
 Y como ya habíamos visto demasiados números bonitos, escribimos la regla antes de medir: folds nuevos, semillas nuevas, una sola confirmación.
 
 **[El resultado, \~1 min]** Con 5% de falsas alarmas, el modelo avisa a **1 de cada 3 autos que van a fallar: 35% [dev]**. El azar da 10%. Saber solo el país y el motor da 15%. Si Ford acepta 20% de falsas alarmas, llegamos al **70% [dev]**.
 
-Le gana a nuestro modelo anterior por casi 10 puntos [dev], con evidencia estadística. Y es **el primer modelo que le gana con evidencia a "saber país y motor"**. Es decir: lee algo más que la lista, lee cómo se usa el auto. Y cuando fijamos el umbral con otros autos, las falsas alarmas reales quedan en el 5% prometido.
+Le gana a nuestro modelo anterior por casi 10 puntos [dev], con evidencia estadística. Y es **el primer modelo que le gana con evidencia a "saber país y motor"**. Es decir: lee algo más que la lista, lee cómo se usa el auto. Y cuando fijamos el umbral con otros autos, las falsas alarmas en esos autos quedan en el 5% prometido.
 
 **[Cuánto antes, \~20 s]** La primera alerta llega con una mediana de **más de tres meses de margen [dev]**. Y el puntaje sube a medida que se acerca la falla: el modelo no solo sabe qué auto, también nota que el momento se acerca.
 
-**[En qué se apoya, \~30 s]** Si le escondemos al modelo el estado del filtro, pierde 38 puntos de detección. Si le escondemos los hábitos de manejo, 23; el que más pesa es la duración de los viajes. Es la misma física que les contó Gonzalo: viajes cortos que no dejan terminar la limpieza del filtro. Nadie le explicó al modelo la física del filtro. La encontró solo.
+**[En qué se apoya, \~30 s]** Si le escondemos al modelo el estado del filtro, pierde 38 puntos de detección. Si le escondemos los hábitos de manejo, 23; el que más pesa es la duración de los viajes. Es la misma física que les contó Gonzalo: viajes cortos que no dejan terminar la limpieza del filtro. No le dimos ninguna regla del filtro: esa relación la aprendió de los datos.
 
 **[Puente a Octavio, \~10 s]** Ahora sabemos que el auto de Laura va camino a la falla, con tres meses de margen. Pero una alerta en un servidor no le sirve a Laura. ¿Qué le decimos, y cómo, sin asustarla? Eso se los cuenta Octavio.
 
@@ -527,7 +527,7 @@ El taller recibe las señales técnicas del filtro y qué revisar. Y la persona 
 
 **[Demo en vivo, \~2 min 30 s]** Les muestro. *(Abrir la demo en la bandeja.)*
 
-Esta es la bandeja del lunes 25 de agosto de 2025. Estamos reproduciendo la flota real, semana a semana, y el sistema solo sabe lo que se sabía ese día. Esta semana hay cuatro avisos. *(Abrir una tarjeta.)* Acá está el mensaje al conductor, el resumen para el taller y los hechos en los que se apoya el texto. Este tilde verde es el verificador: el texto pasó todas las reglas.
+Esta es la bandeja del lunes 25 de agosto de 2025. Estamos reproduciendo, semana a semana, los autos reales del estudio, y el sistema solo sabe lo que se sabía ese día. Esta semana hay cuatro avisos. *(Abrir una tarjeta.)* Acá está el mensaje al conductor, el resumen para el taller y los hechos en los que se apoya el texto. Este tilde verde es el verificador: el texto pasó todas las reglas.
 
 *(Ver ficha.)* Esta es la ficha del auto. El puntaje fue subiendo, cruzó el umbral y se confirmó la alerta. Y acá está el porqué: en estos hábitos, el auto se aparta de los sanos de su país.
 
@@ -662,7 +662,7 @@ El piloto en sombra es el paso clave: es la primera vez que se mide la prevalenc
 
 El modelo es chico: una red que corre en una computadora común, sin placas de video, en milisegundos por auto. Puntuar un millón de autos es un proceso nocturno de una o dos horas. Y los agentes no leen la flota entera: solo trabajan sobre las alertas. El costo de la inteligencia artificial crece con los avisos, no con los autos.
 
-Y algo que parece un detalle, pero no lo es: el código que calcula los datos del auto en producción es exactamente el mismo con el que medimos todo lo que les mostramos. Así, los números del piloto se pueden comparar con los de hoy.
+Y algo que parece un detalle, pero no lo es: el código que calcula los datos del auto en producción va a ser exactamente el mismo con el que medimos todo lo que les mostramos. Así, los números del piloto se pueden comparar con los de hoy.
 
 **[El paso clave: la sombra, \~1 min]** ¿Cómo llega a la calle? En cuatro pasos. Primero, congelamos el modelo y lo medimos una sola vez en el test. Después, el paso que más nos importa: un **piloto en sombra**. Durante tres a seis meses, el sistema puntúa todos los autos reales de un país, Colombia o Chile, pero no le avisa a nadie. Solo mira.
 
@@ -821,7 +821,7 @@ Entonces la pregunta no es cuánto cuesta avisar. Es otra: **¿cuántos avisos s
 
 En un plato de la balanza está el aviso de menos: la falla sin aviso, el "nadie me avisó". En el otro, el aviso de más: un mensaje que no hacía falta.
 
-Diseñamos todo para que el aviso de más pese lo menos posible. El primer contacto nunca es "lleve su auto al taller". Es un consejo: *"un tramo de ruta de 20 minutos por semana"*. Si el auto no iba a fallar, Laura recibió un consejo que igual le hace bien a su motor. Solo si el riesgo sigue, la llama el concesionario. En la temporada que vieron en la demo, casi todas las alertas fueron consejos, no turnos.
+Diseñamos todo para que el aviso de más pese lo menos posible. Casi siempre, el primer contacto no es "lleve su auto al taller". Es un consejo: *"un tramo de ruta de 20 minutos por semana"*. Si el auto no iba a fallar, Laura recibió un consejo que igual le hace bien a su motor. Si no hay un hábito para nombrar, o el riesgo sigue, la llama el concesionario. En la temporada que vieron en la demo, casi todas las alertas fueron consejos, no turnos.
 
 Y el que decide cuánto pesa cada plato es Ford, con la perilla. Al 5%, uno de cada veinte autos sanos recibe un consejo de más, y avisamos a un tercio de las fallas. Al 20%, avisamos a siete de cada diez [dev], con cuatro veces más consejos de más. No hay un número correcto: hay un punto que Ford elige según cuánto confía en sus clientes y cuánto le duele una falla.
 
@@ -926,7 +926,7 @@ El pedido a Ford es concreto: un piloto en sombra de 3 meses en un mercado, con 
 
 **Slide 35 · Conclusiones.** Las tres frases:
 
-1. El DPF falla por cómo se usa el auto, y hoy Ford se entera tarde.
+1. El DPF se tapa con el uso, eso deja huella, y hoy Ford se entera tarde.
 2. Con la telemetría que ya recibe, detectamos 1 de cada 3 autos que van a fallar, más de tres meses antes, con 5% de falsas alarmas.
 3. Cada alerta se convierte en un consejo al conductor antes de que pierda eficiencia, o en un turno si el riesgo sigue, por \~USD 0,10 por auto y por año.
 
@@ -953,7 +953,7 @@ Primero, **anticipa de verdad.** El modelo nunca ve los últimos 500 km antes de
 
 Segundo, **no exageramos.** Cada número que les mostramos está al lado del azar y de lo que se sabe sin modelo, con solo el país y el motor. Les contamos qué datos descartamos, qué modelos fallaron y dónde no conviene usarlo. Es lo que hace creer un número cuando llega el piloto.
 
-Tercero, **habla como una persona y no inventa.** La inteligencia artificial escribe cada mensaje para ese auto y ese conductor, y el código controla que no diga nada que no sea cierto.
+Tercero, **habla como una persona, sin inventar.** La inteligencia artificial escribe cada mensaje para ese auto y ese conductor, y el código controla que no diga nada que no sea cierto.
 
 Y cuarto, **no hay que tocar ni un auto.** Todo sale de la telemetría que Ford ya recibe, y el que decide cuántos avisos manda es Ford.
 
@@ -963,11 +963,11 @@ Y si quieren que esto mejore más rápido, hay cuatro cosas que solo Ford tiene:
 
 **[Las tres frases, \~30 s]** Si se llevan tres cosas, que sean estas.
 
-El filtro de partículas falla por cómo se usa el auto, y hoy Ford se entera tarde.
+El filtro de partículas se tapa con el uso, eso deja huella en los datos, y hoy Ford se entera tarde.
 
 Con la telemetría que ya recibe, avisamos a uno de cada tres autos que van a fallar, más de tres meses antes, con 5% de falsas alarmas [dev].
 
-Y cada aviso se convierte en un consejo que cuida al cliente antes de que termine en el taller, por unos centavos por auto y por año.
+Y cada aviso se convierte en un consejo que le llega al cliente antes del taller, por unos centavos por auto y por año.
 
 **[Laura, otra vez, \~40 s]** Volvamos a Laura. Mismo auto, misma ciudad, mismos viajes cortos al colegio. Pero esta vez, tres meses antes, le llega un mensaje a la app de su Ford: *"Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo."*
 
