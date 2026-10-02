@@ -127,8 +127,8 @@ iframe[data-testid="stIFrame"]{background:transparent;color-scheme:dark}
    replay's progress and the ringed column is the week on screen. ---------------------------------------------- */
 .st-key-weekbar{margin-bottom:12px}
 .tl{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px 14px;color:var(--text);font-family:Manrope,Arial,sans-serif}
-.tl-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin-bottom:12px}
-.tl-when{display:flex;flex-direction:column;gap:6px;min-width:0}
+.tl-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px 20px;margin-bottom:12px}
+.tl-when{display:flex;flex:1;flex-direction:column;gap:6px;min-width:0;overflow-wrap:anywhere}
 .tl-eyebrow{font-size:var(--fs-label);font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9cbbdf}
 .tl-titlerow{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
 .tl-title{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.25}
@@ -138,7 +138,7 @@ iframe[data-testid="stIFrame"]{background:transparent;color-scheme:dark}
 .tl-chip-new{background:#33260f;color:var(--amber);border-color:#6b4d1f}
 .tl-chip-esc{background:#361616;color:var(--red);border-color:#6e2c2c}
 .tl-chip-new:before,.tl-chip-esc:before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
-.tl-ctrl{display:flex;gap:8px;align-items:center}
+.tl-ctrl{display:flex;flex-shrink:0;gap:8px;align-items:center}
 .tl-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;min-width:40px;margin:0;padding:0 10px;background:var(--control);border:1px solid var(--control-line);border-radius:var(--radius-sm);color:var(--text);font:600 var(--fs-meta)/1 Manrope,Arial,sans-serif;cursor:pointer;transition:background .18s,border-color .18s,transform .18s}
 .tl-btn svg{width:20px;height:20px;fill:currentColor;flex:none}
 .tl-skip{padding:0 16px 0 12px}

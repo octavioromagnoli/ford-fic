@@ -171,8 +171,15 @@ function select(root, i) {
 
 function go(root, i) {
   if (i < 0 || i >= root._weeks.length || i === root._i) return;
-  select(root, i);            // answer at once; the rerun confirms it
-  root._send('week', root._weeks[i].iso);
+  select(root, i);
+  // Keep clicks responsive while Python reruns. Only one trigger is in flight;
+  // subsequent clicks update the destination instead of racing server responses.
+  if (root._pending === undefined) sendSelection(root);
+}
+
+function sendSelection(root) {
+  root._pending = root._weeks[root._i].iso;
+  root._send('week', root._pending);
 }
 
 export default function ({ parentElement, data, setTriggerValue }) {
@@ -186,6 +193,14 @@ export default function ({ parentElement, data, setTriggerValue }) {
     parentElement.appendChild(root);
   }
   root._send = setTriggerValue;
+  if (root._pending !== undefined) {
+    if (data.current !== root._pending) return;
+    root._pending = undefined;
+    if (data.current !== root._weeks[root._i].iso) {
+      sendSelection(root);
+    }
+    return;
+  }
   const i = data.weeks.findIndex(w => w.iso === data.current);
   if (i >= 0 && i !== root._i) select(root, i);
 }
