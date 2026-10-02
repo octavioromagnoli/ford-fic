@@ -125,11 +125,11 @@ def week_label(week: pd.Timestamp) -> str:
     return f"{week.day} de {long_date(week).split(' de ')[1]} al {long_date(end)}"
 
 
-def week_label_short(week: pd.Timestamp) -> str:
+def week_label_short(week: pd.Timestamp, *, include_year: bool = True) -> str:
     """`29 sep – 5 oct 2025`: la semana en el ancho de un celular."""
     start, end = pd.Timestamp(week), pd.Timestamp(week) + pd.Timedelta(days=6)
-    first = f"{start.day} {MONTHS[start.month - 1][:3]}" + (f" {start.year}" if start.year != end.year else "")
-    return f"{first} – {end.day} {MONTHS[end.month - 1][:3]} {end.year}"
+    first = f"{start.day} {MONTHS[start.month - 1][:3]}" + (f" {start.year}" if include_year and start.year != end.year else "")
+    return f"{first} – {end.day} {MONTHS[end.month - 1][:3]}" + (f" {end.year}" if include_year else "")
 
 
 def timeline_data(current: pd.Timestamp) -> dict:

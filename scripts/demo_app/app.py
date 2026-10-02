@@ -112,7 +112,10 @@ with st.container(key="compact_dock"):
         with st.container(horizontal=True, vertical_alignment="center", gap="small", key="dock_week"):
             st.button("Semana anterior", key="dock_prev", icon=":material/chevron_left:", on_click=_move, args=(-1,),
                       disabled=week == week_list[0])
-            st.markdown(f'<div class="dock-week"><span>Semana</span><strong>{week_label_short(week)}</strong></div>',
+            end_year = (week + pd.Timedelta(days=6)).year
+            years = str(week.year) if week.year == end_year else f"{week.year}–{end_year}"
+            st.markdown(f'<div class="dock-week"><span>Semana · {years}</span>'
+                        f'<strong>{week_label_short(week, include_year=False)}</strong></div>',
                         unsafe_allow_html=True)
             st.button("Semana siguiente", key="dock_next", icon=":material/chevron_right:", on_click=_move, args=(1,),
                       disabled=week == week_list[-1])
