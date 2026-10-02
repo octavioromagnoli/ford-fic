@@ -85,7 +85,7 @@ indica la cohorte, $s_{i,c} = \ind\{i \text{ tiene evento}\}$, sin ninguna infor
   \text{PR-AUC}_{\text{cohorte}} = 0{,}177, \qquad \text{lift} = \frac{0{,}177}{0{,}058} = 3{,}03,
   \label{eq:techo}
 \end{equation}
-($0{,}263$ y $2{,}10$ con la primera entrega). La meta inicial de lift, de $1{,}6$ a $2$, se alcanzaba entonces sin anticipar
+($0{,}263$ y $2{,}10$ con la primera versión de los datos). La meta inicial de lift, de $1{,}6$ a $2$, se alcanzaba entonces sin anticipar
 nada: el PR-AUC por fila~\cite{saito2015} de este panel premia reconocer \emph{qué vehículo} va a fallar aunque no se sepa
 \emph{cuándo}, y por eso no se usó para elegir. La métrica que se usó, a continuación, exige anticipar: solo cuenta una
 alerta que llega antes del evento, con un presupuesto fijo de falsas alarmas. Por la misma razón no se reporta exactitud:
@@ -116,10 +116,10 @@ criterio primario es la detección media en cuatro presupuestos,
 que pondera el rango de operación plausible para una flota.
 
 \textbf{Nulo con el historial conservado.} $m_i$ es el máximo sobre los cortes del vehículo, de modo que un historial más
-largo tiene más oportunidades de superar $\tau$. Con la primera entrega, los vehículos con evento tenían en promedio
+largo tiene más oportunidades de superar $\tau$. Con la primera versión de los datos, los vehículos con evento tenían en promedio
 $18{,}25$ cortes y los sanos $9{,}00$, y el largo del historial como único puntaje daba lift $1{,}79$. Por eso $D(\alpha)$ se
 compara con su distribución bajo la hipótesis nula, que se obtiene permutando los puntajes entre todas las filas y conservando
-la cantidad de cortes de cada vehículo (1.000 permutaciones). Con las bolsas asimétricas de la primera entrega, ese nulo
+la cantidad de cortes de cada vehículo (1.000 permutaciones). Con las bolsas asimétricas de la primera versión, ese nulo
 ``detectaba'' $10\,\%$ al $5\,\%$ de falsas alarmas.
 
 \textbf{Comparaciones.} La diferencia entre dos modelos A y B se estima con un bootstrap pareado por

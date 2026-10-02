@@ -8,7 +8,7 @@
 
 Se recibieron las tres tablas del anexo de datos~\cite{ford} (estática del vehículo, resúmenes de viaje
 \emph{TripSummary} y señales \emph{DynamicInformation}), cada una dividida en dos cohortes (vehículos con y sin evento) y en
-dos entregas. La segunda entrega trajo una tabla estática nueva, con ciudad de venta y país, y nuevos viajes y señales de los
+dos versiones. La segunda versión de los datos trajo una tabla estática nueva, con ciudad de venta y país, y nuevos viajes y señales de los
 vehículos con evento; los de los sanos son idénticos byte a byte a los de la primera. En total son $\sim 2{,}5\times10^6$
 viajes y $\sim 10^7$ señales.
 
@@ -46,7 +46,7 @@ Tasa de eventos por país dependiente de la extracción & De $0\,\%$ (PER) a $48
   vehículos con evento sin fecha excluidos por mercado & Toda comparación entre cohortes, dentro del mercado \\
 13 vehículos con dos códigos & Mismos viajes bajo dos identificadores (Jaccard $1{,}0$ sobre fecha y odómetro) & Se
   unifican antes de particionar \\
-Formato de la segunda entrega & Columna del evento renombrada; fecha de producción con otro origen ($+538$\,d); una fila
+Formato de la segunda versión & Columna del evento renombrada; fecha de producción con otro origen ($+538$\,d); una fila
   por evento; filas repetidas; extracción de la cohorte con evento diez días más larga (16.911 viajes) & Corrección al leer
   y corte en el fin de extracción común (14-09-2026) \\
 Cambio de uso posterior al evento & Viajes bajo régimen: bajan en el $72\,\%$ de los vehículos; velocidad: sube en el
@@ -65,7 +65,7 @@ Columnas con otra semántica & Combustible $>100$ en el $10{,}5\,\%$ de los viaj
   $\ge 95$ \\
 Fechas en dos formatos & Sin declararlo, el parser anulaba 4.464 inicios de viaje y 18.124 señales & Formato ISO 8601
   explícito \\
-Odómetro de señales nulo & $11\,\%$ en la primera entrega (9 vehículos); $0{,}5\,\%$ en la segunda & La ventana se ubica
+Odómetro de señales nulo & $11\,\%$ en la primera versión de los datos (9 vehículos); $0{,}5\,\%$ en la segunda & La ventana se ubica
   con el odómetro de los viajes \\
 Tramos sin viajes & Huecos de 50\,km en la secuencia & Canal de cobertura y arrastre del último valor \\
 \bottomrule
@@ -73,7 +73,7 @@ Tramos sin viajes & Huecos de 50\,km en la secuencia & Canal de cobertura y arra
 \end{table}
 
 La imputación (mediana) y el escalado se ajustan en el entrenamiento de cada pliegue. Queda una pregunta que solo Ford puede
-responder: entre las dos entregas salieron 278 vehículos con evento y fecha por defecto, concentrados por mercado; no se
+responder: entre las dos versiones de los datos salieron 278 vehículos con evento y fecha por defecto, concentrados por mercado; no se
 sabe si son eventos sin fecha o un error de extracción, y eso explica en parte la variación de la tasa entre países.
 
 \subsection{Universo de estudio y partición}
@@ -94,7 +94,7 @@ sabe si son eventos sin fecha o un error de extracción, y eso explica en parte 
 \draw[arr] (all) -- (uni); \draw[arr] (uni.east) -- (dev.west); \draw[arr] (uni.east) -- (test.west);
 \draw[arr,dashed] (all) -- (out.north -| all);
 \end{tikzpicture}
-\caption{Del conjunto recibido al conjunto de prueba. La partición se sorteó al recibir la segunda entrega (semilla 42,
+\caption{Del conjunto recibido al conjunto de prueba. La partición se sorteó al recibir la segunda versión de los datos (semilla 42,
 estratificada por evento, mercado y motor), antes de examinar ninguna de sus variables contra la etiqueta. Se recibió además
 un vehículo de Paraguay, mercado sin vehículos sanos, que no entra en el estudio.}
 \label{fig:embudo}
@@ -103,11 +103,11 @@ un vehículo de Paraguay, mercado sin vehículos sanos, que no entra en el estud
 Se conserva el período de producción en que se muestrearon ambas cohortes: un vehículo sano producido en octubre de 2025 no
 es un negativo verificable si de esa época no se registró ningún evento. Se evaluó también la alternativa de incluir los 433
 vehículos excluidos: con ellos, los modelos ordenaban \emph{peor} a los vehículos comparables, porque aprendían la fecha de
-producción. Con la segunda entrega la partición se volvió a sortear sobre el universo nuevo.
+producción. Con la segunda versión de los datos la partición se volvió a sortear sobre el universo nuevo.
 
-La segunda entrega modificó varias conclusiones: la velocidad dejó de separar dentro del mercado; apareció una trayectoria
+Esa versión modificó varias conclusiones: la velocidad dejó de separar dentro del mercado; apareció una trayectoria
 hacia el evento que antes no se observaba; la ventana de calendario del registro de eventos resultó ser propia de la
-extracción anterior; y el motor ENG\_3, sin eventos en la primera entrega, pasó a tener 47 (46 en Brasil).
+extracción anterior; y el motor ENG\_3, sin eventos en la primera versión, pasó a tener 47 (46 en Brasil).
 
 \subsection{Ingeniería de variables}
 \label{sec:features}
