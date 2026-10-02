@@ -34,18 +34,16 @@ test:
   subset: test
   budgets_table: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
   null_model: gru_f10            # el nulo que se dibuja es el del finalista (conserva el largo de su historial)
-  models:                        # orden de la tabla y etiqueta; `role` decide el color
+  models:                        # orden de la tabla y etiqueta; `role` decide el color; `short`, el nombre en la nota de grises
     gru_f10: {label: "GRU ×3 (finalista)", role: focus}
-    cnn_lstm_x3: {label: "CNN-LSTM ×3", role: muted}
     survival_stacking: {label: "Survival stacking", role: third, label_dy: 4}
-    lightgbm: {label: "LightGBM (53 features)", role: muted}
-    logistica_l2: {label: "Logística L2 (53 features)", role: muted}
-    ss_efecto_aleatorio: {label: "SS + efecto aleatorio (GPBoost)", role: muted}
+    lightgbm: {label: "LightGBM (53 features)", short: "LightGBM", role: muted}
+    logistica_l2: {label: "Logística L2 (53 features)", short: "logística", role: muted}
+    ss_efecto_aleatorio: {label: "SS + efecto aleatorio (GPBoost)", short: "GPBoost", role: muted}
   # AUC por auto: no está en report.json; tabla de f11-test-resultado.md §3.
   auc_from_memo:
     source: docs/memoria/f11-test-resultado.md §3
     gru_f10: 0.794
-    cnn_lstm_x3: 0.790
     survival_stacking: 0.710
     lightgbm: 0.725
     logistica_l2: 0.679
@@ -54,7 +52,6 @@ test:
   dev_from_memo:
     source: docs/memoria/f11-test-resultado.md §3
     gru_f10: "27 · 42 · 61"
-    cnn_lstm_x3: "22 · 41 · 62"
     survival_stacking: "14 · 24 · 42"
     lightgbm: "18 · 28 · 42"
     logistica_l2: "15 · 23 · 37"

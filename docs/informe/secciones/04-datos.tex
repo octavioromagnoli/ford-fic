@@ -36,7 +36,7 @@ configuración y tiene un test automático.
 Problema & Evidencia & Tratamiento \\
 \midrule
 \multicolumn{3}{@{}l}{\textit{Muestreo y etiqueta}} \\
-Cohortes muestreadas en períodos de producción distintos & Antes del 20-01-2025 solo hay vehículos con evento (93) y
+Cohortes muestreadas en períodos de producción distintos & Antes del 20-01-2025 solo hay vehículos con evento (92) y
   después de julio de 2025 solo sanos (341, con $\sim 50$ eventos esperados). Con ellos, la fecha de producción sola
   separa las cohortes con AUC $0{,}87$ dentro del mercado & Universo restringido al período común
   (\S\ref{sec:universo}) \\
@@ -85,25 +85,25 @@ sabe si son eventos sin fecha o un error de extracción, y eso explica en parte 
   b/.style={draw,align=center,minimum height=9mm,inner sep=3pt},
   xb/.style={draw,dashed,align=left,inner sep=3pt,text width=6.2cm,font=\footnotesize},
   arr/.style={-{Stealth[length=2mm]},thick}]
-\node[b,text width=2.6cm] (all) {991 vehículos\\con etiqueta};
+\node[b,text width=2.6cm] (all) {990 vehículos\\cinco mercados};
 \node[b,text width=3.6cm,right=7mm of all] (uni) {557 vehículos · 177 eventos\\producidos 20-01 a 31-07-2025};
 \node[b,text width=2.4cm,right=7mm of uni,yshift=6mm] (dev) {446 desarrollo\\141 eventos};
 \node[b,text width=2.4cm,right=7mm of uni,yshift=-6mm,very thick] (test) {111 prueba\\36 eventos};
-\node[xb,below=5mm of all.south west,anchor=north west] (out) {434 excluidos: 92 con evento anteriores al 20-01-2025
-  (sin sanos contemporáneos), 341 sanos posteriores al 31-07-2025 (0 eventos frente a $\sim 50$ esperados) y 1 de PRY.};
+\node[xb,below=5mm of all.south west,anchor=north west] (out) {433 excluidos: 92 con evento anteriores al 20-01-2025
+  (sin sanos contemporáneos) y 341 sanos posteriores al 31-07-2025 (0 eventos frente a $\sim 50$ esperados).};
 \draw[arr] (all) -- (uni); \draw[arr] (uni.east) -- (dev.west); \draw[arr] (uni.east) -- (test.west);
 \draw[arr,dashed] (all) -- (out.north -| all);
 \end{tikzpicture}
-\caption{Del conjunto recibido al conjunto de prueba. La partición se sorteó una sola vez (semilla 42, estratificada por
-evento, mercado y motor) antes de examinar ninguna variable contra la etiqueta.}
+\caption{Del conjunto recibido al conjunto de prueba. La partición se sorteó al recibir la segunda entrega (semilla 42,
+estratificada por evento, mercado y motor), antes de examinar ninguna de sus variables contra la etiqueta. Se recibió además
+un vehículo de Paraguay, mercado sin vehículos sanos, que no entra en el estudio.}
 \label{fig:embudo}
 \end{figure}
 
 Se conserva el período de producción en que se muestrearon ambas cohortes: un vehículo sano producido en octubre de 2025 no
-es un negativo verificable si de esa época no se registró ningún evento. Se evaluó también la alternativa de incluir los 434
+es un negativo verificable si de esa época no se registró ningún evento. Se evaluó también la alternativa de incluir los 433
 vehículos excluidos: con ellos, los modelos ordenaban \emph{peor} a los vehículos comparables, porque aprendían la fecha de
-producción. Con la segunda entrega la partición se volvió a sortear; 36 de los 111 vehículos de prueba habían estado en el
-conjunto de desarrollo de la primera, y los resultados de prueba se reportan también sin ellos (\S\ref{sec:test}).
+producción. Con la segunda entrega la partición se volvió a sortear sobre el universo nuevo.
 
 La segunda entrega modificó varias conclusiones: la velocidad dejó de separar dentro del mercado; apareció una trayectoria
 hacia el evento que antes no se observaba; la ventana de calendario del registro de eventos resultó ser propia de la

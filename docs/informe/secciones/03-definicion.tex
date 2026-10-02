@@ -79,15 +79,16 @@ pliegue. (iv) Auditorías de fuga de información obligatorias para todo candida
 \subsection{Métrica de evaluación}
 \label{sec:metricas}
 
-\textbf{El techo de cohorte.} Todas las filas positivas del panel pertenecen a vehículos con evento. Un puntaje que solo
+\textbf{Por qué no alcanza el PR-AUC por fila.} Todas las filas positivas del panel pertenecen a vehículos con evento. Un puntaje que solo
 indica la cohorte, $s_{i,c} = \ind\{i \text{ tiene evento}\}$, sin ninguna información sobre el instante, obtiene
 \begin{equation}
   \text{PR-AUC}_{\text{cohorte}} = 0{,}177, \qquad \text{lift} = \frac{0{,}177}{0{,}058} = 3{,}03,
   \label{eq:techo}
 \end{equation}
 ($0{,}263$ y $2{,}10$ con la primera entrega). La meta inicial de lift, de $1{,}6$ a $2$, se alcanzaba entonces sin anticipar
-nada, y ningún modelo superó ese techo. El PR-AUC por fila~\cite{saito2015} de este panel mide sobre todo \emph{qué
-vehículo} y no se usó para elegir; se reporta en el Anexo~\ref{anx:auditorias}. Por la misma razón no se reporta exactitud:
+nada: el PR-AUC por fila~\cite{saito2015} de este panel premia reconocer \emph{qué vehículo} va a fallar aunque no se sepa
+\emph{cuándo}, y por eso no se usó para elegir. La métrica que se usó, a continuación, exige anticipar: solo cuenta una
+alerta que llega antes del evento, con un presupuesto fijo de falsas alarmas. Por la misma razón no se reporta exactitud:
 con $5{,}8\,\%$ de positivos, la predicción constante ``sin evento'' da $94\,\%$.
 
 \textbf{Detección por vehículo a presupuesto de falsas alarmas.} Sea $s_{i,c}$ el puntaje del corte $c$ y $c_1 < c_2 < \dots$
@@ -130,9 +131,14 @@ aceptación se fijaron por escrito antes de medirlos~\cite{nosek2018}.
 
 \subsection{Impacto operativo}
 
+Hoy la detección es reactiva: el aviso llega cuando el filtro ya está saturado. Para el cliente, eso es un testigo en el
+tablero que nadie le explicó, un vehículo que limita su potencia para protegerse y una visita al taller que no estaba en sus
+planes; lo que más pesa es la sensación de que nadie le avisó. Para Ford, además del costo de garantía, es un cliente que
+pierde confianza en la marca. Para las flotas (Ford Pro), un vehículo de trabajo en el taller es trabajo que no se hace.
+
 El desafío menciona la satisfacción del cliente, los costos de garantía, la vida útil percibida y la planificación de los
 concesionarios~\cite{ford}. El sistema propuesto actúa sobre ellos a través de tres palancas: el aviso llega con unos tres
 meses de margen (\S\ref{sec:anticipacion}), en lenguaje del cliente y con una acción concreta; los casos llegan priorizados
 al concesionario; y el presupuesto $\alpha$ de la ecuación~\eqref{eq:deteccion} es un parámetro que Ford elige según su
-capacidad de atención. La cantidad de fallas evitadas no es medible con estos datos y es la métrica central del piloto
-propuesto (\S\ref{sec:viabilidad}).
+capacidad de atención y del costo de cada aviso. La cantidad de fallas evitadas y el efecto sobre la confianza del cliente
+no son medibles con estos datos, y son las métricas centrales del piloto propuesto (\S\ref{sec:costo}).

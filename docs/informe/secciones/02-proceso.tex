@@ -1,6 +1,6 @@
 % ============================================================================ 2 · Contexto del proceso
 % fuente: docs/memoria/f9-entrega-v2.md (fecha v2 vs v1, mediana 14 d), f9-eda-v2.md (aceite, ralentí 1,5–1,8×, 72 %),
-% docs/pitch/presentacion-contenido.md bloque 4 (circuito).
+% docs/pitch/presentacion-contenido.md bloque 4 (circuito; la figura está en 06-producto.tex).
 \section{Contexto del proceso}
 \label{sec:proceso}
 
@@ -20,30 +20,7 @@ detección reactiva que Ford ya tiene. Por eso: (i) la referencia del evento es 
 modelo nunca observa los 500\,km previos a esa referencia (\S\ref{sec:panel}); y (iii) ningún dato posterior al evento entra
 en ninguna ventana.
 
-\textbf{Dónde entra la predicción.} En la posventa, la alerta alimenta un circuito que termina en una acción
-(Figura~\ref{fig:circuito}). Si en la ventana del vehículo hay un hábito modificable que lo distingue de los sanos de su
-mercado, se envía un consejo al conductor; si no lo hay, se agenda un contacto del concesionario; si el riesgo se mantiene
-alto dos revisiones después, el caso escala. La decisión es determinista y la define Ford; la redacción la hacen agentes de
-lenguaje cuyo texto valida un verificador programado (\S\ref{sec:viabilidad}).
-
-\begin{figure}[!htbp]
-\centering
-\begin{tikzpicture}[
-  node distance=4mm and 3.2mm,
-  box/.style={draw,rounded corners=1.5pt,align=center,font=\footnotesize,minimum height=11mm,text width=21mm,inner sep=2pt},
-  arr/.style={-{Stealth[length=2mm]},thick}]
-\node[box] (t) {Telemetría\\viajes y señales};
-\node[box,right=of t] (s) {Puntaje GRU\\cada 500 km};
-\node[box,right=of s] (a) {Alerta\\2 cortes sobre $\tau_\alpha$};
-\node[box,right=of a] (w) {Explicación\\hábitos vs.\ sanos};
-\node[box,right=of w,dashed] (p) {Política\\determinista};
-\node[box,below=6mm of p] (g) {Agentes LLM\\+ verificador};
-\node[box,left=of g,text width=33mm] (u) {Conductor · concesionario\\· posventa};
-\node[box,left=of u,text width=30mm] (r) {Retorno del taller\\monitoreo y reentrenamiento};
-\draw[arr] (t) -- (s); \draw[arr] (s) -- (a); \draw[arr] (a) -- (w); \draw[arr] (w) -- (p);
-\draw[arr] (p) -- (g); \draw[arr] (g) -- (u); \draw[arr] (u) -- (r); \draw[arr] (r) -| (t);
-\end{tikzpicture}
-\caption{Circuito de posventa propuesto. El modelo decide si hay alerta, la política (recuadro punteado) decide la acción y
-los agentes solo redactan.}
-\label{fig:circuito}
-\end{figure}
+\textbf{Dónde entra la predicción.} En la posventa, la alerta alimenta un circuito que termina en una acción: un consejo
+de manejo al conductor cuando hay un hábito modificable que lo distingue de los vehículos sanos de su mercado, un contacto
+del concesionario cuando no lo hay, y un escalamiento si el riesgo se mantiene alto. La decisión es determinista y la define
+Ford; la redacción la hacen agentes de lenguaje bajo un verificador programado (\S\ref{sec:producto}).

@@ -1,4 +1,5 @@
-% ============================================================================ 6 · Información complementaria + conclusión
+% ============================================================================ 7 · Información complementaria + conclusión
+% fuente del enlace del prototipo: docs/pitch/deck/index.html (QR del cierre); la clave no va en el informe.
 \section{Información complementaria}
 \label{sec:complementaria}
 
@@ -6,6 +7,13 @@
 contrastó con los archivos columna por columna (\S\ref{sec:datos}). Cada hallazgo, decisión y experimento quedó documentado
 con su fecha, su motivo y el procedimiento que lo reproduce, y cada experimento está definido por un archivo de configuración
 versionado.
+
+\textbf{Prototipo.} La aplicación de la \S\ref{sec:prototipo} está disponible en línea, con acceso por clave:
+
+\begin{center}
+{\color{black}\qrcode[height=2.4cm,nolink]{https://scan.page/JrOsm5}}\\[4pt]
+\url{https://scan.page/JrOsm5}
+\end{center}
 
 \textbf{Información que solo Ford puede aportar.} El límite actual no es el modelo sino la información disponible:
 \begin{enumerate}
@@ -19,8 +27,8 @@ versionado.
   \item \textbf{Un piloto en sombra de tres meses en un país}, para medir prevalencia, falsas alarmas y detección reales.
 \end{enumerate}
 
-\textbf{Trabajo futuro.} Reentrenar con los 557 vehículos y empaquetar el modelo. Validar toda mejora con datos nuevos (una
-extracción posterior al 14-09-2026) y no con este conjunto de prueba, que ya fue utilizado. Medir en el piloto lo que estos
+\textbf{Trabajo futuro.} Reentrenar con los 557 vehículos y empaquetar el modelo. Validar toda mejora futura con datos
+nuevos, de una extracción posterior al 14-09-2026. Medir en el piloto lo que estos
 datos no permiten: si los avisos cambian hábitos, cuántas fallas se evitan y cuánto combustible se ahorra. Extender el
 circuito a otras fallas del sistema de postratamiento.
 
@@ -32,14 +40,14 @@ Se mostró que la telemetría que Ford ya recibe contiene información que antic
 que esa información es consistente con la física de la regeneración: los vehículos que fallan pasan más tiempo detenidos con
 el motor en marcha y con el motor por debajo de su temperatura de régimen, y la diferencia crece hacia el evento. Se mostró
 también que los datos contenían sesgos de muestreo y de formato capaces de producir métricas favorables sin ninguna
-capacidad predictiva, y que el PR-AUC por fila tiene un piso de $0{,}177$ alcanzable sin información temporal. Por eso el
-modelo se seleccionó con la detección por vehículo a presupuesto de falsas alarmas, comparada con un nulo que conserva el
-historial.
+capacidad predictiva, y que el PR-AUC por fila alcanza $0{,}177$ con un puntaje que solo reconoce qué vehículo va a fallar,
+sin anticipar cuándo. Por eso el modelo se seleccionó con una métrica que exige anticipar: la detección por vehículo a
+presupuesto de falsas alarmas, comparada con un nulo que conserva el historial.
 
 Con ese criterio, el modelo finalista, una GRU con atención de $\sim 3.900$ parámetros en un ensamble de tres semillas,
 detecta en vehículos no vistos $\sim 30\,\%$ de los eventos con $5\,\%$ de falsas alarmas y $\sim 50$--$60\,\%$ con $20\,\%$,
 con una mediana de $\sim 4.600$\,km (unos tres meses) de anticipación y un umbral que respeta su presupuesto fuera de
 muestra. Duplica la detección de los modelos tabulares y de supervivencia en el mismo conjunto. El circuito propuesto
 convierte cada alerta en un aviso verificable, con el punto de operación como decisión de Ford, a un costo estimado de
-USD~$0{,}07$--$0{,}10$ por vehículo y por año. La validación de su impacto sobre fallas evitadas requiere el piloto en sombra
-propuesto.
+USD~$0{,}07$--$0{,}10$ por vehículo y por año. Medir su impacto sobre las fallas evitadas y sobre la confianza del cliente
+requiere el piloto propuesto: primero en sombra y después con un grupo de control.
