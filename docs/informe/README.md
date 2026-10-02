@@ -2,7 +2,8 @@
 
 El informe que se entrega a Ford (PDF desde LaTeX). Tiene formato de informe técnico (clase `article`, Latin Modern,
 ecuaciones numeradas, referencias numeradas) y sigue las secciones del documento del desafío, con los criterios de la
-§5.2 dentro de la sección 5 y una sección 6 de producto (de la alerta a la acción), como en el pitch.
+§5.2 dentro de la sección 5 y una sección 6 de producto (de la alerta a la acción).
+El PDF no menciona la presentación oral.
 Por decisión del equipo (02-10) no incluye la CNN-LSTM, la GRU con etiqueta suave, la celda mercado × motor ni el
 razonamiento interno que no se presentó (PR-AUC por fila contra el techo, descartes no presentados).
 
