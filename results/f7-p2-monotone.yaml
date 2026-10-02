@@ -4,7 +4,7 @@ note: 'F7 P2 (preregistro 0b29b2b): K2 con monotone_constraints del mapa del 18-
   V (decide): 20,7% ± 9,3 (8/15/5) contra 17,0% ± 3,8: diff +0,037 < desvío combinado
   0,101; pareado +0,022/+0,111/-0,022. Exceso +13,0 contra +9,5. Anticipación 5.306
   contra 7.438 km. Falla condiciones 1 y 3: NO SE ADOPTA. (a0) +0,0012, (b) +0,023.
-  docs/memoria/f7-varianza-k2.md'
+  docs/reproducibilidad.md'
 source:
   config_path: configs\exp_f7_p2_monotone.yaml
   config_versioned: true

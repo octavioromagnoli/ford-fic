@@ -2,7 +2,7 @@ run: f11-seeds3-gru-ref-conf
 logged_on: '2026-09-28'
 note: 'F11: REFERENCIA de la confirmación. La GRU de hoy (label), semillas 101-103,
   folds de confirmación (semilla 2026). 24,0 / 42,0 / 51,6 / 57,5% al 5/10/15/20%.
-  Reentrenada en audit_model: (a0) PASS, (a'') -0,0093, (b) +0,012. docs/memoria/f11-gru-objetivo-suave.md'
+  Reentrenada en audit_model: (a0) PASS, (a'') -0,0093, (b) +0,012. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_f11_seeds3_gru_ref_conf.yaml
   config_versioned: false

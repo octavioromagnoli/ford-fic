@@ -11,7 +11,7 @@
 # Por qué existe: el panel secuencial v1 es la lectura de la solución de la tutora
 # ("usó solo dos datasets"), y deja afuera la tabla donde el EDA encontró lo que más
 # anticipa —idle de 0 km, trayectos por debajo de régimen térmico, velocidad—
-# (docs/memoria/f2-eda-revision-y-features.md, CLAUDE.md §hallazgos). Este panel es
+# (docs/reproducibilidad.md, CLAUDE.md). Este panel es
 # la ablación de canales por familia: mismo modelo, mismos folds, misma ventana,
 # `signals` vs. `signals + trips`. Si el número no se mueve, la tabla dinámica extra
 # no aporta ORDEN que la red pueda usar (los agregados de `trips` ya están en el

@@ -1,106 +1,176 @@
-# Ford FIC · Predicción temprana de degradación de eficiencia de combustión
+# Ford FIC · Predicción temprana de saturación del DPF
 
-Ford Innovation Challenge III — desafío *Data-Driven Powertrain Intelligence*.
-Objetivo: anticipar, a partir de telemetría de viajes, qué vehículos van a
-degradar su eficiencia de combustión, **con kilómetros de anticipación** y a un
-costo de falsas alarmas explícito.
+Ford Innovation Challenge III — *Data-Driven Powertrain Intelligence*.
+Anticipamos la saturación del filtro de partículas diésel a partir de los
+resúmenes de viaje y las señales de postratamiento de vehículos conectados.
 
-Plan completo: [`plan-implementacion-ford.md`](plan-implementacion-ford.md).
-Reglas y contrato de datos: [`CLAUDE.md`](CLAUDE.md).
+**Modelo finalista: GRU con atención y ensamble por rango de tres semillas.**
+Recibe los últimos 1.000 km como 20 tramos de 50 km × 15 canales, más país,
+motor y serie. Estima un puntaje de riesgo para un evento entre 500 y 3.500 km
+por delante del corte. El puntaje ordena riesgo; no es una probabilidad calibrada.
 
-## Instalación
+- [Informe final (PDF)](docs/informe/informe.pdf)
+- [Fuentes y compilación del informe](docs/informe/README.md)
+- [Reproducción y artefactos necesarios](docs/reproducibilidad.md)
+
+## Resultados del informe
+
+El universo contiene 557 vehículos: 446 de desarrollo y 111 de prueba;
+103 de estos últimos tienen cortes evaluables, 32 con evento.
+
+| Presupuesto de falsas alarmas por vehículo | Detección en prueba |
+|---|---:|
+| 5 % | ≈30 % |
+| 10 % | ≈40–50 % |
+| 20 % | ≈50–60 % |
+
+La mediana de anticipación es de aproximadamente 4.600 km. Estos valores
+corresponden a la curva de evaluación; con umbrales fijados en desarrollo,
+las falsas alarmas realizadas en prueba fueron 5,8 %, 8,9 % y 18,2 %.
+El informe detalla las métricas, la incertidumbre y las limitaciones.
+El conjunto de prueba ya fue evaluado y no se usa para ajustar nuevas variantes.
+
+## Cómo usar el repositorio
+
+Se necesitan Git y Python 3.12. Abrir una terminal y descargar el proyecto:
 
 ```bash
-python3.12 -m venv .venv          # o: uv venv --python 3.12 .venv
-source .venv/bin/activate         # .\.venv\Scripts\Activate.ps1 en Windows
-pip install -r requirements.txt   # o: uv pip install -r requirements.txt
+git clone --branch feat/demo-gru https://github.com/octavioromagnoli/ford-fic.git
+cd ford-fic
 ```
 
-Los datos crudos no se versionan. Copiarlos a `data/raw/` (o exportar
-`FORD_DATA_DIR=/ruta/a/los/datos`) y ajustar `configs/data/raw_sources.yaml`.
+Si se recibió un ZIP, descomprimirlo y abrir una terminal en la carpeta que
+contiene `README.md`, `configs/` y `scripts/`. Todos los comandos siguientes se
+ejecutan desde esa carpeta. Si Git solicita acceso, usar una cuenta autorizada
+para el repositorio.
 
-## Corrida end-to-end (F0)
+### 1. Instalar el entorno
 
-Sin ningún dato real, el repo ya corre de punta a punta contra un panel dummy que
-tiene el esquema exacto del contrato:
+En macOS o Linux:
 
 ```bash
-python scripts/make_dummy.py --config configs/data/dummy_v1.yaml   # panel + splits
-python scripts/train.py --config configs/exp_dummy.yaml            # CV + métricas + wandb
-python scripts/check_setup.py                                      # smoke test del harness
-streamlit run scripts/dashboard.py -- --run experiments/f0-dummy-baserate
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dl.txt
+export WANDB_MODE=disabled
 ```
 
-La corrida dummy usa un predictor por tasa base sobre features aleatorias: tiene
-que dar PR-AUC ≈ tasa base y ROC-AUC ≈ 0,5. Si diera mejor, hay un bug.
+En Windows (PowerShell):
 
-El dashboard del finalista (K2) corre contra el panel real, solo con dev:
-
-```bash
-export FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled
-python scripts/train.py --config configs/exp_ss_hw_r3.yaml              # K2
-python scripts/eval_window_label.py --config configs/exp_ss_hw_r3.yaml  # etiqueta V y comparación
-python scripts/decision_layer.py --config configs/exp_decision_k2.yaml  # curva y punto fuera de muestra
-streamlit run scripts/dashboard_k2/app.py
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt -r requirements-dl.txt
+$env:WANDB_MODE = "disabled"
 ```
 
-## Cómo se lanza un experimento
+W&B es opcional: la ejecución local no requiere una cuenta de ese servicio.
+En cada terminal nueva, volver a activar `.venv` y configurar `WANDB_MODE`.
 
-Un experimento es un YAML en `configs/`. Nunca se edita código para cambiar un
-hiperparámetro:
-
-```bash
-python scripts/train.py --config configs/exp_mi_experimento.yaml
-python scripts/train.py --config configs/exp_mi_experimento.yaml --panel data/processed/panel.parquet
-```
-
-Cada corrida deja en `experiments/<run_name>/`: `predictions.parquet` (out-of-fold),
-`lead_time_curve.csv`, `metrics.json` y el `config.yaml` completo, y loguea lo
-mismo a wandb.
-
-## wandb
-
-Todas las corridas van al team **`oromagnoli-`**, proyecto **`ford-fic`**:
-<https://wandb.ai/oromagnoli-/ford-fic>. Setup por persona, una sola vez:
+### 2. Comprobar la instalación sin datos de Ford
 
 ```bash
-wandb login                           # pega tu API key de wandb.ai/authorize
+python scripts/make_dummy.py --config configs/data/dummy_v1.yaml
 python scripts/train.py --config configs/exp_dummy.yaml
+python scripts/check_setup.py
 ```
 
-Hace falta estar invitado al team antes del primer `train.py`; si no, wandb
-escribe la corrida en tu cuenta personal y no la ve nadie más.
+El ejemplo sintético verifica el pipeline con un predictor de tasa base.
+Sus métricas no son resultados del modelo finalista. La suite debe terminar
+con todos los chequeos aprobados. La corrida de ejemplo se guarda en
+`experiments/f0-dummy-baserate/`.
 
-El YAML manda (`wandb.entity`, `wandb.mode`), pero dos env vars lo pisan sin
-tocar el config compartido:
+### 3. Preparar los datos reales
+
+Los CSV y los splits congelados se reciben por separado; no vienen con el clon.
+Copiar los CSV a `data/raw/` y los archivos `test_split.json` y `splits_r3.json`
+a `data/processed/`. Los nombres exactos y la alternativa de recibir el panel
+ya construido están en la [guía de reproducción](docs/reproducibilidad.md).
+Con esos insumos, construir los paneles:
 
 ```bash
-WANDB_MODE=offline python scripts/train.py --config configs/exp_dummy.yaml
-wandb sync wandb/offline-run-*        # subirla después, cuando haya red
-WANDB_MODE=disabled ...               # iterar sin ensuciar el proyecto
+python scripts/build_dataset.py --config configs/data/panel_v2_estaticas.yaml
+python scripts/build_seq_panel.py --config configs/data/panel_seq_trips_v2_estaticas.yaml
 ```
 
-## Flujos para agentes
+Si se recibió el panel secuencial con su metadata y los splits, omitir esos dos
+comandos. Sin datos reales se puede completar el ejemplo del paso anterior.
 
-Tres tareas recurrentes están escritas paso a paso, con las reglas antileakage
-incluidas:
+### 4. Entrenar la GRU y combinar las semillas
 
-| Tarea | Claude Code | Cualquier otro agente |
-|---|---|---|
-| Implementar un modelo nuevo | `/mlmodel` | `.claude/skills/mlmodel/SKILL.md` |
-| Lanzar un entrenamiento | `/train` | `.claude/skills/train/SKILL.md` |
-| Comparar corridas | `/compare` | `.claude/skills/compare/SKILL.md` |
-
-`AGENTS.md` apunta ahí para los agentes que no leen skills (Codex y compañía).
-Es el mismo archivo en los dos casos: si cambia el flujo, se edita una vez.
-
-## Estructura
-
+```bash
+python scripts/train.py --config configs/exp_v2all_gru_trips_estaticas_r3.yaml
+python scripts/train.py --config configs/exp_v2all_gru_trips_estaticas_s1_r3.yaml
+python scripts/train.py --config configs/exp_v2all_gru_trips_estaticas_s2_r3.yaml
+python scripts/ensemble_rank.py --config configs/exp_v2all_seeds3_gru_trips_estaticas.yaml
 ```
-src/          código (data, features, models, training, eval)
-configs/      un YAML por experimento
-scripts/      build_dataset.py, train.py, make_dummy.py, dashboard.py, check_setup.py
-notebooks/    solo exploración, sin lógica
-experiments/  outputs y checkpoints (gitignored)
-data/         crudos y procesados (gitignored)
+
+Las tres corridas usan las semillas 42, 1 y 2 y los mismos folds agrupados por
+vehículo: cinco folds, tres repeticiones, solo sobre desarrollo. El ensamble
+combina predicciones fuera de muestra. La evaluación final del informe entrena
+cada semilla con todo desarrollo; es distinta de esta validación cruzada.
+La GRU puede variar entre ejecuciones incluso con la misma semilla.
+
+Cada corrida guarda configuración, métricas y predicciones en `experiments/`.
+Los paths, semillas e hiperparámetros se declaran en `configs/`.
+
+### 5. Consultar las salidas
+
+Cada semilla produce una carpeta `experiments/<nombre-de-corrida>/`. El ensamble
+queda en `experiments/v2all-seeds3-gru-trips-estaticas/`. Allí se guardan las
+métricas y las predicciones fuera de muestra; no confundirlas con las cifras del
+test publicadas en el informe.
+
+Para consultar la evaluación final, abrir [el PDF](docs/informe/informe.pdf).
+Para regenerar sus figuras desde las salidas guardadas, seguir la
+[guía del informe](docs/informe/README.md). No hace falta reentrenar para leerlo.
+
+Si aparece `FileNotFoundError`, verificar los insumos y las rutas del YAML.
+Si falla la validación de splits, usar el panel y los splits correspondientes;
+no desactivar la comprobación ni sortear un nuevo conjunto de prueba.
+
+## Ejecutar la demo GRU
+
+Esta rama incluye la aplicación de Streamlit. Con el entorno activo:
+
+```bash
+python -m pip install -r requirements-demo.txt
 ```
+
+Copiar el bundle precalculado recibido del equipo en
+`experiments/demo-bundle-gru-final/`, incluida su caché de textos. Luego:
+
+```bash
+DEMO_LLM_MODE=cache_only streamlit run scripts/demo_app/app.py
+```
+
+En PowerShell, configurar `$env:DEMO_LLM_MODE = "cache_only"` y ejecutar
+`streamlit run scripts/demo_app/app.py`. Abrir la dirección local que imprime
+Streamlit. Este modo no hace llamadas a la API; si falta un texto en la caché,
+la aplicación utiliza su alternativa de plantilla.
+
+La demo reproduce la flota de desarrollo. Permite elegir semana y presupuesto
+de falsas alarmas, consultar la bandeja de alertas, abrir una ficha de vehículo
+y revisar qué ocurrió después. No representa una evaluación nueva sobre test.
+La [guía de la demo](scripts/demo_app/README.md) explica los insumos, las opciones
+de descarga y cómo construir el bundle desde las corridas.
+
+## Contenido del repositorio
+
+| Directorio | Contenido |
+|---|---|
+| `src/` | Datos, features, modelos, entrenamiento y evaluación |
+| `configs/` | Configuración del finalista y experimentos anteriores |
+| `scripts/` | Construcción de paneles, entrenamiento, evaluación y figuras |
+| `results/` | Registro histórico de resultados y configuraciones |
+| `notebooks/` | Exploración y auditoría de datos |
+| `docs/informe/` | Informe entregado, fuentes, figuras y tablas |
+
+Las implementaciones anteriores se conservan para respaldar las comparaciones.
+Esta rama incluye el pipeline de investigación y la demo del circuito de producto.
+MiniRocket, mencionado en las comparaciones del informe, tampoco está incluido
+en este checkout.
+
+Los datos de Ford, modelos entrenados, credenciales y outputs locales no se
+versionan. Para trabajar en el código, consultar el [contrato de datos y reglas
+antileakage](CLAUDE.md) y [AGENTS.md](AGENTS.md).

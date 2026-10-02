@@ -12,7 +12,7 @@ no rompe si una columna declarada no aparece, pero lo reporta en
 
 La segunda entrega de Ford no trae las seis partes con el mismo esquema, y cada
 desvío se corrige acá, declarado en el YAML, para que ningún consumidor tenga que
-acordarse (`docs/memoria/f9-entrega-v2.md`):
+acordarse (`docs/reproducibilidad.md`):
 
 - `rename`: la estática de fallados llama `IdentificationDaysSinceProduction` a lo
   que la de sanos llama `IdentificationDate`.

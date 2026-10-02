@@ -1,4 +1,4 @@
-# F11 (docs/memoria/f11-preregistro-objetivo-suave.md): GRU + TripSummary + estática completa, referencia con label (la GRU de hoy); semilla del modelo 101, folds de confirmación (semilla 2026).
+# F11 (docs/reproducibilidad.md): GRU + TripSummary + estática completa, referencia con label (la GRU de hoy); semilla del modelo 101, folds de confirmación (semilla 2026).
 #   WANDB_MODE=disabled python scripts/train.py --config configs/exp_f11_gru_ref_conf_s101.yaml
 name: f11-gru-ref-conf-s101
 seed: 101

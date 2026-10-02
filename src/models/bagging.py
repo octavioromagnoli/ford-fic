@@ -1,7 +1,7 @@
 """Bagging por vehículo: el mismo modelo entrenado sobre remuestreos de **autos**, no de filas.
 
 Es la pieza de E2 del preregistro del ensamble
-(`docs/memoria/f3-preregistro-landmark-ensamble.md`): cada finalista se reentrena envuelto
+(`docs/reproducibilidad.md`): cada finalista se reentrena envuelto
 en esto, con `n_bags` remuestreos bootstrap de los vehículos del train de cada fold, y el
 score es el promedio de las bolsas. Lo único que promete es bajar la varianza del
 entrenamiento, que con 53 vehículos con evento es de donde sale buena parte de la

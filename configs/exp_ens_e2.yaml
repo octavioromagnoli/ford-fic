@@ -1,6 +1,6 @@
 # F3 · E2: el ensamble de E1 con los dos finalistas embolsados por vehículo
 #
-# Preregistro: docs/memoria/f3-preregistro-landmark-ensamble.md, E2 (commit 9b7bfb4).
+# Preregistro: docs/reproducibilidad.md, E2 (commit 9b7bfb4).
 # Mismo ensamble que E1 (rango percentil 50/50 por repetición) sobre las OOF de los dos
 # modelos reentrenados con `vehicle_bagging` (10 bolsas, semilla 42, mismos
 # hiperparámetros internos). Los dos embolsados son COMPONENTES, no candidatos.

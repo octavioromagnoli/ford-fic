@@ -5,7 +5,7 @@
 
 Es la Fase 1 del cure model: convierte en código del repo la evidencia que motivó el
 panel de hitos post-venta. No entrena nada. Bloques (lectura en
-`docs/memoria/f3-reloj-y-ventana-del-evento.md`):
+`docs/reproducibilidad.md`):
 
 - **H1 · escala.** Dispersión del momento del evento en cada escala de uso, entre los
   fallados con telemetría desde casi 0 km. La escala buena es la que la minimiza

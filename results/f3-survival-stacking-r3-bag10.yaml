@@ -3,7 +3,7 @@ logged_on: '2026-09-22'
 note: 'COMPONENTE de E2 (no candidato, preregistro 9b7bfb4): survival stacking r3
   envuelto en vehicle_bagging (10 bootstraps de vehículos, semilla 42, hiperparámetros
   sin cambios). Detección 18,2% ± 3,2 (9/8/12), lift veh. 1,591: contra la referencia
-  empata con más desvío. docs/memoria/f3-ensamble-e1-e2.md'
+  empata con más desvío. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_survival_stacking_r3_bag10.yaml
   config_versioned: true

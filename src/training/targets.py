@@ -332,7 +332,7 @@ def build_window_survival_target(
 ) -> TargetSpec:
     """El tramo en riesgo de cada fila de train, en días desde que el odómetro llega a `c + G`.
 
-    Es el objetivo de F5 §3.3 (`docs/memoria/f5-preregistro-ss-post-venta.md`). Las mismas
+    Es el objetivo de F5 §3.3 (`docs/reproducibilidad.md`). Las mismas
     filas del panel v1, con la censura que CLAUDE.md declara correcta desde el 22-09:
 
     * **Origen** `t0`: la fecha en que el odómetro llega a `c + G`. El gap sigue en km
@@ -412,7 +412,7 @@ def build_window_km_survival_target(
 ) -> TargetSpec:
     """El `y` de `discrete_survival` con entrada tardía: el tramo en riesgo de la ventana, en km.
 
-    Es K2 de `docs/memoria/f6-preregistro-deteccion-vehiculo.md`. Las mismas filas y el mismo
+    Es K2 de `docs/reproducibilidad.md`. Las mismas filas y el mismo
     eje que el finalista (km desde `c + G`, así que el gap sigue fuera de la vista); cambia
     qué km cuentan como supervivencia verificada:
 

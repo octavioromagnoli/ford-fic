@@ -4,7 +4,7 @@
     python scripts/ensemble_rank.py --config configs/exp_ens_e1.yaml            # arma y mide
     python scripts/ensemble_rank.py --config configs/exp_ens_e1.yaml --audit    # + (a0) y (b)
 
-Es E1 y E2 del preregistro `docs/memoria/f3-preregistro-landmark-ensamble.md` (9b7bfb4),
+Es E1 y E2 del preregistro `docs/reproducibilidad.md` (9b7bfb4),
 y está escrito para aplicarlo tal cual:
 
 * **Score.** Para cada repetición `r`, el rango percentil (empates promediados) del

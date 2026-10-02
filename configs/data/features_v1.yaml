@@ -7,7 +7,7 @@
 # `aux: true` la deja en el panel como `aux_<name>` —para auditar— pero NO entra al
 # modelo (`src/training/cv.py` selecciona por prefijo `feat_`/`static_`).
 #
-# Evidencia y criterio de cada elección: docs/memoria/f2-eda-revision-y-features.md.
+# Evidencia y criterio de cada elección: docs/reproducibilidad.md
 # Regla que manda: toda columna mira solo hacia atrás desde el corte (regla 3).
 
 thresholds:

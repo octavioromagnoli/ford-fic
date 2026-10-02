@@ -14,7 +14,7 @@ note: 'exp/history-deviation: survival stacking R=3 + feat_regenerations_per_100
   decide). (a0) PASS; (b) +0,0301 (marca; con calendario los dos quedan en ROC 0,65-0,66,
   asi que buena parte del ROC que suma se superpone con el calendario). Piso posicional:
   pierde en (a'') y entre fallados, como el control; gana en deteccion y lift. Ficha:
-  docs/memoria/f3-desvio-historia.md.'
+  docs/reproducibilidad.md'
 source:
   config_path: configs\exp_survival_stacking_history_r3.yaml
   config_versioned: true

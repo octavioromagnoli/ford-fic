@@ -1,6 +1,6 @@
 # F6 · K1: media acumulada causal del score del finalista
 #
-# Preregistro: docs/memoria/f6-preregistro-deteccion-vehiculo.md. Sin reentrenar: toma las
+# Preregistro: docs/reproducibilidad.md Sin reentrenar: toma las
 # predicciones out-of-fold de `f3-survival-stacking-r3-rebuild` y reemplaza el score de cada fila por el promedio de
 # los scores del mismo vehículo hasta ese corte (`scripts/smooth_scores.py`).
 #

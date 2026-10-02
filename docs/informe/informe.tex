@@ -1,0 +1,89 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{icomma}
+\AtBeginDocument{\chardef\%=37 }  % el \% de babel spanish falla dentro de math
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[section]{placeins}
+\usepackage{booktabs,tabularx,multirow,array}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,patterns}
+\usepackage{enumitem}
+\usepackage{caption,subcaption}
+\usepackage{titlesec}
+\usepackage{multicol}
+\usepackage[hidelinks]{hyperref}
+\usepackage{qrcode}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=blue,urlcolor=blue,
+  pdftitle={Predicción temprana de la degradación del filtro de partículas · Ford FIC III},pdfauthor={Equipo SOG}}
+
+% ---------------------------------------------------------------- estilo (informe técnico)
+\setlength{\parindent}{1.5em}
+\setlength{\parskip}{0pt}
+\setlength{\emergencystretch}{2em}
+\setlist{itemsep=1pt,topsep=3pt,parsep=0pt,leftmargin=1.6em}
+\renewcommand{\arraystretch}{1.15}
+\titleformat{\section}{\Large\bfseries}{\thesection.}{0.8em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection.}{0.8em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection.}{0.7em}{}
+\titlespacing*{\section}{0pt}{16pt}{8pt}
+\titlespacing*{\subsection}{0pt}{12pt}{6pt}
+\titlespacing*{\subsubsection}{0pt}{9pt}{4pt}
+\captionsetup{labelsep=colon,font=normalsize,justification=justified,singlelinecheck=true}
+\captionsetup[table]{position=top,skip=6pt}
+\captionsetup[sub]{font=normalsize}
+\renewcommand{\floatpagefraction}{0.8}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\textfraction}{0.1}
+\setcounter{tocdepth}{1}
+
+% notación
+\newcommand{\tagtest}{[\textit{test}]}
+\newcommand{\tagdev}{[\textit{dev}]}
+\newcommand{\ind}{\mathbb{1}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\R}{\mathbb{R}}
+
+\begin{document}
+
+% ================================================================ portada
+\begin{titlepage}
+\centering
+\vspace*{3.2cm}
+\includegraphics[width=0.42\textwidth]{figuras/ford_logo.pdf}\par
+\vspace{1.4cm}
+{\LARGE\bfseries Ford Innovation Challenge III -- AI Edition\par}
+\vspace{0.5cm}
+{\Large Predicción temprana de la degradación del filtro de partículas\\[2pt]
+a partir de la telemetría de vehículos conectados\par}
+\vspace{0.6cm}
+{\large Área: \textit{Data-Driven Powertrain Intelligence}\par}
+\vspace{1.4cm}
+{\large Equipo SOG\par}
+\vspace{0.35cm}
+Santino Cardelli \quad·\quad Gonzalo Malaspina \quad·\quad Octavio Romagnoli\par
+\vspace{0.35cm}
+Octubre 2026\par
+\vfill
+\end{titlepage}
+
+\setcounter{page}{1}
+\input{secciones/00-resumen}
+\input{secciones/01-desafio}
+\input{secciones/02-proceso}
+\input{secciones/03-definicion}
+\input{secciones/04-datos}
+\input{secciones/05-solucion}
+\input{secciones/06-producto}
+\input{secciones/07-complementaria}
+\input{secciones/09-referencias}
+\appendix
+\input{secciones/08-anexos}
+
+\end{document}

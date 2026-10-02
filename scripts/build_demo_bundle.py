@@ -16,7 +16,7 @@ completo (la corrida de `model.run_config`, que puede ser un ensamble) y nada se
 
 El "por qué" es `fleet_profile` (`src/eval/fleet_profile.py`): el modelo de la demo no tiene atribución, así que se
 describe en qué hábitos se aparta el auto de los autos sanos de dev de su mercado. Es una comparación con la flota,
-no lo que el modelo usó (`docs/memoria/f9-demo-gru.md`).
+no lo que el modelo usó (`docs/reproducibilidad.md`).
 
 Deja en `bundle.dir`:
 - cuts.parquet        una fila por corte de dev evaluable con la etiqueta elegida: score de la repetición, fecha,

@@ -12,7 +12,7 @@
 # `2026-09-19`  panel construido ANTES del commit 1eab4a1 ("Corregir umbral y contrato
 #               de regeneraciones", 20-09 15:43): las columnas `feat_*regen*` salen de
 #               caídas de 5 puntos de `AirRegeneration`, que el umbral corregido mostró
-#               que es ruido (docs/memoria/f2-umbral-regeneraciones.md).
+#               que es ruido (docs/reproducibilidad.md).
 # `2026-09-20`  panel reconstruido DESPUÉS de 1eab4a1, con el umbral de 15 puntos.
 #
 # Mismas filas, mismos vehículos y mismos folds en las dos; lo que cambia son los

@@ -1,7 +1,7 @@
 """Traducción del evento al eje de odómetro (regla 4 de CLAUDE.md).
 
 `IdentificationDate` está en días desde producción; `TripDatetimeStart` es
-calendario. F1 encontró el puente (`docs/memoria/f1-anclaje-temporal.md`):
+calendario. F1 encontró el puente (`docs/reproducibilidad.md`):
 `ProductionDay` está en el eje del calendario con un origen común a la flota, así
 que `primer_viaje − ProductionDay` es casi constante entre vehículos (IQR de 0 días).
 

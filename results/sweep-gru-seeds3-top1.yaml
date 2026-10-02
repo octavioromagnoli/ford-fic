@@ -2,7 +2,7 @@ run: sweep-gru-seeds3-top1
 logged_on: '2026-09-27'
 note: 'Mejor trial del sweep (t112) ×3 semillas nuevas: 27,4 / 44,0 / 53,8 / 62,2%
   (promedio 0,469). Contra la de hoy, −2 a +3 puntos con el IC del bootstrap pareado
-  cruzando 0: NO se adopta (docs/memoria/f10-sweep-gru.md).'
+  cruzando 0: NO se adopta (docs/reproducibilidad.md).'
 source:
   config_path: configs\exp_sweep_gru_seeds3_top1.yaml
   config_versioned: false

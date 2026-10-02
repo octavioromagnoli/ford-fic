@@ -1,6 +1,6 @@
 # Capa de decisión sobre la GRU `last` de F3 con la etiqueta V (F9, el primer intento de la demo con la GRU).
 # Es configs/exp_decision_k2.yaml con otra corrida y otra salida: no reentrena ni cambia el orden de los autos,
-# dice DÓNDE se opera el score y cuánto se sostiene ese punto fuera de muestra (docs/memoria/f9-demo-gru.md).
+# dice DÓNDE se opera el score y cuánto se sostiene ese punto fuera de muestra (docs/reproducibilidad.md).
 #
 #   python scripts/decision_layer.py --config configs/exp_decision_gru_f3.yaml
 #

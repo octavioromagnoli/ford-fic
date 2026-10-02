@@ -3,7 +3,7 @@ logged_on: '2026-09-22'
 note: 'F6 K3 (preregistro b12056c): K2 + media acumulada causal. V (decide): 11,1%
   ± 7,9 (0/8/7 de 45): empata con más desvío y no le gana al piso cut_odo; con D pierde
   (10,7% ± 3,2). Suavizar hacia atrás le resta a K2: la alerta llega tarde (anticipación
-  D 5.696 km). No se adopta. docs/memoria/f6-deteccion-vehiculo.md'
+  D 5.696 km). No se adopta. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_ss_hw_cummean_r3.yaml
   config_versioned: true

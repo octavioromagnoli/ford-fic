@@ -20,7 +20,7 @@ Seis secciones, cada una con su CSV en `output_dir` y sus números en `summary.j
    alrededor de la fecha v1 y de la v2. Sin autos de test.
 
 Lee los CSV crudos directo (es una auditoría de archivos, no del pipeline). La lectura
-está en `docs/memoria/f9-entrega-v2.md`.
+está en `docs/reproducibilidad.md`.
 """
 
 from __future__ import annotations

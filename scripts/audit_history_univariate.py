@@ -7,7 +7,7 @@ Por cada feature de `configs/data/features_history.yaml`: ROC contra `label` en 
 orientar: > 0,5 es "historia por encima de la ventana ⇒ más riesgo") y sus ρ de Spearman
 con el mes del corte y con `cut_odo`. La referencia es la versión sin modelo del doc de
 TimesFM: ROC 0,602 para regeneraciones y 0,560 para el nivel
-(docs/memoria/f3-timesfm-zeroshot.md, medida sobre el build `2026-09-19`).
+(docs/reproducibilidad.md, medida sobre el build `2026-09-19`).
 
 Van también los controles que la regla 6 pide para toda métrica que dependa del largo
 del historial: el ROC de `aux_hist_km_covered` solo y la ρ de cada feature con él. Si el

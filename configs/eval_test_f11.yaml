@@ -1,4 +1,4 @@
-# Medición en TEST de F11 (docs/memoria/f11-preregistro-test.md): la GRU con etiqueta suave contra la
+# Medición en TEST de F11 (docs/reproducibilidad.md): la GRU con etiqueta suave contra la
 # GRU de hoy, semillas 101-103, cada una entrenada con todo dev. Un solo tiro.
 #
 #   WANDB_MODE=disabled python scripts/eval_test.py --config configs/eval_test_f11.yaml --fit configs/exp_f11_gru_{suave,ref}_conf_s{101,102,103}.yaml

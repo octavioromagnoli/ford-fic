@@ -4,9 +4,9 @@
 propio filtro. Esto no dice qué usó para alertar: compara el perfil de uso del auto en los cortes que dispararon la
 alerta con los autos sanos de dev de su mercado, que es la misma referencia que las señales del filtro del taller
 (`scripts/build_demo_bundle.py::technician_signals`). Por eso el texto dice "comparado con autos sanos de su mercado,
-este auto…", nunca "el modelo alertó por…" (`docs/memoria/f9-demo-gru.md`).
+este auto…", nunca "el modelo alertó por…" (`docs/reproducibilidad.md`).
 
-Tres reglas, las del mensaje de F4 (`docs/memoria/f4-explicabilidad-k2.md`):
+Tres reglas, las del mensaje de F4 (`docs/reproducibilidad.md`):
 
 - **Solo hábitos accionables de la lista cerrada:** clase `accionable` con signo físico ≠ 0 en la clasificación
   preregistrada (`configs/explain_k2.yaml`, física del DPF) y con frase y recomendación en los textos del mensaje

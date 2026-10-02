@@ -1,0 +1,405 @@
+\section{Expectativas de solución}
+\label{sec:solucion}
+
+La solución combina los cuatro campos que menciona el desafío~\cite{ford}: análisis de datos (\S\ref{sec:datos}),
+aprendizaje automático (modelos lineales, \emph{gradient boosting} y supervivencia en tiempo discreto con validación
+agrupada), aprendizaje profundo (el modelo finalista es una red recurrente con atención) e IA generativa (agentes que redactan
+los avisos bajo un verificador programado, \S\ref{sec:producto}).
+
+\subsection{Objetivo de mejora: anticipar con el mayor margen posible}
+\label{sec:objetivo}
+
+\subsubsection{Modelos evaluados}
+\label{sec:modelos}
+
+Todos los candidatos se entrenaron sobre el mismo panel, con los mismos pliegues, y se evaluaron con la
+métrica~\eqref{eq:primario}. Las familias principales fueron:
+
+\begin{itemize}
+  \item \textbf{Modelos tabulares} sobre las 53 variables agregadas~\eqref{eq:agregado}: regresión logística con
+    regularización L2 y L1, y LightGBM~\cite{ke2017}.
+  \item \textbf{Supervivencia en tiempo discreto} (\emph{survival stacking}~\cite{craig2021,tutz2016}): cada fila se
+    replica en $B$ tramos de km del horizonte y un clasificador estima el riesgo condicional por tramo,
+    \begin{equation}
+      h_b(\mathbf{x}) = P\big(E - c \in I_b \,\big|\, E - c > I_{b-1},\ \mathbf{x}\big), \qquad
+      s(\mathbf{x}) = 1 - \prod_{b=1}^{B} \big(1 - h_b(\mathbf{x})\big),
+      \label{eq:ss}
+    \end{equation}
+    donde $s$ es la probabilidad de evento dentro del horizonte. Usa la información de los cortes censurados que la
+    clasificación binaria descarta. Se probó también con un efecto aleatorio por vehículo.
+  \item \textbf{Modelos secuenciales} sobre el tensor~\eqref{eq:secuencia}: GRU con atención~\cite{cho2014,bahdanau2015}
+    y MiniRocket~\cite{dempster2021}.
+  \item \textbf{Alternativas descartadas:} proceso gamma de degradación~\cite{vannoortwijk2009} (no hay variable de daño
+    irreversible, \S\ref{sec:desafio}) y pronóstico de series con el modelo fundacional TimesFM~\cite{das2024} sin ajuste.
+\end{itemize}
+
+Con la primera versión de los datos (290 vehículos de desarrollo y dos mercados), los modelos tabulares aprendían \emph{qué vehículo} y
+no \emph{cuándo}, lo que motivó la métrica de la \S\ref{sec:metricas}. Con la segunda versión (446 vehículos y el triple
+de eventos), los modelos secuenciales pasaron adelante. Sobre 42 configuraciones medidas con la misma métrica en
+desarrollo \tagdev{}, la GRU con viajes y variables estáticas, en un ensamble de tres semillas, detecta 27, 42 y 61\,\% de
+los eventos al 5, 10 y 20\,\% de falsas alarmas, contra 14, 24 y 42\,\% de survival stacking. Una búsqueda bayesiana de
+130 ensayos sobre sus hiperparámetros (Optuna~\cite{akiba2019}) no mejoró la configuración base cuando se la volvió a medir
+con semillas nuevas ($\bar D$ de $46{,}9$ contra $47{,}1$): la variación entre semillas es mayor que la de los
+hiperparámetros, y por eso el finalista es un ensamble de tres semillas. TimesFM y MiniRocket no mejoraron a la GRU en
+desarrollo.
+
+\subsubsection{Arquitectura del modelo finalista}
+\label{sec:gru}
+
+El finalista es una red GRU unidireccional con atención y una rama estática de fusión tardía (Figura~\ref{fig:gru}). Para
+cada corte, la red recibe la secuencia $\mathbf{x}_1,\dots,\mathbf{x}_T \in \R^{C}$ (las filas de $\mathbf{X}_{i,c}$,
+estandarizadas con el entrenamiento del pliegue) y actualiza un estado oculto $\mathbf{h}_t \in \R^{d}$, $d = 24$, mediante
+las compuertas de actualización $\mathbf{z}_t$ y de reinicio $\mathbf{r}_t$~\cite{cho2014}:
+\begin{align}
+  \mathbf{z}_t &= \sigma\!\left(\mathbf{W}_z \mathbf{x}_t + \mathbf{U}_z \mathbf{h}_{t-1} + \mathbf{b}_z\right), \label{eq:gru1}\\
+  \mathbf{r}_t &= \sigma\!\left(\mathbf{W}_r \mathbf{x}_t + \mathbf{U}_r \mathbf{h}_{t-1} + \mathbf{b}_r\right), \\
+  \tilde{\mathbf{h}}_t &= \tanh\!\left(\mathbf{W}_h \mathbf{x}_t + \mathbf{U}_h (\mathbf{r}_t \odot \mathbf{h}_{t-1}) + \mathbf{b}_h\right), \\
+  \mathbf{h}_t &= (1 - \mathbf{z}_t) \odot \mathbf{h}_{t-1} + \mathbf{z}_t \odot \tilde{\mathbf{h}}_t. \label{eq:gru4}
+\end{align}
+La compuerta $\mathbf{z}_t$ decide qué parte del estado se reemplaza con la información del tramo y $\mathbf{r}_t$ cuánto del
+pasado se usa para calcularla. Esto permite representar tendencias que un agregado~\eqref{eq:agregado} pierde, como una
+acumulación que sube de forma sostenida o viajes que se acortan. La red es unidireccional porque el eje es kilómetros
+recorridos: un estado en el km 200 de la ventana no debe depender del km 900.
+
+Los estados se resumen con una atención aditiva de una cabeza~\cite{bahdanau2015},
+\begin{equation}
+  e_t = \mathbf{v}^{\top}\tanh\!\left(\mathbf{W}_a \mathbf{h}_t + \mathbf{b}_a\right), \qquad
+  \alpha_t = \frac{\exp e_t}{\sum_{t'} \exp e_{t'}}, \qquad
+  \mathbf{h}^{\star} = \sum_{t=1}^{T} \alpha_t \mathbf{h}_t,
+  \label{eq:atencion}
+\end{equation}
+con $\mathbf{W}_a \in \R^{16\times d}$, que puede tomar directamente un tramo intermedio de la ventana sin arrastrarlo por
+todos los siguientes. Las variables estáticas $\mathbf{s}$ (país, motor y serie en codificación \emph{one-hot}) pasan por una
+capa $\mathbf{u} = \mathrm{ReLU}(\mathbf{W}_s \mathbf{s} + \mathbf{b}_s) \in \R^{4}$, y la cabeza produce el puntaje
+\begin{equation}
+  \hat p_{i,c} = \sigma\!\Big(\mathbf{w}_2^{\top}\, \mathrm{ReLU}\big(\mathbf{W}_1 [\mathbf{h}^{\star};\mathbf{u}] + \mathbf{b}_1\big) + b_2\Big),
+  \qquad \mathbf{W}_1 \in \R^{16 \times 28}.
+  \label{eq:cabeza}
+\end{equation}
+El total es de 3.901 parámetros: 2.952 en la GRU, 416 en la atención, 52 en la rama estática y 481 en la cabeza.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[font=\small,
+  bin/.style={draw,minimum width=7mm,minimum height=7mm,inner sep=0pt},
+  cell/.style={draw,thick,rounded corners=1.5pt,minimum width=8mm,minimum height=6.5mm},
+  blk/.style={draw,rounded corners=1.5pt,align=center,inner sep=3pt},
+  arr/.style={-{Stealth[length=1.6mm]}}]
+\foreach \i/\l in {0/1,1/2,2/3,4/T} {
+  \node[bin] (b\i) at (\i*1.25,0) {$\mathbf{x}_{\l}$};
+  \node[cell] (h\i) at (\i*1.25,1.3) {$\mathbf{h}_{\l}$};
+  \draw[arr] (b\i) -- (h\i);
+}
+\node at (3*1.25,0) {$\cdots$}; \node at (3*1.25,1.3) {$\cdots$};
+\draw[arr] (h0) -- (h1); \draw[arr] (h1) -- (h2); \draw[arr] (h2) -- ++(0.75,0); \draw[arr] (4.1,1.3) -- (h4);
+\node[below=1mm of b2,align=center,text width=7cm,font=\footnotesize] {$T=20$ tramos de 50\,km $\times$ $C=15$ canales};
+\node[blk,above=6mm of h2,text width=3.6cm] (att) {Atención, ec.~\eqref{eq:atencion}\\$\mathbf{h}^{\star}=\sum_t\alpha_t\mathbf{h}_t$};
+\foreach \i in {0,1,2,4} {\draw[arr,densely dotted] (h\i) -- (att);}
+\node[blk,left=10mm of att,text width=2.7cm] (st) {Estáticas $\mathbf{s}$\\$\to \mathbf{u}\in\R^4$};
+\node[blk,above=6mm of att,text width=3.6cm] (head) {Cabeza, ec.~\eqref{eq:cabeza}\\$\hat p_{i,c}$};
+\draw[arr] (att) -- (head); \draw[arr] (st) |- (head);
+\node[blk,right=8mm of head,text width=3.1cm,dashed] (ens) {Ensamble por rango\\de 3 semillas, ec.~\eqref{eq:ensamble}};
+\draw[arr] (head) -- (ens);
+\node[right=2mm of h4,align=left,text width=2.8cm,font=\footnotesize] {GRU, $d=24$,\\ecs.~\eqref{eq:gru1}--\eqref{eq:gru4}};
+\end{tikzpicture}
+\caption{Arquitectura del modelo finalista.}
+\label{fig:gru}
+\end{figure}
+
+\textbf{Entrenamiento.} Se minimiza la entropía cruzada binaria ponderada sobre las $\sim 11.700$ filas de desarrollo,
+\begin{equation}
+  \mathcal{L} = -\frac{1}{N}\sum_{(i,c)} \Big[\, w_{+}\, y_{i,c} \log \hat p_{i,c} + (1 - y_{i,c}) \log(1 - \hat p_{i,c}) \,\Big],
+  \qquad w_{+} = \frac{N_{-}}{N_{+}},
+  \label{eq:perdida}
+\end{equation}
+donde $N_{+}$ y $N_{-}$ son las filas positivas y negativas del entrenamiento de cada pliegue (no se remuestrea). Se usa
+Adam~\cite{kingma2015} con tasa de aprendizaje $10^{-3}$, decaimiento de pesos $10^{-4}$, lotes de 64, recorte de gradiente
+en norma 1, \emph{dropout} de $0{,}3$ y 40 épocas fijas. No hay detención temprana porque una validación interna por filas
+mezclaría cortes del mismo vehículo. La red es pequeña a propósito: con 135 vehículos con evento, una red grande memoriza
+vehículos en lugar de hábitos.
+
+\textbf{Ensamble.} Como la variación entre semillas supera a la de los hiperparámetros (\S\ref{sec:modelos}), el
+puntaje final promedia los rangos percentiles de tres redes entrenadas con las semillas 42, 1 y 2 (fijadas de antemano, no
+elegidas por resultado):
+\begin{equation}
+  s_{i,c} = \frac{1}{3}\sum_{k=1}^{3} \mathrm{rk}\big(\hat p^{(k)}_{i,c}\big), \qquad
+  \mathrm{rk}(p) = \frac{\#\{(i',c') : \hat p^{(k)}_{i',c'} \le p\}}{N}.
+  \label{eq:ensamble}
+\end{equation}
+El rango hace comparables escalas distintas y no modifica la métrica~\eqref{eq:deteccion}, que solo depende del orden.
+El puntaje resultante ordena vehículos y no es una probabilidad calibrada: la pérdida~\eqref{eq:perdida} pondera los
+positivos y el ensamble promedia rangos. Por eso las alertas se fijan con un presupuesto de falsas alarmas~\eqref{eq:deteccion}
+y no con un umbral de probabilidad.
+
+\subsubsection{Resultados en el conjunto de prueba}
+\label{sec:test}
+
+El conjunto de prueba son los 111 vehículos separados en la \S\ref{sec:universo}, de los cuales 103 tienen cortes válidos
+(32 con evento y 71 sanos). Cada modelo se entrenó con todo el conjunto de desarrollo y se evaluó con la misma
+métrica. La Figura~\ref{fig:curva} muestra $D(\alpha)$ para todo el rango de presupuestos y la Tabla~\ref{tab:test} resume
+los valores principales.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{figuras/curva_test.pdf}
+\caption{Detección $D(\alpha)$ según el presupuesto de falsas alarmas $\alpha$ en el conjunto de prueba \tagtest{}. La banda
+gris es la distribución nula, ec.~\eqref{eq:deteccion} con puntajes permutados, hasta su percentil 95.}
+\label{fig:curva}
+% fuente: experiments/test-modelos-v2/curve.csv; figura: scripts/make_report_figures.py
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{Detección $D(\alpha)$ (\%) del modelo finalista en el conjunto de prueba \tagtest{}. $\bar D$ según la
+ec.~\eqref{eq:primario}.}
+\label{tab:test}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+ & $\alpha = 5\,\%$ & $10\,\%$ & $15\,\%$ & $20\,\%$ & $\bar D$ \\
+\midrule
+GRU, ensamble de 3 semillas & 31,2 & 46,9 & 62,5 & 62,5 & 50,8 \\
+Survival stacking & 18,8 & 21,9 & 21,9 & 43,8 & 26,6 \\
+Nulo: media / percentil 95 & 7,0 / 15,6 & 13,7 / 25,0 & 18,6 / 31,2 & 24,4 / 40,6 & -- \\
+\bottomrule
+\end{tabular}
+% fuente: experiments/test-f10-s42/report.json, experiments/test-modelos-v2/report.json
+\end{table}
+
+\begin{itemize}
+  \item Al $5\,\%$ de falsas alarmas se detectan 10 de 32 eventos: $4{,}5$ veces la media del nulo y por encima de su
+    percentil 95. Al $20\,\%$, seis de cada diez.
+  \item $\bar D$ duplica al de los modelos tabulares y de supervivencia ($50{,}8$ contra $21$--$27$; frente a survival
+    stacking, $+24{,}2$ puntos, IC $[0{,}8;\,43{,}0]$).
+  \item \textbf{Umbral fijado fuera de muestra.} Con $\tau_\alpha$ calculado con los sanos de desarrollo, la detección en
+    prueba es de 20, 34 y 57\,\% al 5, 10 y 20\,\%, con tasas de falsas alarmas realizadas de $5{,}8$, $8{,}9$ y $18{,}2\,\%$:
+    el umbral respeta su presupuesto en vehículos nuevos.
+  \item El resultado es consistente con el de desarrollo (27,4 · 42,5 · 53,3 · 60,7\,\%, $\bar D = 46{,}0$), y el AUC por
+    vehículo en prueba es $0{,}794$.
+\end{itemize}
+
+\textbf{Incertidumbre.} Tres entrenamientos de la misma configuración, evaluados en prueba, dieron 34, 28 y 31\,\% al
+5\,\%: el entrenamiento de la GRU no es determinista entre ejecuciones, y con 32 eventos cada vehículo representa 3 puntos.
+Por eso el resultado se reporta como rango: $\sim 30\,\%$ al 5\,\%, $\sim 40$--$50\,\%$ al 10\,\% y $\sim 50$--$60\,\%$ al
+20\,\%.
+
+\subsubsection{Anticipación}
+\label{sec:anticipacion}
+
+Para cada vehículo detectado se mide la distancia entre la primera alerta sostenida~\eqref{eq:alerta} y la referencia del
+evento, $\ell_i = E_i - c^{\star}_i$, donde $c^{\star}_i$ es el primero de los dos cortes consecutivos sobre $\tau_\alpha$.
+Por la ecuación~\eqref{eq:cortes}, $\ell_i \ge G$.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{figuras/score_evento.pdf}
+\caption{Rango percentil medio del puntaje en los cortes sanos y en los cortes de vehículos con evento, según la distancia
+al evento \tagtest{}.}
+\label{fig:score}
+\end{figure}
+
+Al $10\,\%$ de falsas alarmas, la mediana de $\ell_i$ en prueba es de \textbf{4.646\,km} (rango intercuartil
+2.403--9.263\,km), unos 99 días; al $5\,\%$, 3.987\,km ($\sim 72$ días), y al $20\,\%$, 5.969\,km ($\sim 109$ días). En
+desarrollo la mediana es de $\sim 7.600$\,km ($\sim 86$ días): los vehículos detectados en prueba recorren menos km por
+día, y en días el margen es similar. La Figura~\ref{fig:score} muestra que el puntaje crece hacia el evento (rango medio
+$0{,}58$ a más de 10.000\,km, $0{,}61$ entre 3.500 y 10.000\,km y $0{,}72$ a menos de 3.500\,km, contra $0{,}44$ en los
+sanos), pero con una dispersión grande. La salida del modelo es, por lo tanto, un \emph{margen} de anticipación y no un
+pronóstico del instante de falla.
+
+\subsection{Criterios de evaluación}
+\label{sec:criterios}
+
+\subsubsection{Viabilidad técnica}
+\label{sec:viabilidad}
+
+El sistema no requiere sensores nuevos: usa los resúmenes de viaje y los mensajes del filtro que el vehículo ya transmite.
+La red tiene $\sim 3.900$ parámetros y corre en CPU (las 56 corridas de la evaluación completa en desarrollo tardaron
+$\sim 25$ minutos en 24 núcleos), y el mismo código de variables se usa en entrenamiento y en producción. Para un millón
+de vehículos se estima un proceso diario de 1 a 2 horas en 8 a 16 vCPU, a validar con Ford: la red puntúa en milisegundos
+por vehículo y no necesita GPU ni para servir ni para reentrenar. Los agentes de lenguaje trabajan solo sobre las alertas,
+de modo que el costo de la IA generativa crece con los avisos y no con la flota. El circuito de posventa y el prototipo que
+lo implementa se describen en la \S\ref{sec:producto}; la Tabla~\ref{tab:etapas} resume el camino a producción.
+
+\begin{table}[!htbp]
+\centering
+\caption{Etapas de implementación.}
+\label{tab:etapas}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.3cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{1.7cm}>{\raggedright\arraybackslash}p{4.3cm}@{}}
+\toprule
+Etapa & Alcance & Duración & Criterio para avanzar \\
+\midrule
+0. Congelamiento & Reentrenar con los 557 vehículos y empaquetar pesos, umbrales y referencia del ensamble & 1--2 semanas &
+  Reproduce el puntaje de 20 vehículos de control \\
+1. Sombra & Puntuar la flota real de un mercado sin emitir avisos & 3--6 meses & Tasa de alertas $\approx \alpha$; detección
+  realizada medida \\
+2. Piloto activo & Avisos en una región, con grupo de control & 6 meses & Fallas evitadas, costo por alerta, cambio de
+  hábitos \\
+3. Escala & Mercados validados, umbral por mercado & continuo & Monitoreo dentro de tolerancia \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+La etapa en sombra es la central: es la primera medición de la prevalencia real y de las falsas alarmas sobre la flota
+completa, y no sobre las listas extraídas para el desafío. El monitoreo sigue la tasa de alertas por mercado, la deriva de
+las variables de entrada, la detección realizada y la interrupción de fuentes de datos (como ocurrió con el contador de
+regeneraciones). El reentrenamiento es trimestral, con las mismas auditorías.
+
+\textbf{Empaquetado.} El paquete que se propone para producción contiene todo lo necesario para puntuar igual que en la
+evaluación: los pesos de cada semilla, exportados a ONNX para servir sin el entorno de entrenamiento; la imputación y el
+escalado ajustados; la distribución de puntajes de los vehículos sanos de entrenamiento, sin la cual el ensamble por
+rango~\eqref{eq:ensamble} no puede calcularse para un vehículo aislado; los umbrales $\tau_\alpha$ por presupuesto; y un
+manifiesto con la configuración, el orden de las variables y las versiones de las bibliotecas. Al cargarlo, 20 vehículos de
+control se vuelven a puntuar y deben reproducir su puntaje. El paquete se versiona y avanza por etapas: candidato, sombra y
+producción. La Tabla~\ref{tab:riesgos} resume los riesgos de operación y cómo se mitigan.
+
+\begin{table}[!htbp]
+\centering
+\caption{Riesgos de operación y mitigación.}
+\label{tab:riesgos}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Riesgo & Mitigación \\
+\midrule
+Prevalencia real distinta de la del estudio & El umbral se recalibra en la etapa en sombra; no se hereda del desarrollo \\
+Fatiga de alertas & Empezar con $\alpha = 5\,\%$; avisar al conductor solo con un hábito para nombrar; escalar solo si el
+  riesgo sigue alto \\
+Cambio de \emph{firmware} o de telemetría & Monitoreo de columnas nulas o interrumpidas por mercado \\
+Privacidad & Solo agregados por viaje que Ford ya procesa, sin ubicación \\
+Mercados sin eventos registrados (PER) & El sistema no se activa donde no se validó \\
+Motores o modelos nuevos & No se activan hasta tener eventos propios \\
+Cambio de versión del modelo de lenguaje & Versión fijada; todo texto pasa igual por el verificador y, si falla, se usa una
+  plantilla aprobada \\
+Vehículo nuevo, sin historial & Necesita 1.000\,km recorridos para su primer puntaje \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Costo y valor}
+\label{sec:costo}
+
+\textbf{Lo que pierde el cliente.} La reparación tiene un precio que Ford conoce mejor que nadie, pero el costo principal de
+una falla sin aviso no está en la factura: una visita al taller que el cliente no planeaba, días sin el vehículo y, sobre
+todo, la confianza. Un cliente que se entera tarde se pregunta si su Ford lo cuida; cada falla sin aviso se paga en
+confianza y, en una flota de trabajo, en días de operación perdidos.
+
+\textbf{Lo que cuesta avisar.} Con la telemetría que Ford ya recibe, operar el sistema para un millón de vehículos cuesta
+del orden de USD~$0{,}10$ por vehículo y por año (Tabla~\ref{tab:costo}). El $80\,\%$ del costo es la persona que lo
+opera, de modo que el costo marginal por vehículo es muy bajo. La implementación se estima en USD 70.000--110.000 por única
+vez, incluida la etapa en sombra.
+
+\begin{table}[!htbp]
+\centering
+\caption{Costo anual de operación estimado para un millón de vehículos (a validar con Ford).}
+\label{tab:costo}
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Componente & USD por año & Supuesto \\
+\midrule
+Variables y puntaje diario & 2.500--6.000 & proceso de 1--2\,h en 8--16 vCPU \\
+Agentes de lenguaje & 1.000--3.000 & $\sim 65.000$ alertas por año, modelo pequeño \\
+Reentrenamiento y monitoreo & 5.000--10.000 & trimestral, en CPU \\
+Equipo de operación & 60.000--80.000 & 1 persona de ML/MLOps \\
+\midrule
+Total & $\sim$70.000--100.000 & USD $0{,}07$--$0{,}10$ por vehículo y año \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{La balanza.} La pregunta, entonces, no es cuánto cuesta avisar sino cuántos avisos soporta la confianza de un
+cliente. En un platillo está el aviso de menos: la falla que llega sin aviso. En el otro, el aviso de más: un mensaje que no
+hacía falta. El sistema está diseñado para que el aviso de más pese lo menos posible: el primer contacto es un consejo de
+manejo y no un turno en el taller, y si el vehículo no iba a fallar, el conductor recibió un consejo que igual le hace bien
+al motor. En el prototipo, al $5\,\%$ de falsas alarmas, 48 de las 53 alertas ($91\,\%$) son un consejo \tagdev{}; el
+concesionario interviene solo si no hay un hábito para nombrar o si el riesgo se mantiene. El punto de equilibrio lo elige
+Ford con $\alpha$: al $5\,\%$, uno de cada veinte vehículos sanos recibe un consejo de más y se avisa a casi uno de cada
+tres eventos; al $20\,\%$, a seis de cada diez, con cuatro veces más consejos de más \tagtest{}.
+
+En una flota real, además, la mayoría de los avisos irán a vehículos que no iban a fallar. Con una prevalencia $\pi$, el
+valor predictivo positivo es
+\begin{equation}
+  \mathrm{VPP} = \frac{\pi\, D(\alpha)}{\pi\, D(\alpha) + (1 - \pi)\,\alpha},
+  \label{eq:vpp}
+\end{equation}
+que con $\pi = 5\,\%$, $\alpha = 5\,\%$ y $D = 30\,\%$ da $\sim 0{,}24$: unos 2 de cada 10 avisos corresponden a un vehículo que
+iba a fallar. Por eso el primer contacto tiene que servirle a cualquier conductor, y el umbral se recalibra con la
+prevalencia real en la etapa en sombra.
+
+\textbf{Por qué no enviar el consejo a toda la flota.} Si avisar no costara nada, avisar a todos le ganaría a cualquier
+modelo. No es así por tres razones. Un consejo genérico se ignora, y cada aviso de más gasta la credibilidad del siguiente.
+Lo que vale es la personalización: ``comparado con vehículos sanos de tu zona, tu camioneta hace muchos viajes cortos'' solo
+se puede decir si es cierto para ese vehículo. Y el segundo paso, el contacto del concesionario, sí tiene un costo: el modelo
+decide a quién llamar.
+
+\textbf{Lo que mide el piloto.} No se reporta un ahorro: el costo de una falla para Ford no se conoce, y la pérdida de
+consumo asociada a la saturación no se pudo medir con estos datos. El piloto activo, con un grupo que recibe avisos y otro
+de control, mide: la confianza (satisfacción y reclamos), la fricción (apertura de los avisos y bajas de las
+notificaciones), la retención en la red de servicio, el cambio del hábito recomendado (visible en la misma telemetría), las
+averías y el consumo (modos de protección, visitas no planificadas y combustible) y el costo por alerta y por falla evitada,
+ya con los costos reales de Ford.
+
+\subsubsection{Carácter innovador}
+\label{sec:innovacion}
+
+\begin{enumerate}
+  \item \textbf{Anticipa de verdad.} El modelo nunca observa los 500\,km previos al evento y aun así avisa con una mediana
+    de $\sim 4.600$\,km, unos tres meses (\S\ref{sec:anticipacion}). Se evalúa con una métrica que exige anticipar
+    (detección por vehículo a presupuesto de falsas alarmas~\eqref{eq:deteccion}) en lugar de un PR-AUC por fila que premia
+    reconocer el vehículo. Una red que lee la ventana en orden~\eqref{eq:gru1}--\eqref{eq:atencion} duplica en prueba la
+    detección de los modelos tabulares y de supervivencia.
+  \item \textbf{No exagera.} Cada número se presenta junto a un nulo que conserva el largo del historial; el resultado se mide
+    en un conjunto de prueba que nunca se usó para entrenar ni para ajustar; los criterios de aceptación se fijaron por
+    escrito antes de medir, y todo candidato pasa auditorías de fuga de información.
+  \item \textbf{Habla como una persona, sin inventar.} El modelo decide si hay alerta, una política determinista elige la
+    acción, un agente de lenguaje redacta y el código verifica: el modelo de lenguaje nunca produce un número ni un
+    diagnóstico. La explicación al conductor es una comparación con vehículos sanos, no una causa (\S\ref{sec:producto}).
+  \item \textbf{No toca ni un auto, y el dial es de Ford.} Usa solo la telemetría que el vehículo ya transmite, sin sensores
+    nuevos, corre en CPU y su costo marginal por vehículo es mínimo. El presupuesto $\alpha$ es un parámetro operativo que
+    Ford elige según lo que le cuesta cada aviso.
+\end{enumerate}
+
+\subsubsection{Calidad del tratamiento de datos y trazabilidad}
+\label{sec:calidad}
+
+Los problemas de la \S\ref{sec:trampas} se corrigen al leer los archivos crudos, y cada corrección está declarada en un único
+archivo de configuración y cubierta por un chequeo automático. El proceso es reproducible de punta a punta: la unión de las
+tablas, la unificación de duplicados, el universo de estudio, la partición (congelada en un archivo con la lista de vehículos
+de cada conjunto), el panel y las variables se reconstruyen desde los datos crudos de forma determinista, con parámetros que
+salen de archivos de configuración y nunca del código. Cada experimento está definido por un archivo de configuración
+versionado (variables, semillas e hiperparámetros) y sus métricas se registran junto con esa configuración; el panel y la
+partición se publican como artefactos versionados. Las variables se calculan solo hacia atrás del corte, la imputación y el escalado se ajustan dentro de cada
+pliegue, y un chequeo automático de más de 200 verificaciones corre antes de integrar cualquier cambio.
+
+\subsubsection{Explicabilidad del modelo}
+\label{sec:explicabilidad}
+
+\textbf{Importancia por permutación.} Para medir en qué se apoya la GRU se permuta cada canal $k$ entre los cortes de
+validación, moviendo sus $T$ tramos juntos para conservar la forma de la serie, y se mide la caída del criterio
+primario~\cite{breiman2001}:
+\begin{equation}
+  I_k = \bar D - \bar D\big(\mathbf{X}^{\pi_k}\big),
+  \label{eq:importancia}
+\end{equation}
+donde $\mathbf{X}^{\pi_k}$ es el tensor con el canal $k$ permutado. Las variables estáticas se tratan igual. Las caídas no son
+aditivas, porque los canales están correlacionados.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{figuras/permutacion.pdf}
+\caption{Importancia por permutación $I_k$, ec.~\eqref{eq:importancia}, en puntos de $\bar D$ \tagdev{}, sobre una base de
+$51{,}9\,\%$.}
+\label{fig:permutacion}
+% fuente: experiments/explain-gru-final/units.csv; configs/explain_gru_final.yaml
+\end{figure}
+
+El hábito de mayor peso es la duración de los viajes ($I = -24{,}1$ puntos), seguido de km por viaje, velocidad, motor bajo
+régimen y ralentí (Figura~\ref{fig:permutacion}). Del estado del filtro, la variable principal es la subida de la acumulación
+($-22{,}2$). El país pesa más que cualquier señal individual ($-28{,}1$): el riesgo de base no es el mismo en todos los
+mercados. El patrón coincide con la física de la ecuación~\eqref{eq:balance} (viajes cortos que no completan la
+regeneración y hollín que se acumula), sin que se le haya provisto al modelo ninguna regla del filtro.
+
+\textbf{Explicación al conductor.} La GRU no ofrece una atribución confiable por vehículo, y 7 de sus 15 canales describen el
+estado del propio filtro, que el conductor no controla. Por eso la explicación que se comunica es una comparación: los
+hábitos (hasta tres) en los que el vehículo supera al percentil 75 de los sanos de su mercado, restringidos a los
+modificables cuyo efecto coincide con la física del DPF. Los síntomas y el contexto se informan solo al taller, y el texto
+al conductor dice ``comparado con vehículos sanos de su zona'', nunca ``porque'' (\S\ref{sec:producto}).

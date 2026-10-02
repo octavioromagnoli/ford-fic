@@ -8,7 +8,7 @@
 #   python scripts/build_history_panel.py --config configs/data/panel_history_v1.yaml
 #   python scripts/train.py --config configs/exp_survival_stacking_history_r3.yaml
 #
-# Criterio declarado antes de correr (docs/memoria/f3-desvio-historia.md): contra
+# Criterio declarado antes de correr (docs/reproducibilidad.md): contra
 # f3-survival-stacking-r3 en el mismo build, por (a') ± desvío entre repeticiones,
 # detección @ ≤50 FA/1000 y lift por vehículo (`mean`), y contra el piso posicional.
 # El PR-AUC por fila se reporta y no decide.

@@ -6,7 +6,7 @@
 # Todo lo que usa la etiqueta es a nivel vehículo (quién es fallado, cuándo, de qué
 # producción), como la tabla de mercados de la entrega 1. Lo único que mira telemetría
 # alrededor del evento (§6, qué marca la fecha nueva) excluye a los autos de test.
-# Lectura: docs/memoria/f9-entrega-v2.md.
+# Lectura: docs/reproducibilidad.md
 
 sources_v1: configs/data/raw_sources_v1.yaml
 sources_v2: configs/data/raw_sources.yaml

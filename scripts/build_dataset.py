@@ -86,7 +86,7 @@ def main() -> int:
     cfg = load_config(args.config)
     seed = set_seed(int(cfg["seed"]))
     # Entrega v2: la fecha registrada cae ~2 semanas DESPUÉS de la intervención (el cambio de
-    # aceite y el fin de la sobrecarga del filtro quedan antes; docs/memoria/f9-entrega-v2.md).
+    # aceite y el fin de la sobrecarga del filtro quedan antes; docs/reproducibilidad.md).
     # La referencia del evento se corre hacia atrás para que el gap G blanquee el taller y
     # los síntomas, no los días siguientes. 0 = la fecha tal cual (entrega 1).
     reference_offset_days = float(cfg["label"].get("reference_offset_days", 0) or 0)

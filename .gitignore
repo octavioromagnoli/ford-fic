@@ -24,3 +24,21 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+# Cachés y herramientas locales
+.ruff_cache/
+.pytest_cache/
+.impeccable/
+.graphify_cache/
+graphify-out/
+
+# Variantes locales de secretos
+.env.*
+!.env.example
+
+# Intermedios de compilación del informe
+/docs/informe/*.aux
+/docs/informe/*.log
+/docs/informe/*.out
+/docs/informe/*.toc
+/docs/informe/*.synctex.gz

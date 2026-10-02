@@ -1,0 +1,125 @@
+\section{Producto: de la alerta a la acción}
+\label{sec:producto}
+
+Una alerta sola no evita ninguna falla: la evita que alguien haga algo a tiempo. El producto convierte cada alerta en una
+acción ---un consejo de manejo al conductor o un contacto del concesionario--- redactada por agentes de IA generativa y
+controlada por código. Lo ordena un principio: \emph{el modelo decide, el agente comunica y el código cuida lo que se dice}.
+El modelo de lenguaje nunca produce un puntaje, un número ni un diagnóstico: solo redacta a partir de los hechos que el
+sistema le entrega.
+
+\subsection{El circuito}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=4mm and 3.2mm,
+  box/.style={draw,rounded corners=1.5pt,align=center,font=\footnotesize,minimum height=11mm,text width=21mm,inner sep=2pt},
+  arr/.style={-{Stealth[length=2mm]},thick}]
+\node[box] (t) {Telemetría\\viajes y señales};
+\node[box,right=of t] (s) {Puntaje GRU\\cada 500 km};
+\node[box,right=of s] (a) {Alerta\\2 cortes sobre $\tau_\alpha$};
+\node[box,right=of a] (w) {Explicación\\hábitos vs.\ sanos};
+\node[box,right=of w,dashed] (p) {Política\\determinista};
+\node[box,below=6mm of p] (g) {Agentes LLM\\+ verificador};
+\node[box,left=of g,text width=33mm] (u) {Conductor · concesionario\\· posventa};
+\node[box,left=of u,text width=30mm] (r) {Retorno del taller\\monitoreo y reentrenamiento};
+\draw[arr] (t) -- (s); \draw[arr] (s) -- (a); \draw[arr] (a) -- (w); \draw[arr] (w) -- (p);
+\draw[arr] (p) -- (g); \draw[arr] (g) -- (u); \draw[arr] (u) -- (r); \draw[arr] (r) -| (t);
+\end{tikzpicture}
+\caption{Circuito de posventa. El modelo decide si hay alerta, la política (recuadro punteado) decide la acción y los
+agentes solo redactan.}
+\label{fig:circuito}
+\end{figure}
+
+El circuito de la Figura~\ref{fig:circuito} tiene siete pasos:
+\begin{enumerate}
+  \item \textbf{Telemetría diaria} del vehículo conectado: los resúmenes de viaje y los mensajes del filtro que Ford ya recibe.
+  \item \textbf{Puntaje} de la GRU cada 500\,km, sobre los últimos 1.000\,km (\S\ref{sec:gru}).
+  \item \textbf{Alerta confirmada} cuando el puntaje supera dos veces seguidas el umbral $\tau_\alpha$~\eqref{eq:alerta},
+    con el presupuesto $\alpha$ que eligió Ford.
+  \item \textbf{El porqué}: los hábitos en los que el vehículo supera al percentil 75 de los vehículos sanos de su mercado,
+    solo los modificables y coherentes con la física del DPF, hasta tres (\S\ref{sec:explicabilidad}).
+  \item \textbf{Política determinista}, que define Ford: si hay un hábito para nombrar, se envía un consejo al conductor; si
+    no lo hay, lo contacta el concesionario; si el riesgo sigue alto dos revisiones después (una revisión es un corte, cada
+    500\,km), el caso se escala al concesionario.
+  \item \textbf{Redacción}: los agentes escriben los textos y un verificador programado los controla.
+  \item \textbf{Retorno del taller}: cada intervención registrada indica si hubo alerta antes y con cuánto margen, y alimenta
+    el monitoreo y el reentrenamiento.
+\end{enumerate}
+
+\subsection{Agentes y verificador}
+
+La Tabla~\ref{tab:agentes} resume las tres piezas. Los agentes trabajan solo sobre las alertas, no sobre la flota, y
+ninguno puede cambiar la acción que fija la política.
+
+\begin{table}[!htbp]
+\centering
+\caption{Las piezas que redactan y controlan los textos.}
+\label{tab:agentes}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Pieza & Qué hace \\
+\midrule
+Agente de clasificación & Recorre los eventos de la semana con herramientas: consulta la acción que fija la política y el
+  contexto de la flota, encarga la redacción y arma el resumen semanal para posventa. No puede elegir una acción distinta de
+  la política. \\
+Agente redactor & Escribe el mensaje al conductor, el resumen para el taller y la línea de la bandeja de posventa. Las
+  recomendaciones y los chequeos se eligen de listas cerradas, y su texto lo pone el código. \\
+Verificador (código) & Todo número tiene que estar en los hechos del caso. Rechaza el lenguaje causal (``porque'',
+  ``debido a''), las certezas, las promesas de que el riesgo baja, la palabra ``probabilidad'' y las atribuciones (``el
+  sistema lo marcó por\ldots'', ``se parece a autos que fallaron''). Al conductor no le llegan síntomas del filtro (carga,
+  regeneraciones, aceite, consumo). Si rechaza un texto, el agente lo reintenta hasta dos veces con la lista de problemas;
+  si no lo logra, se usa una plantilla aprobada. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Cada pedido al modelo de lenguaje se guarda con una clave derivada de lo que lo define, de modo que un texto aprobado no
+cambia entre ejecuciones y el prototipo se reproduce sin conexión.
+
+\subsection{Tres destinatarios, tres mensajes}
+
+\begin{itemize}
+  \item \textbf{El conductor}, en la aplicación de su Ford, recibe un hábito concreto, algo que puede hacer el fin de semana,
+    sin códigos de error, sin porcentajes y sin hablar de fallas. Por ejemplo: \emph{``Comparado con autos sanos de tu zona,
+    tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie
+    solo.''}
+  \item \textbf{El concesionario} recibe la ficha del vehículo, con las señales del filtro comparadas con las de los
+    vehículos sanos de su mercado y los chequeos sugeridos.
+  \item \textbf{Posventa de Ford} recibe cada lunes una bandeja con las alertas de la semana priorizadas y ya redactadas,
+    para aprobar o editar.
+\end{itemize}
+
+\subsection{Prototipo}
+\label{sec:prototipo}
+
+Se construyó una aplicación que reproduce semana a semana los 426 vehículos de desarrollo con el modelo finalista: en cada
+semana el sistema solo conoce lo que se sabía ese día, y ningún vehículo del conjunto de prueba aparece en ella. Tiene tres
+vistas ---la bandeja de posventa, la ficha del vehículo y el seguimiento de lo que pasó después--- y un control del
+presupuesto $\alpha$ (Tabla~\ref{tab:replay}). El acceso está en la \S\ref{sec:complementaria}.
+
+\begin{table}[!htbp]
+\centering
+\caption{La temporada reproducida en el prototipo, según el presupuesto de falsas alarmas \tagdev{} (426 vehículos: 135 con
+evento y 291 sanos).}
+\label{tab:replay}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & $\alpha = 5\,\%$ & $10\,\%$ & $15\,\%$ & $20\,\%$ \\
+\midrule
+Vehículos con evento avisados antes (de 135) & 39 & 56 & 69 & 82 \\
+Vehículos sanos con un aviso de más (de 291) & 14 & 29 & 43 & 58 \\
+Alertas nuevas / escalamientos & 53 / 7 & 85 / 10 & 112 / 22 & 140 / 36 \\
+Alertas con un hábito para nombrar & 48 & 73 & 101 & 125 \\
+Anticipación mediana, semanas (km) & 15 (7.000) & 16 (7.200) & 16 (7.500) & 21 (8.100) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Al $5\,\%$, 39 de los 135 vehículos con evento reciben un aviso con una mediana de 15 semanas de margen, y 14 de los 291
+sanos reciben uno de más; 48 de las 53 alertas son un consejo al conductor. La muestra está enriquecida en eventos (135 de
+426), de modo que los conteos no se trasladan directamente a una flota real (\S\ref{sec:costo}). En los cuatro puntos del
+control, los agentes redactaron 465 textos y 196 resúmenes semanales, todos aprobados por el verificador, que rechazó 103
+intentos en el camino; no hizo falta ninguna plantilla.

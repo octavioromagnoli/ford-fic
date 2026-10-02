@@ -95,7 +95,7 @@ def _build_logistic_l1(params: dict[str, Any]) -> BaseEstimator:
 
 @register("lgbm")
 def _build_lgbm(params: dict[str, Any]) -> BaseEstimator:
-    """GBM chico de referencia de F3 (docs/f3-modelos-candidatos.md §1.3, sin restricciones).
+    """GBM chico de referencia de F3 (CLAUDE.md, sin restricciones).
 
     Los defaults son los del doc para el panel v1: ~2.000 filas y ~250 positivas de
     ~50 vehículos. Con más hojas o menos regularización, un GBM memoriza vehículos.
@@ -199,7 +199,7 @@ def _build_cure_mixture(params: dict[str, Any]) -> BaseEstimator:
     Va de a pares con `target: {name: cure_window}` y `preprocessing: none`: trae adentro
     la normalización contra la flota, la imputación y la escala por hito, y las ajusta
     con el train del fold. Detalle y verosimilitud en `src/models/cure.py`; qué corre y
-    qué decide, en `docs/memoria/f3-preregistro-cure.md`.
+    qué decide, en `docs/reproducibilidad.md`.
     """
     from src.models.cure import CureMixtureModel
 
@@ -214,7 +214,7 @@ def _build_external_incidence(params: dict[str, Any]) -> BaseEstimator:
     `fit` no aprende nada: carga el ajuste de la fuente (`artifact`, el `.joblib` de
     `scripts/fit_external_incidence.py`) y puntúa. Va con `preprocessing: none`, porque la
     normalización contra la flota, la imputación y la escala son las de la fuente. Detalle en
-    `src/models/incidence.py`; qué decide, en `docs/memoria/f5-preregistro-incidencia-externa.md`.
+    `src/models/incidence.py`; qué decide, en `docs/reproducibilidad.md`.
     """
     from src.models.incidence import FrozenIncidenceScorer
 
@@ -229,7 +229,7 @@ def _build_vehicle_bagging(params: dict[str, Any]) -> BaseEstimator:
     de la corrida sin bagging, sin cambios), `n_bags` y `random_state` (el sorteo de
     vehículos). Necesita el vehículo en el `y`: `discrete_survival` lo trae y los binarios
     van con `target: {name: grouped_label}`. Es la pieza de E2
-    (`docs/memoria/f3-preregistro-landmark-ensamble.md`); detalle en `src/models/bagging.py`.
+    (`docs/reproducibilidad.md`); detalle en `src/models/bagging.py`.
     """
     from src.models.bagging import VehicleBaggingClassifier
 

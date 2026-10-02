@@ -1,0 +1,23 @@
+\section{Contexto del proceso}
+\label{sec:proceso}
+
+La telemetría llega a la nube de forma continua, pero la degradación se identifica una vez manifestada: en un servicio
+programado o cuando el cliente la reporta~\cite{ford}. El desafío se ubica, por lo tanto, en la posventa, y el valor de una
+predicción depende de cuánto antes de esa identificación llega.
+
+\textbf{El proceso reactivo queda registrado en la telemetría.} La fecha registrada del evento es posterior a la intervención
+en el taller. En la primera versión de los datos coincidía con ella: los cambios de aceite se concentraban en $\pm 3$ días. En la
+segunda versión, la fecha de los mismos vehículos cae una mediana de 14 días más tarde, y en las dos semanas previas ya
+aparecen el cambio de aceite y el ralentí prolongado característico de una regeneración forzada en servicio ($1{,}5$ a
+$1{,}8$ veces la tasa de base). Después del evento, además, el uso cambia: la fracción de viajes por debajo de la temperatura
+de régimen baja en el $72\,\%$ de los vehículos.
+
+Ambos hechos tienen consecuencias directas sobre la formulación. Si el modelo observara los días del taller, haría la
+detección reactiva que Ford ya tiene. Por eso: (i) la referencia del evento es la fecha registrada menos 21 días; (ii) el
+modelo nunca observa los 500\,km previos a esa referencia (\S\ref{sec:panel}); y (iii) ningún dato posterior al evento entra
+en ninguna ventana.
+
+\textbf{Dónde entra la predicción.} En la posventa, la alerta alimenta un circuito que termina en una acción: un consejo
+de manejo al conductor cuando hay un hábito modificable que lo distingue de los vehículos sanos de su mercado, un contacto
+del concesionario cuando no lo hay, y un escalamiento si el riesgo se mantiene alto. La decisión es determinista y la define
+Ford; la redacción la hacen agentes de lenguaje bajo un verificador programado (\S\ref{sec:producto}).

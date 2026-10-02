@@ -12,7 +12,7 @@ note: 'F6 K2 (preregistro b12056c, implementación de55335): survival stacking e
   Informativo: bootstrap pareado por vehículo +5,5 pts IC90 [-8,9; +17,8], P(dif>0)=0,74;
   con D empata (15,1% ± 3,1 contra 15,7% ± 0,9) con más lift (1,671 contra 1,616);
   (b) +0,020 (el finalista anterior +0,049); C-index 0,603 contra 0,582; Brier 0,112
-  igual. docs/memoria/f6-deteccion-vehiculo.md'
+  igual. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_ss_hw_r3.yaml
   config_versioned: true

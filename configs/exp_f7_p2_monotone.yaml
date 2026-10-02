@@ -1,6 +1,6 @@
 # F7 · P2: K2 con restricciones monótonas en el LightGBM del hazard.
 #
-# Preregistro: docs/memoria/f7-preregistro-varianza-k2.md (P2). Es `configs/exp_ss_hw_r3.yaml` (K2)
+# Preregistro: docs/reproducibilidad.md (P2). Es `configs/exp_ss_hw_r3.yaml` (K2)
 # con `monotone:` y nada más. La referencia es K2.
 #
 #   FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled python scripts/train.py --config configs/exp_f7_p2_monotone.yaml
@@ -35,7 +35,7 @@ model:
     bin_km: 500
     max_horizon_km: 55000    # <- horizonte completo (preregistro, §0)
     random_state: 42
-    # El mapa del 18-09 (docs/f3-modelos-candidatos.md §1.3, b88e1ce), sin agregar ni sacar nada.
+    # El mapa del 18-09 (CLAUDE.md, b88e1ce), sin agregar ni sacar nada.
     # +1: el riesgo no baja · −1: el riesgo no sube · el resto (y el bin) libre.
     # `msg_cleaning_auto_trend_per_1000km` queda libre: es una diferencia, no una tasa (preregistro §2).
     monotone:

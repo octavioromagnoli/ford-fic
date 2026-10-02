@@ -6,7 +6,7 @@
 # plantilla del bundle (el mensaje de scripts/build_demo_bundle.py con los textos de configs/explain_texts.yaml).
 #
 # El modelo de la demo (la GRU) no tiene atribución: los hábitos de los hechos son una comparación con los autos
-# sanos de su mercado, no lo que el modelo usó (docs/memoria/f9-demo-gru.md). Los textos lo dicen así, y el
+# sanos de su mercado, no lo que el modelo usó (docs/reproducibilidad.md). Los textos lo dicen así, y el
 # verificador rechaza el marco anterior ("se parece a autos que fallaron") y la atribución ("lo marcó por…").
 #
 #   python scripts/warm_demo_cache.py --config configs/demo.yaml     # corre el triage de todas las semanas

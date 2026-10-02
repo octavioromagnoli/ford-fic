@@ -406,7 +406,7 @@ def signal_aggregates(signals: pd.DataFrame, km_by_vehicle: pd.Series, eda: dict
     """Un vehículo por fila: severidad, `Acumulation` y ciclo de regeneración de `signals`.
 
     Las tasas se normalizan por los km de `trips`, no por el odómetro de `signals`:
-    `trips` manda como eje (`docs/memoria/f1-calidad-odometro.md`).
+    `trips` manda como eje (`docs/reproducibilidad.md`).
     """
     saturation = float(eda["saturation_level"])
     work = signals.assign(
@@ -620,7 +620,7 @@ def estimate_origin_day(vehicles: pd.DataFrame) -> tuple[float, pd.Series]:
     """Origen del calendario en días desde epoch, estimado **sobre dev**.
 
     `primer_viaje − ProductionDay` es el puente que encontró F1
-    (`docs/memoria/f1-anclaje-temporal.md`). Acá se re-estima restringido a dev para
+    (`docs/reproducibilidad.md`). Acá se re-estima restringido a dev para
     confirmar que el hallazgo se sostiene; es una estimación **exploratoria**, no el
     valor que F2 va a congelar.
     """
@@ -684,7 +684,7 @@ def event_odometer(vehicles: pd.DataFrame, trips: pd.DataFrame, origin_day: floa
     """Traduce el evento al eje de km con las **dos** lecturas posibles del eje de días.
 
     El diccionario oficial (anexo 7.3) dice que `IdentificationDate` son "días desde
-    producción". Con el anclaje de F1 (`docs/memoria/f1-anclaje-temporal.md`):
+    producción". Con el anclaje de F1 (`docs/reproducibilidad.md`):
 
         A · fecha_evento = origen + ProductionDay + IdentificationDate
 

@@ -5,7 +5,7 @@
 #
 #   python scripts/decision_layer.py --config configs/exp_decision_v2_ss.yaml
 #
-# Lectura: docs/memoria/f9-remedicion-v2.md (§ K2 sobre v2).
+# Lectura: docs/reproducibilidad.md (§ K2 sobre v2).
 seed: 0
 
 run_config: configs/exp_v2_ss_r3.yaml

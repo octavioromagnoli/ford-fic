@@ -1,6 +1,6 @@
 # F6 · K2: survival stacking en km con horizonte completo y el conjunto en riesgo de la ventana
 #
-# Preregistro: docs/memoria/f6-preregistro-deteccion-vehiculo.md (K2). Es
+# Preregistro: docs/reproducibilidad.md (K2). Es
 # `configs/exp_survival_stacking_r3.yaml` con dos cambios y nada más:
 #   - el target: `window_km_survival` en vez de `discrete_survival` (entrada tardía en el
 #     odómetro del 01-09-2025; un sano sale en min(último odómetro, odómetro del 11-03-2026));

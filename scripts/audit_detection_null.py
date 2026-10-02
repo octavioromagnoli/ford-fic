@@ -7,7 +7,7 @@ La alerta sostenida (`k_consecutive` cortes seguidos sobre el umbral) depende de
 historial: los fallados del panel tienen el doble de cortes que los sanos, así que un score al
 azar ya detecta algo. CLAUDE.md (regla 6) pide comparar toda métrica así contra un nulo que
 conserve esa magnitud. Este script hace lo del §4 del preregistro
-`docs/memoria/f6-preregistro-deteccion-vehiculo.md`:
+`docs/reproducibilidad.md`:
 
 * **Nulo.** Por repetición, el score **crudo** del modelo (antes de la post-transformación del
   candidato, si la tiene) se permuta entre todas las filas de dev, se le aplica la misma

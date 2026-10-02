@@ -1,0 +1,11 @@
+\begin{tabular}{@{}lll@{}}
+\toprule
+Modelo & Detección (\%) al 5 · 10 · 20\,\% & Falsas alarmas reales (\%) \\
+\midrule
+GRU ×3 (finalista) & 20 · 34 · 57 & 5,8 · 8,9 · 18,2 \\
+Survival stacking & 13 · 20 · 33 & 4,6 · 8,3 · 15,6 \\
+LightGBM (53 features) & 16 · 25 · 36 & 7,5 · 10,7 · 16,9 \\
+Logística L2 (53 features) & 12 · 16 · 33 & 8,8 · 11,8 · 18,3 \\
+SS + efecto aleatorio (GPBoost) & 8 · 11 · 14 & 6,5 · 11,3 · 21,5 \\
+\bottomrule
+\end{tabular}

@@ -38,8 +38,7 @@ siendo comparable con cualquier otra corrida de la tabla, con los mismos folds.
 ## El efecto aleatorio por vehículo
 
 Los ~5 cortes de un vehículo no son independientes: comparten el auto, el conductor y
-la ruta. Tratarlos como si lo fueran es la trampa que `docs/f3-modelos-candidatos.md`
-§2.1 anota para el Cox por fila. Con `backend: gpboost` (Sigrist, *tree-boosting with
+la ruta. Tratarlos como si lo fueran es la trampa que `CLAUDE.md` anota para el Cox por fila. Con `backend: gpboost` (Sigrist, *tree-boosting with
 grouped random effects*) el intercept por `vehicle_id` absorbe ese nivel y los árboles
 se quedan con lo que varía **dentro** del vehículo, que es donde el EDA dice que está la
 señal (ICC 0,3–0,6).
@@ -56,7 +55,7 @@ cuánto aporta el stacking y cuánto el efecto por vehículo.
 ## Menos varianza (F7): signos, pocas columnas y un hazard logístico
 
 Tres parámetros que por default no cambian nada, y que el preregistro F7
-(`docs/memoria/f7-preregistro-varianza-k2.md`) usa para bajar la varianza de K2:
+(`docs/reproducibilidad.md`) usa para bajar la varianza de K2:
 
 * `monotone`: `{feature: +1 | −1}`. Se traduce a `monotone_constraints` del LightGBM
   **por nombre**, con 0 para las demás y para el bin del hazard. El preprocesado estándar
@@ -113,7 +112,7 @@ class DiscreteSurvivalStacker(BaseEstimator, ClassifierMixin):
         `lightgbm` (sin efecto aleatorio) o `gpboost` (intercept aleatorio por vehículo).
     model_params
         Hiperparámetros del booster. Los defaults son los del LightGBM chico de F3
-        (`docs/f3-modelos-candidatos.md` §1.3) adaptados al tamaño del dataset apilado.
+        (`CLAUDE.md`) adaptados al tamaño del dataset apilado.
     gp_params
         Extras del `GPModel` de GPBoost (`likelihood`, etc.). Solo con `backend: gpboost`.
     monotone

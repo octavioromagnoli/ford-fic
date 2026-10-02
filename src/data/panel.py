@@ -7,7 +7,7 @@ Una fila por `(vehículo, punto de corte)`. Para cada vehículo:
 - en un vehículo **con evento** en `E` los cortes llegan hasta `E − G`: los que caen
   dentro del gap `(E − G, E)` no se etiquetan (el evento está demasiado cerca para
   que la fila sea anticipación), y todo lo posterior a `E` se descarta —después de
-  `IdentificationDate` el uso cambia (ver `docs/memoria/f2-eda-revision-y-features.md`)—.
+  `IdentificationDate` el uso cambia (ver `docs/reproducibilidad.md`)—.
   `label = 1` si `E ∈ [c + G, c + G + H]`, es decir si `c >= E − G − H`;
 - en un vehículo **sano** el último corte verificable es `last_odo − G − H`: más allá
   no sabemos si el evento habría caído dentro del horizonte (`censored_policy:

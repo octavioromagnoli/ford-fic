@@ -10,7 +10,7 @@
 # razonable. En v2 son cinco, con climas, usos y tasas de falla de hasta 8× de
 # diferencia, y la tasa por mercado está cruzada con cuántos fallados sin fecha sacó
 # Ford de cada uno. Una comparación agrupada mezcla mercado con señal. Lectura:
-# docs/memoria/f9-eda-v2.md.
+# docs/reproducibilidad.md
 seed: 42
 
 test_split: ${DATA_DIR}/processed/test_split.json

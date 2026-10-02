@@ -216,7 +216,7 @@ def holdout_summary(decision: dict[str, Any], label: str) -> pd.DataFrame:
     return pd.DataFrame(decision["labels"][label]["holdout_summary"])
 
 
-# --- por qué (docs/memoria/f4-explicabilidad-k2.md) -----------------------------------------
+# --- por qué (docs/reproducibilidad.md) -----------------------------------------
 
 @dataclass
 class K2Explanations:
@@ -283,7 +283,7 @@ def vehicle_why(expl: K2Explanations, vehicle_id: str, label: str, repeat: int, 
             "variant": expl.winner}
 
 
-# --- costo esperado (docs/memoria/f8-costos-k2.md) ------------------------------------------
+# --- costo esperado (docs/reproducibilidad.md) ------------------------------------------
 
 def curve_points(curve: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """(FPR, TPR) de una curva, con las dos políticas triviales agregadas como extremos."""

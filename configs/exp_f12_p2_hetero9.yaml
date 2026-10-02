@@ -1,4 +1,4 @@
-# F12 (P2: GRU + CNN-LSTM trips + CNN-LSTM tutora, ×3 semillas cada una), preregistrado en docs/memoria/f12-preregistro-deteccion.md.
+# F12 (P2: GRU + CNN-LSTM trips + CNN-LSTM tutora, ×3 semillas cada una), preregistrado en docs/reproducibilidad.md
 #   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_f12_p2_hetero9.yaml
 name: f12-p2-hetero9
 seed: 42

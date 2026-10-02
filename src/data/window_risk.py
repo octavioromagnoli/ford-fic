@@ -2,7 +2,7 @@
 
 El panel v1 mide el riesgo en km desde el corte y cuenta como negativo verificado todo
 horizonte de un sano, aunque el registro de eventos no lo cubriera. La Fase 1 del cure
-model (`docs/memoria/f3-reloj-y-ventana-del-evento.md`) mostró dos cosas:
+model (`docs/reproducibilidad.md`) mostró dos cosas:
 - el evento se ordena por días desde la venta, no por km;
 - el registro solo anota eventos entre `event_window.start` y `event_window.end`
   (`configs/data/event_clock.yaml`).

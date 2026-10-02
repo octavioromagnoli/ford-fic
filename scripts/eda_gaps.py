@@ -38,7 +38,7 @@ de `notebooks/eda-exhaustivo-dev.ipynb` dejó abierta o no formuló:
 
 Deja además `trips_dev_full.parquet` / `signals_dev_full.parquet` en `gaps/` (dev
 completo, ya canonizado y deduplicado) para no releer 1,2 GB en cada iteración.
-Los hallazgos están resumidos en `docs/memoria/f2-eda-revision-y-features.md`.
+Los hallazgos están resumidos en `docs/reproducibilidad.md`.
 """
 
 from __future__ import annotations

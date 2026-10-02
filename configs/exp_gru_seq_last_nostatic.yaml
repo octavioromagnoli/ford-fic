@@ -2,7 +2,7 @@
 # SIN la rama estática (`static_hidden: 0`).
 #
 # `SalesCountry_cd` sola da ROC 0,566 sobre este panel (invertida; ver
-# docs/memoria/f3-cnn-lstm-tutora.md): el mercado es sesgo de muestreo de F1, no física
+# docs/reproducibilidad.md): el mercado es sesgo de muestreo de F1, no física
 # del vehículo. Si el salto de `last` sobre los demás pooling viene de ahí, no predice
 # nada para Ford. Todo lo demás es idéntico a `exp_gru_seq_last.yaml`.
 #

@@ -34,7 +34,7 @@ Escribe (todo bajo `data/`, que no se versiona):
   el artefacto de auditoría, y el universo se aplica leyendo el holdout.
 - `raw_quality.csv`  · nulos y tipo por columna de las tres tablas crudas.
 
-El detalle y los números están en `docs/memoria/f2-union-y-holdout-dev-test.md`.
+El detalle y los números están en `docs/reproducibilidad.md`.
 
 ## Entrega v2 (26-09-2026): `draw.mode: universe`
 
@@ -44,7 +44,7 @@ contra la etiqueta— y se sortea **una vez** sobre él, con la misma semilla y 
 estrato compuesto (evento × mercado × motor). `previous_holdout` compara el sorteo
 nuevo con el viejo y guarda qué autos del test nuevo estaban en el dev viejo. Con
 `draw.mode: all` (configs/data/test_split_v1.yaml) corre el procedimiento de la entrega
-1, bit a bit. El porqué: `docs/memoria/f9-universo-v2.md`.
+1, bit a bit. El porqué: `docs/reproducibilidad.md`.
 """
 
 from __future__ import annotations

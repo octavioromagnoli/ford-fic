@@ -25,7 +25,7 @@ convierte el pronóstico en un score y en resúmenes por corte:
    enteramente anteriores al corte (regla 3).
 
 Qué cambió respecto de la primera versión, por el EDA de F2
-(`docs/memoria/f3-timesfm-zeroshot.md`): el canal de regeneraciones contaba el
+(`docs/reproducibilidad.md`): el canal de regeneraciones contaba el
 marcador `signals.Regenerations`, que se corta el 25-05-2026 y mide el calendario;
 los cortes se armaban con el universo de 1081 (incluidos los mercados sin eventos
 observables y los positivos con fecha de evento = fecha de venta) y los sanos se

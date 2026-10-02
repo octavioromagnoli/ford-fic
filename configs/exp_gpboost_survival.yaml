@@ -5,7 +5,7 @@
 # dos es lo que aporta el efecto aleatorio y nada más.
 #
 # Los ~5 cortes de un vehículo comparten auto, conductor y ruta: tratarlos como
-# independientes es la trampa que docs/f3-modelos-candidatos.md §2.1 anota para el Cox
+# independientes es la trampa que CLAUDE.md anota para el Cox
 # por fila. GPBoost (Sigrist) mete el nivel del vehículo en un efecto aleatorio para que
 # los árboles se queden con lo que cambia **dentro** del vehículo, que es donde el EDA
 # dice que está la señal (ICC 0,3–0,6).

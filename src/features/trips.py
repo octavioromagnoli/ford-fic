@@ -5,7 +5,7 @@ al universo) y los umbrales del YAML, y devuelve la misma tabla con columnas nue
 Ninguna de estas columnas mira otro viaje que no sea el anterior del mismo vehículo
 (para el tiempo de reposo), así que todas se pueden agregar hacia atrás sin riesgo.
 
-Lo que se decide acá y por qué (evidencia en `docs/memoria/f2-eda-revision-y-features.md`):
+Lo que se decide acá y por qué (evidencia en `docs/reproducibilidad.md`):
 
 - **`idle` vs. `moving`.** El 35% de las filas de `trips` tiene 0 km: motor encendido
   sin desplazamiento (mediana 0,8 min). No son viajes cortos, son otra cosa, y son
@@ -88,7 +88,7 @@ def derive_trip_columns(
     `OdometerTripEnd` y las de kilometraje negativo: no tienen posición confiable
     sobre el eje del panel. Todo lo demás se conserva; una fecha nula solo deja en NaN
     las derivadas temporales (con `date_format: ISO8601` en `raw_sources.yaml` no hay
-    ninguna: el 0,3% que había era de parseo, ver `docs/memoria/f2-fechas-formato-mixto.md`).
+    ninguna: el 0,3% que había era de parseo, ver `docs/reproducibilidad.md`).
     """
     missing = [c for c in REQUIRED if c not in trips.columns]
     if missing:

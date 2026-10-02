@@ -1,0 +1,174 @@
+\section{Datos técnicos relevantes}
+\label{sec:datos}
+
+\subsection{Fuentes, esquema y restricciones}
+
+Se recibieron las tres tablas del anexo de datos~\cite{ford} (estática del vehículo, resúmenes de viaje
+\emph{TripSummary} y señales \emph{DynamicInformation}), cada una dividida en dos cohortes (vehículos con y sin evento) y en
+dos versiones. La segunda versión de los datos trajo una tabla estática nueva, con ciudad de venta y país, y nuevos viajes y señales de los
+vehículos con evento; los de los sanos son idénticos byte a byte a los de la primera. En total son $\sim 2{,}5\times10^6$
+viajes y $\sim 10^7$ señales.
+
+\textbf{Contraste con el diccionario.} \emph{TripSummary} trae 25 de las 40 columnas documentadas: faltan posición GPS,
+elevación, presión de neumáticos, hollín de regeneración manual y autonomía. Las columnas del DPF llegan con otra
+denominación (\S\ref{sec:desafio}). No hay VIN: la clave es un código anonimizado, y la unión de las tres tablas es
+completa. El evento no está marcado fila a fila: la fecha del evento existe en el $100\,\%$ de los vehículos de la cohorte con
+evento y en ninguno de la otra. \emph{La cohorte es la etiqueta}, y por lo tanto nunca se usa como variable. El historial
+alcanza holgadamente para ventanas de varios miles de km (mediana de $\sim 2.000$ viajes y más de un año por vehículo).
+
+\subsection{Calidad de datos: sesgos, limpieza, faltantes y atípicos}
+\label{sec:trampas}
+
+Los problemas de la Tabla~\ref{tab:trampas} tienen algo en común: ninguno produce un error de ejecución, y todos producen
+una métrica mejor de lo que corresponde. Cada corrección se aplica al leer los archivos, se declara en un archivo de
+configuración y tiene un test automático.
+
+\begin{table}[!htbp]
+\centering
+\caption{Problemas encontrados en los datos, evidencia y tratamiento.}
+\label{tab:trampas}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.1cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{4.3cm}@{}}
+\toprule
+Problema & Evidencia & Tratamiento \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Muestreo y etiqueta}} \\
+Cohortes muestreadas en períodos de producción distintos & Antes del 20-01-2025 solo hay vehículos con evento (92) y
+  después de julio de 2025 solo sanos (341, con $\sim 50$ eventos esperados). Con ellos, la fecha de producción sola
+  separa las cohortes con AUC $0{,}87$ dentro del mercado & Universo restringido al período común
+  (\S\ref{sec:universo}) \\
+Fecha registrada posterior al taller & Cambio de aceite y ralentí prolongado en las dos semanas previas & Referencia del
+  evento $=$ fecha $-\,21$\,d \\
+Tasa de eventos por país dependiente de la extracción & De $0\,\%$ (PER) a $48\,\%$ (COL), en orden inverso a la cantidad de
+  vehículos con evento sin fecha excluidos por mercado & Toda comparación entre cohortes, dentro del mercado \\
+13 vehículos con dos códigos & Mismos viajes bajo dos identificadores (Jaccard $1{,}0$ sobre fecha y odómetro) & Se
+  unifican antes de particionar \\
+Formato de la segunda versión & Columna del evento renombrada; fecha de producción con otro origen ($+538$\,d); una fila
+  por evento; filas repetidas; extracción de la cohorte con evento diez días más larga (16.911 viajes) & Corrección al leer
+  y corte en el fin de extracción común (14-09-2026) \\
+Cambio de uso posterior al evento & Viajes bajo régimen: bajan en el $72\,\%$ de los vehículos; velocidad: sube en el
+  $79\,\%$ & Ningún dato posterior al evento entra en una ventana \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Columnas, faltantes y atípicos}} \\
+Contador de regeneraciones interrumpido & Cero registros desde el 25-05-2026 en toda la flota; su correlación con la
+  etiqueta ($0{,}317$) era calendario & Solo para auditoría; regeneración $=$ caída de la acumulación,
+  ec.~\eqref{eq:regen} \\
+Velocidad imposible o nula & Hasta $1{,}36\times10^5$\,km/h; nula \emph{exactamente} en los viajes de 0\,km ($33\,\%$ de las
+  filas) & Recalculada como km/duración con tope de 200\,km/h; el ralentí es una variable, no un faltante \\
+Temperaturas, duraciones y km extremos & $-73$\,°C, viajes de 20 días y de $-230$\,km ($<0{,}05\,\%$ cada uno) & Topes
+  físicos fijos; viajes con km negativos o sin odómetro, descartados \\
+Columnas con otra semántica & Combustible $>100$ en el $10{,}5\,\%$ de los viajes; vida del aceite constante dentro del viaje;
+  acumulación hasta 100 & Combustible como índice relativo; pendiente del aceite en la ventana; saturación $=$ nivel
+  $\ge 95$ \\
+Fechas en dos formatos & Sin declararlo, el parser anulaba 4.464 inicios de viaje y 18.124 señales & Formato ISO 8601
+  explícito \\
+Odómetro de señales nulo & $11\,\%$ en la primera versión de los datos (9 vehículos); $0{,}5\,\%$ en la segunda & La ventana se ubica
+  con el odómetro de los viajes \\
+Tramos sin viajes & Huecos de 50\,km en la secuencia & Canal de cobertura y arrastre del último valor \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+La imputación (mediana) y el escalado se ajustan en el entrenamiento de cada pliegue.
+
+\subsection{Universo de estudio y partición}
+\label{sec:universo}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[font=\small,
+  b/.style={draw,align=center,minimum height=9mm,inner sep=3pt},
+  xb/.style={draw,dashed,align=left,inner sep=3pt,text width=6.2cm,font=\footnotesize},
+  arr/.style={-{Stealth[length=2mm]},thick}]
+\node[b,text width=2.6cm] (all) {990 vehículos\\cinco mercados};
+\node[b,text width=3.6cm,right=7mm of all] (uni) {557 vehículos · 177 eventos\\producidos 20-01 a 31-07-2025};
+\node[b,text width=2.4cm,right=7mm of uni,yshift=6mm] (dev) {446 desarrollo\\141 eventos};
+\node[b,text width=2.4cm,right=7mm of uni,yshift=-6mm,very thick] (test) {111 prueba\\36 eventos};
+\node[xb,below=5mm of all.south west,anchor=north west] (out) {433 excluidos: 92 con evento anteriores al 20-01-2025
+  (sin sanos contemporáneos) y 341 sanos posteriores al 31-07-2025 (0 eventos frente a $\sim 50$ esperados).};
+\draw[arr] (all) -- (uni); \draw[arr] (uni.east) -- (dev.west); \draw[arr] (uni.east) -- (test.west);
+\draw[arr,dashed] (all) -- (out.north -| all);
+\end{tikzpicture}
+\caption{Del conjunto recibido al conjunto de prueba. La partición se sorteó al recibir la segunda versión de los datos (semilla 42,
+estratificada por evento, mercado y motor), antes de examinar ninguna de sus variables contra la etiqueta. Se recibió además
+un vehículo de Paraguay, mercado sin vehículos sanos, que no entra en el estudio.}
+\label{fig:embudo}
+\end{figure}
+
+Se conserva el período de producción en que se muestrearon ambas cohortes: un vehículo sano producido en octubre de 2025 no
+es un negativo verificable si de esa época no se registró ningún evento. Se evaluó también la alternativa de incluir los 433
+vehículos excluidos: con ellos, los modelos ordenaban \emph{peor} a los vehículos comparables, porque aprendían la fecha de
+producción. Con la segunda versión de los datos la partición se volvió a sortear sobre el universo nuevo.
+
+Esa versión modificó varias conclusiones: la velocidad dejó de separar dentro del mercado; apareció una trayectoria
+hacia el evento que antes no se observaba; la ventana de calendario del registro de eventos resultó ser propia de la
+extracción anterior; y el motor ENG\_3, sin eventos en la primera versión, pasó a tener 47 (46 en Brasil).
+
+\subsection{Ingeniería de variables}
+\label{sec:features}
+
+\textbf{Variables derivadas por viaje.} Sobre cada viaje $j$ con distancia $d_j$ y duración $\delta_j$ se calcula, entre
+otras, la velocidad $v_j = d_j/\delta_j$ (con tope de 200\,km/h), el indicador de ralentí $\ind\{d_j = 0\}$, el de motor bajo
+régimen $\ind\{T^{\mathrm{motor}}_{\max,j} < 70\ {}^{\circ}\mathrm{C}\}$ entre los viajes con desplazamiento, y el arranque en frío.
+Las fracciones ``de viaje'' se calculan solo entre los viajes con $d_j > 0$. Como el contador de regeneraciones deja de
+reportar, una regeneración se define a partir del nivel de acumulación $a$:
+\begin{equation}
+  r_j = \ind\{\, a_{j}^{\mathrm{inicio}} - a_{j}^{\mathrm{fin}} > 15 \,\},
+  \label{eq:regen}
+\end{equation}
+es decir, una caída de más de 15 puntos entre el inicio y el final del viaje. Con un umbral de 5 puntos, el saldo acumulado de
+subidas y caídas no seguía la acumulación (correlación $0{,}005$ contra $0{,}45$): el umbral bajo contaba ruido.
+
+\textbf{Representación agregada.} Para los modelos tabulares y de supervivencia, la ventana se resume en 53 variables
+\begin{equation}
+  x^{(f)}_{i,c} = \mathrm{agg}_f\big(\{\, z^{(f)}_j : j \in i,\ \mathrm{odo}_j \in (c-W, c] \,\}\big),
+  \label{eq:agregado}
+\end{equation}
+donde $z^{(f)}$ es una variable derivada y $\mathrm{agg}_f$ un agregador: media, mediana, percentil, conteo por 1.000\,km o por
+día, distancia media entre eventos, km desde el último evento, y tendencia como diferencia entre la segunda y la primera
+mitad de la ventana. Se agrupan en cuatro familias: térmica y trayectos cortos (17), regeneración (15), uso (6) y severidad
+de mensajes (13), más dos de control de cobertura (Anexo~\ref{anx:features}).
+
+\textbf{Representación secuencial.} Para los modelos recurrentes, la ventana se divide en $T = 20$ tramos de 50\,km y en
+cada tramo $t$ se calculan $C = 15$ canales, lo que da un tensor
+\begin{equation}
+  \mathbf{X}_{i,c} \in \R^{T \times C}, \qquad
+  \mathbf{X}_{i,c}[t,k] = \mathrm{agg}_k\big(\{ z^{(k)}_j : \mathrm{odo}_j \in (c - W + 50(t-1),\ c - W + 50t] \}\big).
+  \label{eq:secuencia}
+\end{equation}
+Seis canales describen cómo se viaja (cantidad de viajes, ralentí, bajo régimen, velocidad, km y duración por viaje) y nueve
+el estado del filtro (acumulación media y máxima, subida de la acumulación, regeneraciones, tres fracciones de mensajes,
+registros y cobertura). Un tramo sin datos se rellena con cero en los conteos y con el último valor de la ventana en los
+niveles; el canal de cobertura indica al modelo cuál es cuál. Se agregan país, motor y serie como variables estáticas.
+
+\textbf{Variables excluidas del modelo.} Se conservan solo para auditoría las que miden calendario o cohorte y no el
+vehículo: fechas de producción y de venta, temperatura ambiente (los vehículos con evento circulan en zonas más frías que los
+sanos de su mercado) y el contador de regeneraciones interrumpido.
+
+\subsection{Análisis exploratorio}
+\label{sec:eda}
+
+Todo el análisis se hizo sobre el conjunto de desarrollo y compara contra sanos \emph{del mismo mercado}: con cinco
+mercados de tasas muy distintas, una comparación agrupada confunde país con vehículo. Para una variable $x$ y una distancia
+al evento $d$, se estima
+\begin{equation}
+  \theta(d) = P\big(\, x_{\mathcal{F}} > x_{\mathcal{S}} \;\big|\; \text{mismo mercado y tramo de odómetro},\ E - c \in d \,\big),
+  \label{eq:theta}
+\end{equation}
+la probabilidad de que un corte de un vehículo con evento supere a uno sano comparable ($\theta = 0{,}5$: sin separación).
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.62\textwidth]{figuras/perfil_evento.pdf}
+\caption{Probabilidad $\theta(d)$ de la ecuación~\eqref{eq:theta} para cuatro variables, según la distancia al evento.}
+\label{fig:perfil}
+\end{figure}
+
+La Figura~\ref{fig:perfil} muestra que la huella crece hacia el evento: la fracción de ralentí pasa de $\theta = 0{,}60$ a
+$0{,}64$ y $0{,}76$, y la de viajes bajo régimen de $0{,}55$ a $0{,}62$ y $0{,}73$, mientras la temperatura del refrigerante
+al final del viaje baja ($\theta$ de $0{,}47$ a $0{,}29$) y la velocidad no se aparta de $0{,}5$. Lo que crece es el tiempo
+detenido con el motor en marcha y la imposibilidad de alcanzar temperatura, consistente con la
+ecuación~\eqref{eq:balance}; lejos del evento la señal es débil. La señal también aparece temprano: con los primeros 60 días
+de uso tras la venta, el ralentí ordena vehículos con AUC $0{,}636$ dentro del mercado, que es información de \emph{qué
+vehículo}. Por último, el riesgo es función de la edad y no del odómetro: la tasa de eventos crece hasta los $\sim 4$ meses
+desde la venta y luego se estabiliza en 3 a 4 eventos cada 100 vehículos-mes, sin efecto del mes calendario ($p = 0{,}16$).

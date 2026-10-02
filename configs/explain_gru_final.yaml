@@ -1,0 +1,21 @@
+# En qué se apoya la GRU final (F10: GRU + TripSummary + estática con `label`, semilla 42, folds splits_r3).
+# Misma cuenta que configs/explain_f11.yaml: reentrena la repetición 0 y permuta cada canal / estática en la
+# validación de cada fold. Es lo que cita la diapositiva "En qué se apoya" del pitch (solo dev).
+#
+#   FORD_DATA_DIR=$PWD/data/v2 WANDB_MODE=disabled python scripts/explain_perm_seq.py --config configs/explain_gru_final.yaml
+seed: 0
+output_name: explain-gru-final
+experiments_dir: experiments
+repeat: 0
+n_permutations: 3
+k_consecutive: 2
+budgets: [0.05, 0.10, 0.15, 0.20]
+
+experiments:
+  - configs/exp_v2all_gru_trips_estaticas_r3.yaml
+
+families:
+  cobertura: [n_records, observed, n_trips]
+  estado DPF: [acum_mean, acum_max, acum_rise, regen_drops, msg_full_frac, msg_severe_frac, msg_cleaning_auto_frac]
+  hábitos: [idle_frac, below_regime_frac, speed_kmh, trip_km, trip_duration_min]
+  estática: [static_SalesCountry_cd, static_Engine, static_ModelSeries]

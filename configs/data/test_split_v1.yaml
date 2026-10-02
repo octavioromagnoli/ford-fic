@@ -28,7 +28,7 @@ event_column: event_observed                # estratificación: IdentificationDa
 # sobrevive conserva el lado que le tocó. Re-sortear el universo recortado sería
 # un dado nuevo tirado después de haber mirado los datos que motivaron el recorte.
 # El detalle está en `src/data/usable.py` y en
-# `docs/memoria/f2-universo-fecha-usable.md`. Poner las dos claves en `false`/`null`
+# `docs/reproducibilidad.md`. Poner las dos claves en `false`/`null`
 # devuelve el universo completo de 1081 sin tocar una línea de código.
 universe:
   # `IdentificationDate == daysUntilSale` exactamente en 284 de los 365 positivos:

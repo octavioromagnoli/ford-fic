@@ -22,7 +22,7 @@
 #      fecha; mediana del corrimiento v2 − v1: 14 d, p75 27-33 d). Sin correrla, el gap G
 #      (500 km ≈ 9 días) dejaría el taller y los síntomas adentro de la última ventana;
 #   3. los folds estratifican por label × mercado × motor (src/eval/splits.py).
-# Evidencia: docs/memoria/f9-entrega-v2.md y f9-eda-v2.md.
+# Evidencia: docs/reproducibilidad.md y f9-eda-v2.md.
 #
 seed: 42
 

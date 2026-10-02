@@ -1,5 +1,5 @@
 # Demo de producto (MVP para el pitch del 02-10-2026): la flota de dev reproducida en el calendario con la GRU,
-# una bandeja semanal de triage y dos agentes (redactor + verificador, triage). docs/memoria/f9-demo-gru.md.
+# una bandeja semanal de triage y dos agentes (redactor + verificador, triage). docs/reproducibilidad.md
 #
 #   FORD_DATA_DIR=$PWD/data/v2 python scripts/build_demo_bundle.py --config configs/demo.yaml
 #   python scripts/warm_demo_cache.py --config configs/demo.yaml --prune   # agentes, todas las semanas
@@ -7,7 +7,7 @@
 #   streamlit run scripts/demo_app/app.py
 #
 # Necesita la entrega v2 (FORD_DATA_DIR con los paneles v2 y `splits_r3.json`) y las tres semillas del modelo final
-# con su ensamble (docs/memoria/f11-test-resultado.md):
+# con su ensamble (docs/reproducibilidad.md):
 #   WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2all_gru_trips_estaticas{,_s1,_s2}_r3.yaml
 #   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_v2all_seeds3_gru_trips_estaticas.yaml
 # **No cambia ninguna métrica**: el score, el umbral y la alerta son los del ensamble en una repetición, tal cual.
@@ -22,7 +22,7 @@ brand:
   team: SOG
   page_title: SOG · Ford Innovation Challenge III
 
-# El modelo que puntúa la flota: el finalista, medido en test el 01-10 (docs/memoria/f11-test-resultado.md). Es la
+# El modelo que puntúa la flota: el finalista, medido en test el 01-10 (docs/reproducibilidad.md). Es la
 # GRU + TripSummary + estática completa entrenada con `label`, en ensamble por rango de las semillas 42, 1 y 2 sobre
 # los folds `splits_r3`. Nombre y familia viajan en la meta del bundle: la app no los escribe a mano.
 model:
@@ -124,7 +124,7 @@ bundle:
   # wandb Artifact que baja la app desplegada. La versión se fija acá (`v0`, `v1`…) para que la demo no cambie
   # sola: publicar y cambiar el pin es una decisión. Los bundles anteriores no se tocan.
   # v0 (01-10): el modelo final (GRU con `label`, semillas 42/1/2), los cuatro puntos de la perilla y su triage
-  # (docs/memoria/f9-demo-gru-final.md).
+  # (docs/reproducibilidad.md).
   artifact: demo-bundle-gru-final
   version: v0
   entity: oromagnoli-

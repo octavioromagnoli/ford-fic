@@ -6,7 +6,7 @@
 #      reconstruirlo (`src/data/panel.py::match_healthy_cuts` es una función pura).
 #
 # NO es el panel de referencia: acá el kilometraje alto y el calendario de 2026 son
-# atajos que el modelo puede aprender (ver docs/memoria/f2-eda-revision-y-features.md).
+# atajos que el modelo puede aprender (ver docs/reproducibilidad.md).
 #
 #   python scripts/build_dataset.py --config configs/data/panel_v1_unmatched.yaml
 seed: 42

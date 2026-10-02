@@ -1,0 +1,28 @@
+\section*{Resumen}
+\addcontentsline{toc}{section}{Resumen}
+
+En este trabajo se desarrolló y se validó un método para anticipar la saturación del filtro de partículas diésel (DPF) a
+partir de la telemetría que los vehículos conectados de Ford ya transmiten: resúmenes de viaje y mensajes del sistema de
+postratamiento. El problema se formuló como un panel de cortes cada $\Delta = 500$\,km, donde en cada corte un modelo
+observa los últimos $W = 1.000$\,km y asigna un puntaje de riesgo de que el evento ocurra entre $G = 500$ y
+$G + H = 3.500$\,km más adelante, sin acceso a los $500$\,km inmediatamente previos. Antes de modelar se identificaron y corrigieron sesgos de
+muestreo y de formato que inflaban cualquier métrica: dos cohortes muestreadas en períodos de producción distintos, una fecha
+de evento posterior a la intervención en taller y un contador de regeneraciones que deja de reportar. Como el PR-AUC por
+fila de este panel premia reconocer qué vehículo va a fallar aunque no se anticipe cuándo, los modelos se evaluaron con
+una métrica que exige anticipar: la detección por vehículo a un presupuesto fijo de falsas alarmas, contrastada con un
+nulo de permutación que conserva el largo de cada historial. Sobre más de 40 configuraciones (modelos
+lineales, \emph{gradient boosting}, supervivencia en tiempo discreto y redes recurrentes), el modelo finalista es una red
+GRU con atención de $\sim 3.900$ parámetros sobre una secuencia de 20 tramos de 50\,km $\times$ 15 canales, más país, motor
+y serie, combinada en un ensamble por rango de tres semillas. En un conjunto de prueba de 111 vehículos que nunca se usó para
+entrenar ni para ajustar (103 con datos, 32 con evento), detecta $\sim 30\,\%$ de los eventos con $5\,\%$ de vehículos sanos con
+falsa alarma (el nulo da $7\,\%$), $\sim 40$--$50\,\%$ con $10\,\%$ y $\sim 50$--$60\,\%$ con $20\,\%$, con una mediana de
+$\sim 4.600$\,km (unos tres meses) entre la primera alerta y el evento. Con el umbral fijado en desarrollo, las falsas
+alarmas realizadas en prueba fueron $5{,}8$, $8{,}9$ y $18{,}2\,\%$. Cada alerta entra en un circuito de posventa: una
+política determinista que define Ford decide la acción (un consejo de manejo al conductor o un contacto del
+concesionario), y agentes de lenguaje redactan los avisos bajo un verificador programado que impide que inventen números o
+diagnósticos. El costo de operación estimado es de USD~$0{,}07$--$0{,}10$ por vehículo y por año, sin sensores
+adicionales.
+
+\clearpage
+\tableofcontents
+\clearpage

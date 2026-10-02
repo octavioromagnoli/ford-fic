@@ -6,7 +6,7 @@
     # 2 · medir
     python scripts/eval_test.py --config configs/eval_test_f11.yaml --report
 
-El protocolo es el de docs/memoria/f11-preregistro-test.md. Por experimento (`--fit`):
+El protocolo es el de docs/reproducibilidad.md Por experimento (`--fit`):
 
 * **Modelo final:** el `Pipeline` del experimento (preprocesado + modelo + target) entrenado con
   **todo dev**, que puntúa los cortes de test.

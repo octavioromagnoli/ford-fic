@@ -1,0 +1,141 @@
+\section{Definición del desafío}
+\label{sec:definicion}
+
+Ford pide anticipar \emph{el momento} en que un vehículo se aproxima a la degradación, con margen para actuar antes de que
+el cliente lo perciba~\cite{ford}. Son dos exigencias que tiran en direcciones opuestas: \emph{anticipar} obliga a no
+mirar los últimos kilómetros, que es donde la señal es más fuerte, y \emph{el momento} exige información sobre
+\emph{cuándo}, no solo sobre \emph{qué vehículo}. Esta sección traduce ambas exigencias a un problema de aprendizaje
+supervisado y a una métrica que no se pueda satisfacer con atajos.
+
+\subsection{Formulación: panel de cortes con gap de blanking}
+\label{sec:panel}
+
+Sea $i$ un vehículo con historial observado hasta el odómetro $L_i$ y, si tiene evento, $E_i$ el odómetro en la referencia
+del evento (fecha registrada $-\,21$\,d, traducida a km con el anclaje del calendario). Se definen cortes sobre una grilla
+de paso $\Delta$,
+\begin{equation}
+  c \in \{\, k\Delta : k \in \mathbb{N} \,\}, \qquad
+  c \le \begin{cases} E_i - G & \text{si } i \text{ tiene evento,}\\ L_i - G - H & \text{si } i \text{ es sano,} \end{cases}
+  \label{eq:cortes}
+\end{equation}
+y para cada par $(i,c)$ la etiqueta
+\begin{equation}
+  y_{i,c} = \ind\{\, G \le E_i - c \le G + H \,\},
+  \label{eq:etiqueta}
+\end{equation}
+con $y_{i,c} = 0$ para los sanos. La condición sobre los sanos en~\eqref{eq:cortes} exige que el vehículo haya sido observado
+hasta $c + G + H$: un corte sin ese seguimiento no es un negativo verificable y se descarta (censura). La entrada del modelo
+es una función de los datos con odómetro en la ventana $(c - W, c]$, de modo que entre la última observación y el comienzo
+del horizonte siempre hay al menos $G$\,km sin información (Figura~\ref{fig:panel}). Se usan
+\begin{equation}
+  W = 1.000\ \text{km}, \qquad G = 500\ \text{km}, \qquad H = 3.000\ \text{km}, \qquad \Delta = 500\ \text{km}.
+\end{equation}
+Se descartan además las ventanas con menos de 5 viajes o que cubren menos de $W/2$ en km recorridos.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[x=2.3cm,y=0.9cm,font=\small]
+\fill[black!12] (0,0) rectangle (1,0.75);
+\fill[pattern=north east lines,pattern color=black!45] (1,0) rectangle (1.5,0.75);
+\fill[black!4] (1.5,0) rectangle (4.5,0.75);
+\draw (0,0) rectangle (1,0.75); \draw (1,0) rectangle (1.5,0.75); \draw (1.5,0) rectangle (4.5,0.75);
+\draw[-{Stealth}] (-0.3,0) -- (4.9,0) node[right] {km};
+\foreach \x/\l in {0/{$c-W$},1/{$c$},1.5/{$c+G$},4.5/{$c+G+H$}} {\draw (\x,0) -- (\x,-0.1) node[below] {\l};}
+\node at (0.5,0.37) {$W$: entrada};
+\node[fill=white,inner sep=1pt] at (1.25,0.37) {$G$};
+\node at (3,0.37) {$H$: $y_{i,c}=1$ si $E_i$ cae acá};
+\draw[very thick] (1,-0.05) -- (1,1.0) node[above] {corte};
+\end{tikzpicture}
+\caption{Ventana de entrada $W$, gap de blanking $G$ y horizonte $H$ alrededor de un corte $c$.}
+\label{fig:panel}
+\end{figure}
+
+\textbf{Elección de los parámetros.} El gap $G$ es la condición de anticipación: sin él, el modelo aprende los mensajes de
+``filtro sobrecargado'' de los últimos kilómetros, que son la definición del evento y no un precursor. Ventanas de 2.000 y
+3.000\,km dieron resultados equivalentes a $W = 1.000$\,km y reducen la cantidad de eventos con cortes válidos. El horizonte
+$H$ ubica los positivos donde el perfil alineado al evento muestra señal (\S\ref{sec:eda}).
+
+\textbf{Eje temporal.} El evento se ordena mejor por edad del vehículo que por odómetro: el desvío estándar del logaritmo
+del instante del evento es $0{,}38$ en días desde la venta y $0{,}91$ en km. Los cortes se definen en km, porque es el eje en
+que se acumula el uso, y la anticipación se reporta en km y en días.
+
+\textbf{Emparejamiento de los sanos.} Los cortes de los vehículos sanos se muestrean con la misma distribución conjunta
+de odómetro (celdas de 4.000\,km) y mes calendario que los cortes positivos. Sin el emparejamiento por mes, tres variables
+de calendario elevaban el ROC de $0{,}67$ a $0{,}76$; con él, de $0{,}57$ a $0{,}60$: el calendario dejaba de ser un atajo.
+
+El panel de desarrollo resultante tiene 11.703 filas de 426 vehículos con cortes válidos (135 con evento) y 682 filas
+positivas, una tasa de $0{,}058$.
+
+\textbf{Restricciones de validación.} (i) Partición agrupada por vehículo~\cite{roberts2017}: un vehículo nunca aparece en
+entrenamiento y validación a la vez; los pliegues se estratifican por etiqueta, mercado y motor, y la validación cruzada de
+5 pliegues se repite 3 veces. (ii) Un conjunto de prueba congelado antes de examinar cualquier variable contra la etiqueta.
+(iii) Variables calculadas solo hacia atrás del corte, con imputación y escalado ajustados en el entrenamiento de cada
+pliegue. (iv) Auditorías de fuga de información obligatorias para todo candidato: con las variables permutadas entre filas, la
+métrica tiene que caer a la tasa base.
+
+\subsection{Métrica de evaluación}
+\label{sec:metricas}
+
+\textbf{Por qué no alcanza el PR-AUC por fila.} Todas las filas positivas del panel pertenecen a vehículos con evento. Un puntaje que solo
+indica la cohorte, $s_{i,c} = \ind\{i \text{ tiene evento}\}$, sin ninguna información sobre el instante, obtiene
+\begin{equation}
+  \text{PR-AUC}_{\text{cohorte}} = 0{,}177, \qquad \text{lift} = \frac{0{,}177}{0{,}058} = 3{,}03,
+  \label{eq:techo}
+\end{equation}
+($0{,}263$ y $2{,}10$ con la primera versión de los datos). La meta inicial de lift, de $1{,}6$ a $2$, se alcanzaba entonces sin anticipar
+nada: el PR-AUC por fila~\cite{saito2015} de este panel premia reconocer \emph{qué vehículo} va a fallar aunque no se sepa
+\emph{cuándo}, y por eso no se usó para elegir. La métrica que se usó, a continuación, exige anticipar: solo cuenta una
+alerta que llega antes del evento, con un presupuesto fijo de falsas alarmas. Por la misma razón no se reporta exactitud:
+con $5{,}8\,\%$ de positivos, la predicción constante ``sin evento'' da $94\,\%$.
+
+\textbf{Detección por vehículo a presupuesto de falsas alarmas.} Sea $s_{i,c}$ el puntaje del corte $c$ y $c_1 < c_2 < \dots$
+los cortes de $i$. Un vehículo queda \emph{alertado} con umbral $\tau$ cuando su puntaje supera $\tau$ en dos cortes
+consecutivos, lo que equivale a
+\begin{equation}
+  m_i = \max_{t}\, \min\!\left(s_{i,c_t},\, s_{i,c_{t+1}}\right) \ge \tau .
+  \label{eq:alerta}
+\end{equation}
+La condición de dos cortes evita que un pico aislado cuente como alerta. Si $\mathcal{S}$ y $\mathcal{F}$ son los
+conjuntos de vehículos sanos y con evento, para cada presupuesto $\alpha$ de falsas alarmas se toma el menor umbral que lo
+cumple y se mide la fracción de eventos detectados:
+\begin{equation}
+  \tau_\alpha = \min\Big\{\tau : \tfrac{1}{|\mathcal{S}|}\textstyle\sum_{j\in\mathcal{S}} \ind\{m_j \ge \tau\} \le \alpha\Big\},
+  \qquad
+  D(\alpha) = \frac{1}{|\mathcal{F}|}\sum_{i\in\mathcal{F}} \ind\{m_i \ge \tau_\alpha\}.
+  \label{eq:deteccion}
+\end{equation}
+Por construcción~\eqref{eq:cortes}, toda alerta en un vehículo con evento ocurre al menos $G$\,km antes de $E_i$. El
+criterio primario es la detección media en cuatro presupuestos,
+\begin{equation}
+  \bar D = \tfrac14\left[ D(0{,}05) + D(0{,}10) + D(0{,}15) + D(0{,}20) \right],
+  \label{eq:primario}
+\end{equation}
+que pondera el rango de operación plausible para una flota.
+
+\textbf{Nulo con el historial conservado.} $m_i$ es el máximo sobre los cortes del vehículo, de modo que un historial más
+largo tiene más oportunidades de superar $\tau$. Con la primera versión de los datos, los vehículos con evento tenían en promedio
+$18{,}25$ cortes y los sanos $9{,}00$, y el largo del historial como único puntaje daba lift $1{,}79$. Por eso $D(\alpha)$ se
+compara con su distribución bajo la hipótesis nula, que se obtiene permutando los puntajes entre todas las filas y conservando
+la cantidad de cortes de cada vehículo (1.000 permutaciones). Con las bolsas asimétricas de la primera versión, ese nulo
+``detectaba'' $10\,\%$ al $5\,\%$ de falsas alarmas.
+
+\textbf{Comparaciones.} La diferencia entre dos modelos A y B se estima con un bootstrap pareado por
+vehículo~\cite{efron1993}: se remuestrean vehículos con reposición, se recalcula $\bar D_A - \bar D_B$ sobre los mismos
+vehículos y se reporta el intervalo percentil del $95\,\%$ (1.000 réplicas). El umbral también se fija \emph{fuera de
+muestra} (con los sanos de desarrollo) para medir la tasa de falsas alarmas realizada en prueba. Con unos 12 eventos por
+pliegue, cada candidato nuevo agrega una comparación múltiple; por eso los candidatos decisivos y sus criterios de
+aceptación se fijaron por escrito antes de medirlos~\cite{nosek2018}.
+
+\subsection{Impacto operativo}
+
+Hoy la detección es reactiva: el aviso llega cuando el filtro ya está saturado. Para el cliente, eso es un testigo en el
+tablero que nadie le explicó, un vehículo que limita su potencia para protegerse y una visita al taller que no estaba en sus
+planes; lo que más pesa es la sensación de que nadie le avisó. Para Ford, además del costo de garantía, es un cliente que
+pierde confianza en la marca. Para las flotas (Ford Pro), un vehículo de trabajo en el taller es trabajo que no se hace.
+
+El desafío menciona la satisfacción del cliente, los costos de garantía, la vida útil percibida y la planificación de los
+concesionarios~\cite{ford}. El sistema propuesto actúa sobre ellos a través de tres palancas: el aviso llega con unos tres
+meses de margen (\S\ref{sec:anticipacion}), en lenguaje del cliente y con una acción concreta; los casos llegan priorizados
+al concesionario; y el presupuesto $\alpha$ de la ecuación~\eqref{eq:deteccion} es un parámetro que Ford elige según su
+capacidad de atención y del costo de cada aviso. La cantidad de fallas evitadas y el efecto sobre la confianza del cliente
+no son medibles con estos datos, y son las métricas centrales del piloto propuesto (\S\ref{sec:costo}).

@@ -1,6 +1,6 @@
 # F3 · E2, componente 2: CNN-LSTM con bagging por vehículo (10 bolsas), R=3
 #
-# Preregistro: docs/memoria/f3-preregistro-landmark-ensamble.md, E2 (commit 9b7bfb4).
+# Preregistro: docs/reproducibilidad.md, E2 (commit 9b7bfb4).
 # Es `configs/exp_cnn_lstm_r3.yaml` envuelto en `vehicle_bagging`: mismo panel secuencial,
 # mismos folds, y los hiperparámetros de la red **sin cambios**. Lo único que se agrega
 # es promediar 10 bootstraps de vehículos del train de cada fold.

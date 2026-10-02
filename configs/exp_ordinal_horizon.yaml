@@ -56,7 +56,7 @@ eval:
   # degenerada (con p = 0,125 revisar todo es óptimo desde C_FN/C_FP ≈ 7, así que
   # sus 20–50× eligen la política sin mirar el modelo). Se conserva la matriz para
   # reproducir el número ya registrado, pero lo comparable entre corridas es esto.
-  # Ver docs/memoria/f3-ordinal-horizonte.md.
+  # Ver docs/reproducibilidad.md
   cost_ratios: [2, 3, 5, 7, 10, 20, 50]
   cost_fp: 1.0
   # Filas = clase real; columnas = clase predicha. Costos del benchmark

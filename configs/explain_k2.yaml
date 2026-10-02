@@ -2,7 +2,7 @@
 #
 # Se escribió y se commiteó ANTES de reentrenar un solo fold y de mirar un solo SHAP. Lo que el
 # script mida después se lee contra esto; lo que cambie respecto de acá va como desviación en la
-# ficha (docs/memoria/f4-explicabilidad-k2.md).
+# ficha (docs/reproducibilidad.md).
 #
 #   FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled \
 #     python scripts/explain_k2.py --config configs/explain_k2.yaml
@@ -70,10 +70,10 @@ sources:
     régimen térmico, idle y arranques en frío ⇒ el escape no llega a la temperatura de la
     regeneración pasiva, el hollín se acumula y la regeneración no alcanza.
   mapa_1809: >-
-    Mapa de signos del 18-09 (docs/f3-modelos-candidatos.md §1.3, b88e1ce), escrito antes del primer
+    Mapa de signos del 18-09 (CLAUDE.md, b88e1ce), escrito antes del primer
     modelo del repo; es el de las restricciones monótonas de P2 (configs/exp_f7_p2_monotone.yaml).
   f2_3_2: >-
-    Perfil alineado al evento, F2 §3.2 (docs/memoria/f2-eda-revision-y-features.md): P(fallado >
+    Perfil alineado al evento, F2 §3.2 (docs/reproducibilidad.md): P(fallado >
     sano) > 0,5 ⇒ +1, < 0,5 ⇒ −1. Es descriptivo y sale de dev: acompaña, no es una fuente a priori.
 
 features:

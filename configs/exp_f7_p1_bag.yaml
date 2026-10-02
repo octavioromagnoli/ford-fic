@@ -1,6 +1,6 @@
 # F7 · P1: K2 embolsado por vehículo (10 bootstraps de autos del train de cada fold).
 #
-# Preregistro: docs/memoria/f7-preregistro-varianza-k2.md (P1). Es `configs/exp_ss_hw_r3.yaml` (K2)
+# Preregistro: docs/reproducibilidad.md (P1). Es `configs/exp_ss_hw_r3.yaml` (K2)
 # envuelto en `vehicle_bagging`, con los mismos params de K2. La referencia es K2.
 #
 #   FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled python scripts/train.py --config configs/exp_f7_p1_bag.yaml

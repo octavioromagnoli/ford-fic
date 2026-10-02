@@ -3,7 +3,7 @@
 La pregunta es *qué auto*, sin *cuándo*: ¿falla en algún momento? Se aprende con los
 fallados sin fecha utilizable y sus sanos (`src/data/external.py`,
 `scripts/build_external_panel.py`), y se aplica a dev **sin ajustar nada ahí**. Lo que decide
-y por qué está en `docs/memoria/f5-preregistro-incidencia-externa.md`.
+y por qué está en `docs/reproducibilidad.md`.
 
 ## El modelo
 

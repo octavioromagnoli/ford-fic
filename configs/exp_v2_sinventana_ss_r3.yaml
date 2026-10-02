@@ -1,6 +1,6 @@
 # VARIANTE SIN LA VENTANA DE PRODUCCIÓN (universo de 990, holdout test_split_sinventana.json).
 # No es el universo vigente (ese es el de la ventana, 557): se conserva como evidencia de por
-# qué no se usa para elegir ni medir modelos. Ver docs/memoria/f9-universo-v2.md §6.
+# qué no se usa para elegir ni medir modelos. Ver docs/reproducibilidad.md
 #
 # Re-medición sobre la ENTREGA v2 (26-09-2026): survival stacking (finalista de F3), R=3.
 #

@@ -43,7 +43,7 @@ tables:
     description: Un registro por viaje, con agregados del viaje (2.53M filas).
     # Los timestamps mezclan dos formatos (con y sin milisegundos). Sin `ISO8601`,
     # pandas infiere el formato de la primera fila y las otras salen NaT en silencio
-    # (ver docs/memoria/f2-fechas-formato-mixto.md).
+    # (ver docs/reproducibilidad.md).
     date_format: ISO8601
     parts:
       failed: ${DATA_DIR}/old_raw/TripSummary_Failed_SelectionVins.csv

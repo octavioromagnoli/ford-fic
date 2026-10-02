@@ -3,11 +3,11 @@
 #
 # ENTREGA 1. Lee los crudos y artefactos congelados de la entrega 1 (raw_sources_v1.yaml,
 # data/processed-v1/). En la entrega v2 la ventana del registro no existe (LR del mes
-# calendario p = 0,16): ver docs/memoria/f9-eda-v2.md §C.
+# calendario p = 0,16): ver docs/reproducibilidad.md
 #
 #   python scripts/audit_event_clock.py --config configs/data/event_clock.yaml
 #
-# Lectura de los resultados: docs/memoria/f3-reloj-y-ventana-del-evento.md.
+# Lectura de los resultados: docs/reproducibilidad.md
 seed: 0
 
 sources: configs/data/raw_sources_v1.yaml

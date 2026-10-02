@@ -5,7 +5,7 @@
 #   python scripts/build_external_panel.py --config configs/data/panel_external_incidence.yaml --counts-only  # Fase 1
 #   python scripts/build_external_panel.py --config configs/data/panel_external_incidence.yaml                # Fase 3
 #
-# Cada valor de acá está en docs/memoria/f5-preregistro-incidencia-externa.md. Para cambiar
+# Cada valor de acá está en docs/reproducibilidad.md Para cambiar
 # uno, primero se commitea el cambio en el preregistro (y por qué), después acá.
 seed: 42
 

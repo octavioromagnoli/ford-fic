@@ -24,7 +24,7 @@ splits:
   test_split: ${DATA_DIR}/processed/test_split.json
 
 model:
-  name: lgbm                 # defaults del builder: docs/f3-modelos-candidatos.md §1.3
+  name: lgbm                 # defaults del builder: CLAUDE.md
   params:
     random_state: 42
 

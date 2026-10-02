@@ -1,5 +1,5 @@
 # F9 · La GRU `last` de F3 medida con la etiqueta corregida por la ventana del registro: el modelo de la demo de
-# producto (docs/memoria/f9-demo-gru.md).
+# producto (docs/reproducibilidad.md).
 #
 # **No es un candidato ni una comparación nueva** (el presupuesto de comparaciones está agotado): no va a
 # `results/`, no cambia el finalista y el veredicto de `window_eval` no aplica. Es `configs/exp_gru_seq_last.yaml`

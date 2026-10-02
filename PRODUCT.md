@@ -124,7 +124,7 @@ evento (el gap de blanking). Con más tolerancia el margen crece: 21 semanas (~8
   - **En test** (no está en la app; el pitch cita estos): ~30 · 40–50 · 50–60% al 5 · 10 · 20%, y con el
     umbral fijado en dev 20 · 34 · 57% con 5,8 · 8,9 · 18,2% de falsas alarmas reales.
 
-  Las fuentes son `docs/memoria/f9-demo-gru-final.md` y `docs/memoria/f11-test-resultado.md`.
+  Las fuentes son `docs/reproducibilidad.md` y `docs/reproducibilidad.md`.
 - **Terminología:**
   - **alerta:** confirmada en el `k`-ésimo corte seguido sobre el umbral;
   - **escalamiento:** el paso al concesionario;
@@ -186,8 +186,8 @@ evento (el gap de blanking). Con más tolerancia el margen crece: 21 semanas (~8
   `demo-bundle:v0`.
 - **Textos reales:** en los cuatro puntos, los agentes redactaron los 465 textos y los 196 resúmenes, todos
   aprobados por el verificador (40 intentos rechazados en el camino), sin ninguna plantilla. Lo que se corrigió
-  después de revisar a mano la primera semana está en `docs/memoria/f9-demo-gru.md`, y el precalentado por punto,
-  en `docs/memoria/f9-demo-gru-final.md`.
+  después de revisar a mano la primera semana está en `docs/reproducibilidad.md`, y el precalentado por punto,
+  en `docs/reproducibilidad.md`.
 - **El porqué:** una comparación con los autos sanos de dev del mismo mercado (`src/eval/fleet_profile.py`).
   No es atribución: la GRU no la tiene.
 - **Revisión visual previa:** capturas a 1440×900 y 1920×1080 en `experiments/demo-ui-review/`

@@ -3,7 +3,7 @@
 #
 #   python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps.yaml
 #
-# Cada valor de acá está preregistrado en docs/memoria/f3-preregistro-cure.md §1–§3. Para
+# Cada valor de acá está preregistrado en docs/reproducibilidad.md–§3. Para
 # cambiar uno, primero se commitea el cambio en el preregistro (y por qué), después acá.
 seed: 42
 
@@ -40,7 +40,7 @@ resolved_negative:
 # Terciles de `ProductionDay` sobre los vehículos de dev (estratos del nulo C1 y de C2).
 production_terciles: 3
 
-# Las cuatro features del índice físico (docs/f3-modelos-candidatos.md §1.1). `column` y
+# Las cuatro features del índice físico (CLAUDE.md). `column` y
 # `agg` salen de `features_spec`: acá solo va el peso de la celda (vehículo × mes) y su
 # mínimo. Bajo el mínimo el valor del mes queda en NaN (el peso se conserva). El signo de
 # cada una es de P0 y va en su YAML de experimento, no acá.

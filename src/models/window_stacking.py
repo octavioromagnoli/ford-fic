@@ -1,11 +1,11 @@
 """Survival stacking en días, con exposición exacta: exponencial por tramos (PEM).
 
 Es el finalista (`src/models/survival_stacking.py`) con la cuenta del riesgo arreglada
-(F5 §3.3, `docs/memoria/f5-preregistro-ss-post-venta.md`). Tres cosas cambian:
+(F5 §3.3, `docs/reproducibilidad.md`). Tres cosas cambian:
 
 1. **El reloj.** Los bins son días desde `t0`, la fecha en que el odómetro llega a `c + G`,
    no km. La Fase 1 del cure model mostró que el evento se ordena por días
-   (`docs/memoria/f3-reloj-y-ventana-del-evento.md`). La posición de la fila en el reloj del
+   (`docs/reproducibilidad.md`). La posición de la fila en el reloj del
    evento la lleva `feat_cut_dss`, que entra como cualquier feature.
 2. **El conjunto en riesgo.** Cada fila está en riesgo en `(entry, exit]`, el tramo en que el
    registro de eventos podía anotarla (target `window_survival` de

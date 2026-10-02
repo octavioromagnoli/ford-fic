@@ -1,4 +1,4 @@
-# F11 (docs/memoria/f11-preregistro-objetivo-suave.md): GRU + TripSummary + estática completa, referencia con label (la GRU de hoy); semilla del modelo 103, folds de la exploración (splits_r3).
+# F11 (docs/reproducibilidad.md): GRU + TripSummary + estática completa, referencia con label (la GRU de hoy); semilla del modelo 103, folds de la exploración (splits_r3).
 #   WANDB_MODE=disabled python scripts/train.py --config configs/exp_f11_gru_ref_expl_s103.yaml
 name: f11-gru-ref-expl-s103
 seed: 103

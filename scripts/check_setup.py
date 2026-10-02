@@ -3071,7 +3071,7 @@ def main() -> int:
     # noisy_or ni siquiera con el oráculo: 1 − Π(1 − p) satura con el tamaño de la
     # bolsa, así que un vehículo sano con muchos cortes supera a uno con evento y
     # pocos. No es un bug de la implementación, es la agregación: queda medido acá
-    # para que nadie la elija sin saberlo (docs/memoria/f3-mil-agregacion-vehiculo.md).
+    # para que nadie la elija sin saberlo (docs/reproducibilidad.md).
     # Entre los sanos el riesgo por corte es constante (0,1), así que lo único que
     # queda ordenando sus bolsas es cuántos cortes tienen.
     healthy_bags = vehicle_scores(vehicle_oracle, "noisy_or").query("label == 0")

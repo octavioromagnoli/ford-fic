@@ -6,7 +6,7 @@ note: 'Mismo LightGBM y mismos folds que f3-lgbm-panel-v1: lo único que cambia 
   presupuesto de falsas alarmas. `max`, `topk` y `noisy_or` dan más lift pero no le
   ganan a su propio nulo de permutación: es el tamaño de la bolsa (los que fallan
   conservan todos sus cortes, los sanos solo los emparejados). Detalle y evidencia:
-  docs/memoria/f3-mil-agregacion-vehiculo.md.
+  docs/reproducibilidad.md
 
 
   [NO COMPARABLE · anotado al revisar las auditorias] Esta corrida se midio contra
