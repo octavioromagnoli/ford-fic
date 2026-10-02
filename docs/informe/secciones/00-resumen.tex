@@ -1,0 +1,138 @@
+% ============================================================================ 0 · Resumen
+\section*{Resumen ejecutivo}
+\addcontentsline{toc}{section}{Resumen ejecutivo}
+
+\textbf{El problema.} El filtro de partículas (DPF) de los diésel se tapa según cómo se usa el auto:
+viajes cortos, motor que no llega a temperatura, mucho tiempo detenido con el motor en marcha. Hoy Ford se
+entera tarde, cuando el testigo ya se prendió o el auto ya está en el taller. El desafío pide anticipar ese
+evento con la telemetría del auto conectado, con la mayor cantidad de tiempo o kilometraje posible.
+
+\textbf{Lo que encontramos en los datos.} La telemetría sí deja huella, pero viene con trampas que, sin
+corregir, hacen que cualquier modelo parezca mejor de lo que es. Las dos cohortes (fallados y sanos) se
+muestrearon en períodos de producción distintos: la fecha de fabricación sola ya las separaba. La fecha
+registrada del evento cae unas dos semanas después de la intervención en el taller. El contador de
+regeneraciones se apaga para toda la flota el 25-05-2026. Hay 13 autos duplicados bajo dos códigos. La
+segunda entrega de Ford trae cinco trampas de formato. Corregimos todo esto en un pipeline declarativo y
+trazable (§\ref{sec:datos}). Comparando contra sanos del mismo mercado, los autos que van a fallar pasan
+cada vez más tiempo en ralentí y con el motor frío a medida que se acerca el evento.
+
+\textbf{Lo que hicimos.} Cada 500 km preguntamos: mirando los últimos 1.000 km, ¿este auto falla en los
+próximos 3.000? Dejamos 500 km ciegos antes de la falla (el \emph{gap de blanking}), porque sin ese margen
+estaríamos detectando lo que el tablero ya detecta. Medimos más de 40 modelos con la misma cuenta: la
+detección por auto con un presupuesto fijo de falsas alarmas, siempre al lado del azar y de la regla
+“país × motor”. El finalista es una red recurrente (GRU) que lee la secuencia de viajes y de señales
+del filtro, más país, motor y modelo, en un ensamble de tres semillas.
+
+\textbf{Cuánto detecta, en autos que nunca vio} \tagtest{}. Sobre el holdout (111 autos, 103 con datos, 32
+fallados): \textbf{10 de 32 al 5\,\% de falsas alarmas} (31,2\,\%, con un azar de 7,0\,\%), 46,9\,\% al 10\,\% y
+62,5\,\% al 20\,\%. Leímos la misma configuración tres veces en test, así que el resultado se cita en rango:
+\textbf{\textasciitilde30\,\% al 5\,\%, \textasciitilde40–50\,\% al 10\,\% y \textasciitilde50–60\,\% al 20\,\%}. Con el
+umbral fijado antes, en los autos de desarrollo, detecta 20 · 34 · 57\,\% con 5,8 · 8,9 · 18,2\,\% de falsas
+alarmas reales: el umbral elegido sin ver el test cumple su presupuesto. Le duplica la detección media a
+los modelos tabulares y de supervivencia.
+
+\textbf{Con cuánto margen} \tagtest{}. La primera alerta llega con una mediana de \textasciitilde4.600 km
+(p25–p75: 2.400–9.300 km), unos 100 días antes de la falla registrada. El puntaje sube a medida que se
+acerca el evento.
+
+\textbf{Qué pasa después de la alerta} \tagdev{}. Una política determinista (la define Ford) decide si
+corresponde un consejo al conductor o un llamado del concesionario. Dos agentes de IA redactan los textos y
+un verificador en código los controla: ningún LLM produce un número, un puntaje ni un diagnóstico. La demo
+reproduce semana a semana la flota de desarrollo con una perilla de falsas alarmas de 5 a 20\,\%.
+
+\textbf{Cuánto cuesta y cómo escala.} No hacen falta sensores nuevos: usa solo resúmenes de viaje y mensajes
+del filtro que el auto ya manda. Según nuestra estimación (a validar con Ford), operarlo para un millón de
+autos cuesta \textasciitilde USD 0,07–0,10 por auto y por año. La GRU tiene unos 3.900 parámetros y corre en
+CPU.
+
+\begin{limite}[title={Lo que no prometemos (y conviene decirlo antes de que lo pregunten)}]
+\small
+\begin{itemize}
+  \item \textbf{No le gana con evidencia a la regla “país × motor”} \tagtest{}: +27,3 puntos de detección
+    media al 5–20\,\%, IC95 [−0,8; 46,1]. Queda en el límite y no se cita como victoria.
+  \item \textbf{Sabe poco del \emph{cuándo}}: la auditoría \aprime{} da +0,001 \tagdev{}. Lo que el modelo
+    sabe es sobre todo \emph{qué auto} va a fallar. Lo que sí se ve es que el puntaje sube hacia el evento.
+  \item \textbf{Con 32 fallas en test, cada auto mueve 3 puntos} y los intervalos son anchos.
+  \item \textbf{El test se leyó más de una vez} con la misma configuración (§\ref{sec:test}). Por eso se cita
+    un rango y no un número.
+  \item \textbf{La muestra está enriquecida en fallas}: la prevalencia real de la flota no la conocemos y se
+    mide en un piloto en sombra.
+  \item \textbf{No predecimos la fecha exacta}: marcamos con margen.
+\end{itemize}
+\end{limite}
+
+\subsection*{Cómo leer los números de este informe}
+\addcontentsline{toc}{subsection}{Cómo leer los números de este informe}
+
+\begin{itemize}
+  \item \tagtest{}: medido sobre los 111 autos del holdout, sorteados el 26-09 antes de mirar ninguna
+    feature contra la etiqueta. De ellos, 103 tienen cortes en el panel: 32 fallados y 71 sanos. Cada modelo
+    se entrenó con todo el conjunto de desarrollo.
+  \item \tagdev{}: medido con validación cruzada agrupada por vehículo sobre los 446 autos de desarrollo
+    (5 folds × 3 repeticiones). La demo, la explicabilidad y las auditorías son de dev.
+  \item \textbf{Detección al X\,\%}: de los autos que fallan, cuántos reciben una alerta antes de la falla,
+    con un umbral fijado para que solo el X\,\% de los autos sanos tenga una falsa alarma. Una alerta son
+    dos cortes seguidos sobre el umbral.
+  \item \textbf{Azar}: el mismo puntaje permutado entre filas, 200 veces, conservando el largo del historial
+    de cada auto. Se reporta su media y su percentil 95.
+  \item \textbf{Celda mercado × motor}: la tasa de fallas de la celda del auto (calculada sin él), usada como
+    puntaje fijo. No mira ningún viaje y es el piso que cualquier modelo tiene que superar.
+  \item \textbf{Nada de accuracy.} Con \textasciitilde6\,\% de filas positivas, “nadie falla” daría 94\,\%. El
+    PR-AUC por fila va solo al anexo técnico, al lado del techo de cohorte (Anexo~\ref{anx:prauc}).
+\end{itemize}
+
+\subsection*{Cómo responde este informe a los criterios de Ford}
+\addcontentsline{toc}{subsection}{Cómo responde este informe a los criterios de Ford}
+
+El informe sigue las siete secciones del documento del desafío. En cada una contamos qué entendimos, qué
+encontramos en los datos y qué hicimos. La tabla~\ref{tab:criterios} ubica cada criterio de evaluación de la
+sección 5.2 y el objetivo de mejora de la 5.1.
+
+\begin{table}[H]
+\centering
+\caption{Criterios de evaluación de Ford (§5.1 y §5.2 del desafío) y dónde se responden.}
+\label{tab:criterios}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.3cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{2.3cm}@{}}
+\toprule
+Criterio & Qué mostramos & Dónde \\
+\midrule
+Objetivo 5.1: anticipar con el mayor tiempo o kilometraje posible &
+  Anticipación medida en test (\textasciitilde4.600 km, \textasciitilde100 días de mediana), con el gap de
+  500 km que impide la detección reactiva; el puntaje sube hacia el evento &
+  §\ref{sec:anticipacion}, §\ref{sec:panel} \\
+Viabilidad técnica &
+  Modelo medido en un holdout congelado; GRU chica en CPU; mismo código de features en entrenamiento y
+  producción; demo funcionando; plan de despliegue por etapas &
+  §\ref{sec:viabilidad}, §\ref{sec:test} \\
+Costo &
+  \textasciitilde USD 0,07–0,10 por auto y por año para un millón de autos, sin sensores nuevos; escenarios
+  de costo de falla como reporte &
+  §\ref{sec:costo} \\
+Carácter innovador &
+  Una métrica que separa \emph{qué auto} de \emph{cuándo}; red recurrente sobre la ventana en km; agentes
+  de IA con verificador en código; la perilla de falsas alarmas &
+  §\ref{sec:innovacion} \\
+Calidad del tratamiento de datos: limpieza, faltantes y atípicos &
+  Atípicos con topes físicos; ralentí separado de los viajes; faltantes estructurales tratados como tales;
+  marcador cortado reconstruido &
+  §\ref{sec:limpieza} \\
+Calidad del tratamiento de datos: consistencia y trazabilidad del pipeline &
+  Correcciones declaradas en YAML; universo y holdout congelados; 13 clones colapsados; reglas antileakage;
+  auditorías obligatorias; cada número con su comando &
+  §\ref{sec:trazabilidad}, Anexos~\ref{anx:repro} y~\ref{anx:auditorias} \\
+Claridad para mostrar los datos &
+  Figuras de este informe; demo de producto; dashboards del EDA y de explicabilidad; curva de detección
+  contra falsas alarmas con el azar &
+  §\ref{sec:claridad} \\
+Explicabilidad del modelo &
+  En qué se apoya la GRU (permutación de señales); el porqué que ve el conductor (comparación contra la
+  flota sana, filtrada por la física del DPF) &
+  §\ref{sec:explicabilidad} \\
+Pitch &
+  La misma historia en siete bloques, con los mismos números y los mismos límites &
+  §\ref{sec:pitch} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+\clearpage

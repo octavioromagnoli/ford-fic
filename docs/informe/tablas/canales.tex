@@ -1,0 +1,23 @@
+% Generado por scripts/make_report_figures.py desde configs/data/panel_seq_trips_v2_estaticas.yaml (no editar a mano).
+% ventana 1000 km en bins de 50 km = 20 tramos.
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Canal & Fuente & Columna & Agregado por tramo & Relleno \\
+\midrule
+\texttt{n\_records} & signals & \texttt{*} & count & zero · log1p \\
+\texttt{observed} & signals & \texttt{*} & any & zero \\
+\texttt{acum\_mean} & signals & \texttt{Acumulation} & mean & carry \\
+\texttt{acum\_max} & signals & \texttt{Acumulation} & max & carry \\
+\texttt{acum\_rise} & signals & \texttt{acum\_rise} & sum & zero \\
+\texttt{regen\_drops} & signals & \texttt{acum\_regen\_drop} & sum & zero \\
+\texttt{msg\_full\_frac} & signals & \texttt{msg\_full} & mean & zero \\
+\texttt{msg\_severe\_frac} & signals & \texttt{msg\_severe} & mean & zero \\
+\texttt{msg\_cleaning\_auto\_frac} & signals & \texttt{msg\_cleaning\_auto} & mean & zero \\
+\texttt{n\_trips} & trips & \texttt{*} & count & zero · log1p \\
+\texttt{idle\_frac} & trips & \texttt{idle} & mean & carry \\
+\texttt{below\_regime\_frac} & trips & \texttt{below\_regime\_moving} & mean & carry \\
+\texttt{speed\_kmh} & trips & \texttt{speed\_kmh\_moving} & mean & carry \\
+\texttt{trip\_km} & trips & \texttt{trip\_km\_moving} & mean & carry \\
+\texttt{trip\_duration\_min} & trips & \texttt{trip\_duration\_min\_moving} & mean & carry \\
+\bottomrule
+\end{tabular}

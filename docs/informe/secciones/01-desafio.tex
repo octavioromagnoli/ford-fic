@@ -1,0 +1,72 @@
+% ============================================================================ 1 · Descripción general
+\section{Descripción general del desafío}
+\label{sec:desafio}
+
+\subsection{Título del desafío: qué evento hay que anticipar}
+
+Ford pide una \emph{metodología de inteligencia artificial para la predicción temprana de eventos de
+degradación en la eficiencia de combustión e ingreso de oxígeno al motor, a partir de datos de vehículos
+conectados}.
+
+\textbf{Qué entendimos.} En un diésel moderno, el componente que se degrada por el uso y que afecta a la
+vez la combustión y el flujo de gases es el sistema de postratamiento, y en particular el filtro de
+partículas (DPF). El DPF atrapa el hollín del escape y, para no saturarse, lo quema periódicamente: eso es
+una \emph{regeneración}. La regeneración necesita temperatura, es decir, un tramo de ruta con el motor
+caliente. Con viajes cortos, la regeneración empieza y no termina, y el hollín se acumula. Un filtro
+cargado sube la contrapresión del escape. Si sigue así, el auto entra en un modo de protección con
+potencia limitada y termina en el taller.
+
+\textbf{Qué encontramos en los datos.} El dataset confirma que el evento es del filtro, aunque las columnas
+vienen renombradas (§\ref{sec:restricciones}):
+\begin{itemize}
+  \item La tabla \texttt{DynamicInformation} trae un mensaje de la ECU con nueve niveles del tipo
+    “Air Filter Full”, “Air Filter Overloaded” o “Cleaning Automatically Air Filter”, y una variable de
+    acumulación en escala 0–100 que sube con el uso y se descarga de golpe. Esa es la dinámica de un
+    filtro que se carga y regenera.
+  \item \texttt{TripSummary} no trae las columnas \texttt{DieselParticulateFilterStart/\allowbreak{}End} del anexo, pero
+    sí trae cuatro que el anexo no menciona: \texttt{AirFilterStart/\allowbreak{}End} y \texttt{AirRegenerationStart/\allowbreak{}End}.
+    Son la foto, al inicio y al final de cada viaje, de las mismas dos variables de \texttt{DynamicInformation}.
+    Coinciden en el 99,97\,\% y en el 99,8\,\% de los pares alineados.
+  \item Que esas columnas \emph{sean} el DPF es la explicación que mejor encaja (ocupan su lugar en la tabla,
+    su dinámica es la de un filtro y el anexo avisa que las variables vienen renombradas), pero Ford no la
+    confirmó. Por eso en el informe las llamamos “nivel de acumulación del filtro”.
+\end{itemize}
+
+Hay una pregunta que los datos dejan abierta. La ceniza en un DPF es un fenómeno de más de 100.000 km, y acá
+el evento cae a una mediana de \textasciitilde12.800 km de odómetro (entrega v2). Antes de modelar
+verificamos si había una carga irreversible medible, que es la premisa de un modelo de degradación como el
+proceso gamma, y no la encontramos (\repo{docs/\allowbreak{}memoria/\allowbreak{}f3-proceso-gamma.md}). El evento que vemos es una
+saturación por uso, recuperable, y no un desgaste acumulado. Eso orientó todo lo que sigue hacia los
+hábitos de manejo y el estado reciente del filtro.
+
+\subsection{Contexto: la experiencia del cliente}
+
+\textbf{Qué entendimos.} Ford pone la experiencia del cliente en el centro: eficiencia, consumo y
+comodidad. Para el conductor, una falla del filtro es un testigo que nadie le explicó, un auto que pierde
+fuerza y una visita al taller que no tenía planeada. Lo que más pesa en la relación con la marca es la
+sensación de que nadie le avisó.
+
+\textbf{Qué hicimos con eso.} Diseñamos el producto alrededor de la confianza, no de la falla: el primer
+contacto es un consejo de manejo, en lenguaje humano, y no un turno en el taller. Al cliente nunca le
+llegan porcentajes de riesgo, códigos de error ni frases del tipo “tu auto va a fallar” (§\ref{sec:producto}).
+
+\subsection{El desafío: predecir la degradación debida al uso}
+
+\textbf{Qué entendimos.} El documento habla de degradación “debido al uso indebido del cliente”: trayectos
+predominantemente cortos, operación que no completa los ciclos de recuperación del sistema y conducción
+urbana intensiva.
+
+\textbf{Qué encontramos en los datos.} Esos patrones están, pero no todos se sostienen cuando se compara
+bien. Comparando fallados con sanos \emph{del mismo mercado} y del mismo tramo de odómetro (§\ref{sec:eda}):
+\begin{itemize}
+  \item lo que crece hacia el evento es estar detenido con el motor en marcha (viajes de 0 km, el
+    33\,\% de las filas de \texttt{TripSummary}) y no llegar a temperatura;
+  \item la velocidad y la fracción de viajes cortos entre los que se mueven \emph{no} distinguen dentro del
+    mercado. Con la primera entrega, la velocidad parecía la señal más fuerte, pero era el contraste entre
+    Colombia (más lenta, falla más) y Chile.
+\end{itemize}
+
+\textbf{Qué hicimos.} Un modelo de deep learning que lee la secuencia de los últimos 1.000 km del auto
+(viajes y señales del filtro) y una capa de producto que traduce cada alerta en una acción, con IA
+generativa para redactar y código para verificar. Al conductor no le hablamos de “uso indebido”: le hablamos
+de hábitos que puede cambiar, comparados con autos sanos de su mercado.

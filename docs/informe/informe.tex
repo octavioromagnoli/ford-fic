@@ -1,0 +1,135 @@
+% Informe final · Ford Innovation Challenge III (AI Edition) · Data-Driven Powertrain Intelligence
+% Compilar desde docs/informe/:   tectonic informe.tex
+% Las figuras y las tablas generadas salen de:   python scripts/make_report_figures.py --config configs/report_figures.yaml
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\setmainfont{texgyrepagella}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,
+  ItalicFont=*-italic,BoldItalicFont=*-bolditalic]
+\setsansfont{texgyreheros}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,
+  ItalicFont=*-italic,BoldItalicFont=*-bolditalic]
+\setmonofont{texgyrecursor}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,Scale=0.95]
+
+\usepackage[a4paper,top=2.4cm,bottom=2.4cm,left=2.4cm,right=2.4cm,headheight=14pt]{geometry}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs,tabularx,longtable,multirow,array}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric}
+\usepackage[most]{tcolorbox}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+\usepackage{bookmark}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,breakatwhitespace=true,columns=fullflexible,
+  keepspaces=true,frame=leftline,framerule=1.5pt,rulecolor=\color{fordblue!50},xleftmargin=8pt,
+  commentstyle=\color{inksec},morecomment=[l]{\#},literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1
+  {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1 {×}{{$\times$}}1 {'}{{'}}1,
+  postbreak=\mbox{\textcolor{inksec}{$\hookrightarrow$}\space}}
+
+% ---------------------------------------------------------------- colores (paleta de las figuras)
+\definecolor{fordblue}{HTML}{2A78D6}
+\definecolor{accent2}{HTML}{EB6834}
+\definecolor{accent3}{HTML}{1BAF7A}
+\definecolor{ink}{HTML}{0B0B0B}
+\definecolor{inksec}{HTML}{52514E}
+\definecolor{muted}{HTML}{A3A29D}
+\definecolor{softbg}{HTML}{F4F7FC}
+\definecolor{warnbg}{HTML}{FDF3EE}
+\definecolor{rulec}{HTML}{D9D8D3}
+
+% ---------------------------------------------------------------- estilo
+\setlist{itemsep=2pt,topsep=4pt,parsep=0pt,leftmargin=1.4em}
+\captionsetup{font=small,labelfont={bf,sf},format=hang,justification=raggedright,singlelinecheck=false}
+\captionsetup[table]{position=top,skip=4pt}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\setlength{\emergencystretch}{2.5em}
+\renewcommand{\arraystretch}{1.15}
+\titleformat{\section}{\sffamily\Large\bfseries\color{ink}}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\sffamily\large\bfseries\color{ink}}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\sffamily\normalsize\bfseries\color{ink}}{\thesubsubsection}{0.6em}{}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\sffamily\color{inksec}Ford Innovation Challenge III · Data-Driven Powertrain Intelligence}
+\fancyhead[R]{\small\sffamily\color{inksec}Equipo SOG}
+\fancyfoot[C]{\small\sffamily\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% marcas de dónde sale cada número
+\newcommand{\tagtest}{\textsf{\footnotesize\textbf{\color{fordblue}[test]}}}
+\newcommand{\tagdev}{\textsf{\footnotesize\textbf{\color{inksec}[dev]}}}
+\newcommand{\fuente}[1]{\par\vspace{2pt}{\footnotesize\color{inksec}\textit{Fuente:} #1}}
+\newcommand{\repo}[1]{{\footnotesize\ttfamily\begingroup\renewcommand{\_}{\textunderscore\allowbreak}#1\endgroup}}
+\newcommand{\aprime}{(a$'$)}
+
+\newtcolorbox{caja}[1][]{enhanced,breakable,colback=softbg,colframe=fordblue!60,boxrule=0.5pt,
+  arc=2pt,left=8pt,right=8pt,top=6pt,bottom=6pt,fonttitle=\sffamily\bfseries,coltitle=ink,
+  colbacktitle=softbg,attach title to upper={\par\smallskip},#1}
+\newtcolorbox{limite}[1][]{enhanced,breakable,colback=warnbg,colframe=accent2!70,boxrule=0.5pt,
+  arc=2pt,left=8pt,right=8pt,top=6pt,bottom=6pt,fonttitle=\sffamily\bfseries,coltitle=ink,
+  attach title to upper={\par\smallskip},#1}
+
+\hypersetup{pdftitle={Informe final · Ford FIC III · Equipo SOG},pdfauthor={Equipo SOG}}
+
+\begin{document}
+
+% ================================================================ portada
+\begin{titlepage}
+\thispagestyle{empty}
+\vspace*{1.2cm}
+{\sffamily\small\color{inksec} Ford Innovation Challenge III · AI Edition\\
+Área: Data-Driven Powertrain Intelligence\par}
+\vspace{1.4cm}
+{\sffamily\fontsize{30}{36}\selectfont\bfseries\color{ink} Tu Ford te avisa antes\par}
+\vspace{0.5cm}
+{\sffamily\Large\color{inksec} Predicción temprana de la degradación del filtro de partículas\\
+en los diésel conectados de Ford\par}
+\vspace{1.2cm}
+{\large Informe final del equipo SOG\par}
+\vspace{0.3cm}
+{\normalsize Gonzalo · Santino · Octavio\par}
+\vspace{2.2cm}
+\begin{caja}[title={En una página}]
+\small
+\begin{itemize}
+  \item \textbf{Qué hicimos.} Un modelo que, cada 500 km, lee los últimos 1.000 km de telemetría de un auto
+    y marca a los que van camino a una falla del filtro de partículas (DPF). Nunca ve los 500 km previos
+    al evento. Alrededor del modelo armamos un circuito que convierte cada alerta en una acción: un consejo
+    al conductor o un llamado del concesionario. Los textos los redactan agentes de IA y los controla un
+    verificador en código.
+  \item \textbf{Cuánto detecta} \tagtest{}. Sobre 111 autos que estuvieron bajo llave todo el proyecto
+    (103 con datos, 32 fallados), la GRU finalista avisa a \textbf{\textasciitilde30\,\%} de los autos que
+    fallan con 5\,\% de autos sanos con falsa alarma, a \textbf{\textasciitilde40–50\,\%} con 10\,\% y a
+    \textbf{\textasciitilde50–60\,\%} con 20\,\%. El azar avisa a 7\,\% con 5\,\%.
+  \item \textbf{Con cuánto margen} \tagtest{}. La primera alerta llega con una mediana de
+    \textbf{\textasciitilde4.600 km, unos 3 meses}, antes de la falla registrada.
+  \item \textbf{Lo que no prometemos.} No le gana con evidencia a la regla "país × motor"; sabe sobre
+    todo \emph{qué auto} y poco \emph{cuándo}; con 32 fallas los intervalos son anchos; la prevalencia real
+    se mide en un piloto; no predecimos la fecha exacta.
+\end{itemize}
+\end{caja}
+\vfill
+{\small\color{inksec} 2 de octubre de 2026 · Repositorio \repo{ford-fic}, rama \repo{docs/informe}\par}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\input{secciones/00-resumen}
+\input{secciones/01-desafio}
+\input{secciones/02-proceso}
+\input{secciones/03-definicion}
+\input{secciones/04-datos}
+\input{secciones/05-solucion}
+\input{secciones/06-complementaria}
+\appendix
+\input{secciones/07-anexos}
+
+\end{document}
