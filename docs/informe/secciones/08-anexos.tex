@@ -1,41 +1,7 @@
 % ============================================================================ Anexos
-% fuente: f9-remedicion-v2.md, f9-remedicion-completa-v2.md (auditorías, dev), f11-test-resultado.md §3,
+% fuente: f9-remedicion-completa-v2.md (dev), f11-test-resultado.md §3,
 % experiments/test-modelos-v2/{curve,operating}.csv (tablas generadas), configs/data/features_v1.yaml,
 % configs/data/panel_seq_trips_v2_estaticas.yaml.
-\section{Auditorías de fuga de información}
-\label{anx:auditorias}
-
-Además de las defensas de construcción (gap de 500\,km sobre la referencia corrida, partición por vehículo con los
-duplicados unificados, variables solo hacia atrás y corte en el fin de extracción común), todo candidato se somete a tres
-auditorías~\cite{kaufman2012}. Sea $s_{i,c}$ el puntaje fuera de pliegue y $\mathrm{AP}(\cdot)$ el PR-AUC por fila.
-\begin{itemize}
-  \item \textbf{(a0) Nulo global.} Se permutan las variables entre todas las filas, se reentrena y se exige
-    $\mathrm{AP} \approx \bar y = 0{,}058$. Si no cae a la tasa base, hay información que no proviene de las variables.
-  \item \textbf{\aprime{} Contribución del instante.} Sin reentrenar, se reemplaza cada puntaje por el promedio de su
-    vehículo, $\bar s_i = \frac{1}{n_i}\sum_c s_{i,c}$, y se reporta $\mathrm{AP}(s) - \mathrm{AP}(\bar s)$: lo que el modelo
-    sabía sobre \emph{cuándo}, más allá de \emph{qué vehículo}.
-  \item \textbf{(b) Atajo de calendario.} Se agregan como variables las columnas de calendario (fechas de producción y de
-    venta, temperatura ambiente) y se marca un atajo si el ROC sube más de $0{,}02$.
-\end{itemize}
-
-\begin{table}[!htbp]
-\centering
-\caption{Auditorías en desarrollo \tagdev{} (semilla 42 de la GRU; tasa base $0{,}058$).}
-\label{tab:auditorias}
-\begin{tabular}{@{}lrrrl@{}}
-\toprule
-Modelo & (a0) PR-AUC & \aprime{} & (b) $\Delta$ROC & Resultado \\
-\midrule
-GRU + viajes + estática (finalista) & 0,061 & $+0{,}001$ & $+0{,}004$ & aprueba \\
-Survival stacking + motor y serie & 0,056 & $+0{,}025$ & $+0{,}009$ & aprueba \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Ninguno de los dos presenta fuga: con las variables permutadas, el PR-AUC cae a la tasa base. La contribución \aprime{} es
-positiva en ambos, y el puntaje del finalista crece a medida que se acerca el evento (Figura~\ref{fig:score}). Ninguno
-muestra el atajo de calendario.
-
 \section{Resultados de todos los modelos}
 \label{anx:modelos}
 

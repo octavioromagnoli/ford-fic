@@ -74,7 +74,8 @@ positivas, una tasa de $0{,}058$.
 entrenamiento y validación a la vez; los pliegues se estratifican por etiqueta, mercado y motor, y la validación cruzada de
 5 pliegues se repite 3 veces. (ii) Un conjunto de prueba congelado antes de examinar cualquier variable contra la etiqueta.
 (iii) Variables calculadas solo hacia atrás del corte, con imputación y escalado ajustados en el entrenamiento de cada
-pliegue. (iv) Auditorías de fuga de información obligatorias para todo candidato (Anexo~\ref{anx:auditorias}).
+pliegue. (iv) Auditorías de fuga de información obligatorias para todo candidato: con las variables permutadas entre filas, la
+métrica tiene que caer a la tasa base.
 
 \subsection{Métrica de evaluación}
 \label{sec:metricas}
