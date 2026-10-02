@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Binarios: nunca convertir fin de línea (un PDF con CRLF queda corrupto)
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pptx binary
