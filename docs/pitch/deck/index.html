@@ -669,7 +669,7 @@ table.t td .mono{font-size:15px}
     <div style="display:flex;justify-content:space-between;align-items:end;gap:40px">
       <div>
         <p class="kicker f" data-step="0"><i></i>El recorrido</p>
-        <h2 class="title sm f" data-step="0" data-d="1">Más de 40 modelos,<br>medidos con <em>la misma cuenta</em>.</h2>
+        <h2 class="title sm f" data-step="0" data-d="1">Múltiples modelos,<br>medidos con <em>la misma cuenta</em>.</h2>
       </div>
       <div class="f" data-step="1" style="max-width:520px;border-left:2px solid var(--guardsman-hi);padding-left:18px">
         <span class="lbl" style="color:var(--ford-soft)">La única pregunta</span>
@@ -687,7 +687,7 @@ table.t td .mono{font-size:15px}
         <div class="mrow"><span class="fam"></span><span class="mod">LightGBM</span><div class="bar" style="--w:39"><i></i></div><span class="val">16%</span></div>
       </div>
       <div class="f fade" data-step="3">
-        <div class="mrow"><span class="fam">Supervivencia</span><span class="mod">Survival stacking <span class="note">· finalista entrega 1</span></span><div class="bar" style="--w:47"><i></i></div><span class="val">19%</span></div>
+        <div class="mrow"><span class="fam">Supervivencia</span><span class="mod">Survival stacking</span><div class="bar" style="--w:47"><i></i></div><span class="val">19%</span></div>
         <div class="mrow"><span class="fam"></span><span class="mod">Con efecto aleatorio por auto</span><div class="bar" style="--w:23.5"><i></i></div><span class="val">9%</span></div>
       </div>
       <div class="f fade" data-step="4" style="margin-top:22px;border-top:1px solid var(--line-strong);padding-top:12px">
@@ -697,7 +697,7 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~2 min">
-    <p>Probamos más de 40 modelos, todos medidos con la misma cuenta. Empezamos por lo clásico: logística y árboles sobre 53 indicadores. Daban números que parecían buenos. Hasta que nos preguntamos: ¿y si el modelo solo reconoce qué auto falla? Ese día cambiamos cómo medimos: <b>de los autos que van a fallar, ¿a cuántos avisamos a tiempo, con una cantidad fija de falsas alarmas?</b> Y siempre al lado del azar: con 5% de falsas alarmas, un puntaje al azar avisa a un 7%.</p>
+    <p>Probamos múltiples modelos, todos medidos con la misma cuenta. Empezamos por lo clásico: logística y árboles sobre 53 indicadores. Daban números que parecían buenos. Hasta que nos preguntamos: ¿y si el modelo solo reconoce qué auto falla? Ese día cambiamos cómo medimos: <b>de los autos que van a fallar, ¿a cuántos avisamos a tiempo, con una cantidad fija de falsas alarmas?</b> Y siempre al lado del azar: con 5% de falsas alarmas, un puntaje al azar avisa a un 7%.</p>
     <p>Lo que ven son los números en el test, los 111 autos que estuvieron bajo llave. La logística y LightGBM quedan cerca del azar. Después, modelos de supervivencia, los que usa la medicina: con la primera entrega fueron nuestros finalistas, y en el test llegan a 19%. También probamos TimesFM de Google y MiniRocket: en desarrollo no sumaron, y no llegaron al test.</p>
     <p>Con la segunda entrega, con tres veces más fallas, las redes que leen la secuencia de viajes pasaron adelante. <b>Nuestro finalista es una GRU: en el test avisa a 31% de las fallas con 5% de falsas alarmas</b>, más de cuatro veces el azar y el doble de survival stacking.</p>
     <p class="note">Barras: test, umbral exacto al 5% de los sanos de test, cada modelo entrenado con todo dev (docs/memoria/f11-test-resultado.md §3). La GRU es el ensamble por rango de las semillas 42, 1 y 2. Azar: media del nulo que conserva el largo del historial (7,0%; p95 15,6%).</p>
@@ -770,7 +770,7 @@ table.t td .mono{font-size:15px}
           <polyline class="draw" pathLength="1" points="70,450 114,384.5 180,319.0 290,253.0 400,187.5 510,187.5 620,174.5 730,161.0" fill="none" stroke="#f3f1ea" stroke-width="4.5" style="filter:drop-shadow(0 0 8px rgba(127,178,255,.8))"/>
           <text x="740" y="165" fill="#f3f1ea" font-family="Archivo" font-weight="700" font-size="15">GRU</text>
           <circle cx="180" cy="319.0" r="8" fill="#f3f1ea"/><text x="168" y="306" text-anchor="end" fill="#f3f1ea" font-family="JetBrains Mono" font-size="14" font-weight="700">31,2%</text>
-          <circle cx="510" cy="187.5" r="6" fill="#f3f1ea"/><text x="498" y="172" text-anchor="end" fill="#f3f1ea" font-family="JetBrains Mono" font-size="13">62,5% al 20%</text>
+          <circle cx="400" cy="187.5" r="6" fill="#f3f1ea"/><text x="388" y="172" text-anchor="end" fill="#f3f1ea" font-family="JetBrains Mono" font-size="13">62,5% al 15%</text>
         </g>
       </svg>
       <p class="note" style="margin-top:4px">Test · 111 autos bajo llave (103 con datos: 32 fallaron, 71 sanos) · cada modelo entrenado con todo dev · GRU: ensamble de 3 semillas. Con 32 fallas, cada auto mueve 3 puntos: lo citamos como ~30% al 5% y ~60% al 20%.</p>
@@ -911,7 +911,6 @@ table.t td .mono{font-size:15px}
         <p class="kicker f" data-step="0"><i></i>Demo en vivo · replay de la temporada</p>
         <h2 class="title sm f" data-step="0" data-d="1">Los autos reales, semana a semana.<br>Solo sabe <em>lo que se sabía ese día</em>.</h2>
       </div>
-      <a class="cta f" data-step="0" data-d="2" id="demo-link" href="#" target="_blank" rel="noopener">Abrir la demo →</a>
     </div>
     <div style="align-self:center">
       <div class="f" data-step="1" style="display:flex;align-items:center;gap:26px">
@@ -1114,8 +1113,11 @@ table.t td .mono{font-size:15px}
 
 <section class="slide" data-block="07 · Cierre" data-who="Octavio" data-bg="1" data-stripes="hero">
   <div class="wrap" style="display:flex;flex-direction:column;justify-content:center;padding-bottom:40px">
-    <h1 class="display f" data-step="0" style="font-size:150px">Tu Ford<br>te avisa <em>antes.</em></h1>
+    <h1 class="display f" data-step="0" style="font-size:100px;max-width:880px">Tu Ford<br>te avisa <em>antes.</em></h1>
     <p class="f" data-step="0" data-d="2" style="margin-top:40px;font:500 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)">Gracias · Equipo SOG</p>
+    <a class="f" data-step="0" data-d="2" id="demo-link" href="https://scan.page/JrOsm5" target="_blank" rel="noopener" aria-label="Abrir la demo de Ford × SOG" style="position:absolute;right:180px;top:50%;transform:translateY(-50%);display:block;padding:24px;background:#fff;line-height:0">
+      <img src="demo-qr.jpeg" alt="QR para abrir la demo de Ford × SOG" width="320" height="321" style="display:block">
+    </a>
   </div>
   <aside class="notes" data-time="~10 s">
     <p><b>Tu Ford te avisa antes.</b> Gracias.</p>
@@ -1130,7 +1132,7 @@ table.t td .mono{font-size:15px}
 
 <script>
 /* ── configuración ── */
-const DEMO_URL = "#";   // la URL de Railway de la demo, cuando esté desplegada
+const DEMO_URL = "https://scan.page/JrOsm5";   // mismo destino que el QR
 
 /* ── escalado del escenario ── */
 const stage = document.getElementById('stage');

@@ -1,0 +1,74 @@
+% Generado por scripts/make_report_figures.py desde configs/data/features_v1.yaml (no editar a mano).
+% 53 features de modelo + 3 aux.
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{5.4cm}l>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{3.2cm}@{}}
+\toprule
+Feature & Fuente & Columna derivada & Agregador \\
+\endhead
+\midrule
+\multicolumn{4}{@{}l}{\textbf{A · Térmica y trayectos cortos}} \\
+\texttt{feat\_\allowbreak{}idle\_\allowbreak{}frac} & trips & \texttt{idle} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}idle\_\allowbreak{}per\_\allowbreak{}1000km} & trips & \texttt{idle} & \texttt{per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}idle\_\allowbreak{}frac\_\allowbreak{}trend} & trips & \texttt{idle} & \texttt{half\_\allowbreak{}mean\_\allowbreak{}delta} \\
+\texttt{feat\_\allowbreak{}short\_\allowbreak{}trip\_\allowbreak{}frac\_\allowbreak{}5km} & trips & \texttt{short\_\allowbreak{}trip\_\allowbreak{}moving} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}trips\_\allowbreak{}below\_\allowbreak{}regime\_\allowbreak{}temp\_\allowbreak{}frac} & trips & \texttt{below\_\allowbreak{}regime} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}below\_\allowbreak{}regime\_\allowbreak{}moving\_\allowbreak{}frac} & trips & \texttt{below\_\allowbreak{}regime\_\allowbreak{}moving} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}below\_\allowbreak{}regime\_\allowbreak{}frac\_\allowbreak{}trend} & trips & \texttt{below\_\allowbreak{}regime} & \texttt{half\_\allowbreak{}mean\_\allowbreak{}delta} \\
+\texttt{feat\_\allowbreak{}engine\_\allowbreak{}temp\_\allowbreak{}avg\_\allowbreak{}median} & trips & \texttt{EngineTemperatureAvg\_\allowbreak{}moving} & \texttt{median} \\
+\texttt{feat\_\allowbreak{}engine\_\allowbreak{}temp\_\allowbreak{}max\_\allowbreak{}median} & trips & \texttt{EngineTemperatureMax\_\allowbreak{}moving} & \texttt{median} \\
+\texttt{feat\_\allowbreak{}engine\_\allowbreak{}temp\_\allowbreak{}amplitude\_\allowbreak{}mean} & trips & \texttt{engine\_\allowbreak{}temp\_\allowbreak{}amplitude\_\allowbreak{}moving} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}coolant\_\allowbreak{}temp\_\allowbreak{}end\_\allowbreak{}mean} & trips & \texttt{CoolantTemperatureEnd\_\allowbreak{}moving} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}coolant\_\allowbreak{}temp\_\allowbreak{}start\_\allowbreak{}median} & trips & \texttt{CoolantTemperatureStart} & \texttt{median} \\
+\texttt{feat\_\allowbreak{}cold\_\allowbreak{}start\_\allowbreak{}frac} & trips & \texttt{cold\_\allowbreak{}start} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}chained\_\allowbreak{}trip\_\allowbreak{}frac} & trips & \texttt{chained} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}trip\_\allowbreak{}distance\_\allowbreak{}median\_\allowbreak{}km} & trips & \texttt{trip\_\allowbreak{}km\_\allowbreak{}moving} & \texttt{median} \\
+\texttt{feat\_\allowbreak{}trip\_\allowbreak{}distance\_\allowbreak{}p25\_\allowbreak{}km} & trips & \texttt{trip\_\allowbreak{}km\_\allowbreak{}moving} & \texttt{p25} \\
+\texttt{feat\_\allowbreak{}trip\_\allowbreak{}duration\_\allowbreak{}median\_\allowbreak{}min} & trips & \texttt{trip\_\allowbreak{}duration\_\allowbreak{}min\_\allowbreak{}moving} & \texttt{median} \\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{B · Regeneración (DPF)}} \\
+\texttt{feat\_\allowbreak{}regenerations\_\allowbreak{}per\_\allowbreak{}1000km} & trips & \texttt{regen\_\allowbreak{}drop} & \texttt{per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}regenerations\_\allowbreak{}trend\_\allowbreak{}per\_\allowbreak{}1000km} & trips & \texttt{regen\_\allowbreak{}drop} & \texttt{half\_\allowbreak{}count\_\allowbreak{}delta\_\allowbreak{}per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}distance\_\allowbreak{}between\_\allowbreak{}regen\_\allowbreak{}mean\_\allowbreak{}km} & trips & \texttt{regen\_\allowbreak{}drop} & \texttt{gap\_\allowbreak{}mean\_\allowbreak{}km} \\
+\texttt{feat\_\allowbreak{}distance\_\allowbreak{}between\_\allowbreak{}regen\_\allowbreak{}trend} & trips & \texttt{regen\_\allowbreak{}drop} & \texttt{gap\_\allowbreak{}trend\_\allowbreak{}km} \\
+\texttt{feat\_\allowbreak{}km\_\allowbreak{}since\_\allowbreak{}last\_\allowbreak{}regen} & trips & \texttt{regen\_\allowbreak{}drop} & \texttt{km\_\allowbreak{}since\_\allowbreak{}last} \\
+\texttt{feat\_\allowbreak{}regen\_\allowbreak{}residual\_\allowbreak{}mean} & trips & \texttt{regen\_\allowbreak{}residual} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}regen\_\allowbreak{}start\_\allowbreak{}level\_\allowbreak{}mean} & trips & \texttt{regen\_\allowbreak{}start\_\allowbreak{}level} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}dpf\_\allowbreak{}end\_\allowbreak{}mean} & trips & \texttt{AirRegenerationEnd} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}dpf\_\allowbreak{}end\_\allowbreak{}max} & trips & \texttt{AirRegenerationEnd} & \texttt{max} \\
+\texttt{feat\_\allowbreak{}dpf\_\allowbreak{}end\_\allowbreak{}slope\_\allowbreak{}per\_\allowbreak{}1000km} & trips & \texttt{AirRegenerationEnd} & \texttt{half\_\allowbreak{}slope\_\allowbreak{}per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}dpf\_\allowbreak{}positive\_\allowbreak{}delta\_\allowbreak{}frac} & trips & \texttt{dpf\_\allowbreak{}positive\_\allowbreak{}delta\_\allowbreak{}moving} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}dpf\_\allowbreak{}saturated\_\allowbreak{}frac} & trips & \texttt{dpf\_\allowbreak{}saturated\_\allowbreak{}end} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}filter\_\allowbreak{}abnormal\_\allowbreak{}end\_\allowbreak{}frac} & trips & \texttt{filter\_\allowbreak{}abnormal\_\allowbreak{}end} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}filter\_\allowbreak{}cleaning\_\allowbreak{}auto\_\allowbreak{}end\_\allowbreak{}frac} & trips & \texttt{filter\_\allowbreak{}cleaning\_\allowbreak{}auto\_\allowbreak{}end} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}manual\_\allowbreak{}regen\_\allowbreak{}ever} & trips & \texttt{filter\_\allowbreak{}manual} & \texttt{any} \\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{C · Uso}} \\
+\texttt{feat\_\allowbreak{}speed\_\allowbreak{}kmh\_\allowbreak{}mean} & trips & \texttt{speed\_\allowbreak{}kmh\_\allowbreak{}moving} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}trips\_\allowbreak{}below\_\allowbreak{}30kmh\_\allowbreak{}frac} & trips & \texttt{urban\_\allowbreak{}moving} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}moving\_\allowbreak{}trips\_\allowbreak{}per\_\allowbreak{}1000km} & trips & \texttt{moving} & \texttt{per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}km\_\allowbreak{}per\_\allowbreak{}day} & trips & \texttt{trip\_\allowbreak{}km} & \texttt{per\_\allowbreak{}day} \\
+\texttt{feat\_\allowbreak{}trips\_\allowbreak{}per\_\allowbreak{}day} & trips & \texttt{moving} & \texttt{per\_\allowbreak{}day} \\
+\texttt{feat\_\allowbreak{}hours\_\allowbreak{}between\_\allowbreak{}trips\_\allowbreak{}median} & trips & \texttt{soak\_\allowbreak{}min} & \texttt{median} \\
+\texttt{aux\_\allowbreak{}air\_\allowbreak{}temp\_\allowbreak{}avg} & trips & \texttt{AirTemperatureAvg} & \texttt{mean} \\
+\texttt{aux\_\allowbreak{}air\_\allowbreak{}temp\_\allowbreak{}min} & trips & \texttt{AirTemperatureMin} & \texttt{mean} \\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{D · Severidad (mensajes, aceite, consumo)}} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}full\_\allowbreak{}per\_\allowbreak{}1000km} & signals & \texttt{msg\_\allowbreak{}full} & \texttt{per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}overloaded\_\allowbreak{}per\_\allowbreak{}1000km} & signals & \texttt{msg\_\allowbreak{}overloaded} & \texttt{per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}overloaded\_\allowbreak{}ever} & signals & \texttt{msg\_\allowbreak{}overloaded} & \texttt{any} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}over\_\allowbreak{}limit\_\allowbreak{}per\_\allowbreak{}1000km} & signals & \texttt{msg\_\allowbreak{}over\_\allowbreak{}limit} & \texttt{per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}over\_\allowbreak{}limit\_\allowbreak{}ever} & signals & \texttt{msg\_\allowbreak{}over\_\allowbreak{}limit} & \texttt{any} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}at\_\allowbreak{}limit\_\allowbreak{}ever} & signals & \texttt{msg\_\allowbreak{}at\_\allowbreak{}limit} & \texttt{any} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}cleaning\_\allowbreak{}auto\_\allowbreak{}per\_\allowbreak{}1000km} & signals & \texttt{msg\_\allowbreak{}cleaning\_\allowbreak{}auto} & \texttt{per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}cleaning\_\allowbreak{}auto\_\allowbreak{}trend\_\allowbreak{}per\_\allowbreak{}1000km} & signals & \texttt{msg\_\allowbreak{}cleaning\_\allowbreak{}auto} & \texttt{half\_\allowbreak{}count\_\allowbreak{}delta\_\allowbreak{}per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}msg\_\allowbreak{}abnormal\_\allowbreak{}frac} & signals & \texttt{msg\_\allowbreak{}abnormal} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}msgs\_\allowbreak{}per\_\allowbreak{}1000km} & signals & \texttt{msg\_\allowbreak{}any} & \texttt{per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}oil\_\allowbreak{}life\_\allowbreak{}mean} & trips & \texttt{oil\_\allowbreak{}life} & \texttt{mean} \\
+\texttt{feat\_\allowbreak{}oil\_\allowbreak{}life\_\allowbreak{}slope\_\allowbreak{}per\_\allowbreak{}1000km} & trips & \texttt{oil\_\allowbreak{}life} & \texttt{half\_\allowbreak{}slope\_\allowbreak{}per\_\allowbreak{}1000km} \\
+\texttt{feat\_\allowbreak{}fuel\_\allowbreak{}pct\_\allowbreak{}per\_\allowbreak{}100km\_\allowbreak{}median} & trips & \texttt{fuel\_\allowbreak{}pct\_\allowbreak{}per\_\allowbreak{}100km} & \texttt{median} \\
+\texttt{aux\_\allowbreak{}regen\_\allowbreak{}marker\_\allowbreak{}per\_\allowbreak{}1000km} & signals & \texttt{regen\_\allowbreak{}marker} & \texttt{per\_\allowbreak{}1000km} \\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{Control de ventana (los emite \texttt{windows.py})}} \\
+\texttt{feat\_n\_trips\_window} & trips & \texttt{*} & \texttt{count} \\
+\texttt{feat\_window\_km\_covered} & trips & \texttt{OdometerTripEnd} & \texttt{rango} \\
+\bottomrule
+\end{longtable}

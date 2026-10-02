@@ -1,0 +1,131 @@
+# Figuras y tablas del informe final (docs/informe/). No entrena ni mide nada: lee salidas que ya existen
+# en experiments/ y tablas de docs/memoria/ copiadas acá con su fuente, y escribe PDF y .tex.
+#
+#   python scripts/make_report_figures.py --config configs/report_figures.yaml
+#
+# Cada bloque `from_memo` es una tabla tal como está en la ficha que dice `source`: si la ficha cambia, se
+# cambia acá y se regenera. Lo que sale de experiments/ se lee del CSV/JSON, nunca se tipea.
+seed: 0
+output:
+  figures_dir: docs/informe/figuras
+  tables_dir: docs/informe/tablas
+
+style:
+  # Paleta de referencia de la guía de visualización (validada: 3 primeros slots, todos los pares, modo claro).
+  # La GRU es el foco; la celda y survival stacking, los dos contrastes; el resto en gris.
+  colors:
+    focus: "#2a78d6"
+    second: "#eb6834"
+    third: "#1baf7a"
+    muted: "#a3a29d"
+    null_band: "#e6e5e1"
+    text: "#0b0b0b"
+    text_secondary: "#52514e"
+    grid: "#ebeae6"
+  sequential: ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+  font_size: 9
+  width_in: 6.3
+
+# --- salidas de experiments/ (no versionadas, en disco) -------------------------------------------------
+test:
+  curve: experiments/test-modelos-v2/curve.csv
+  operating: experiments/test-modelos-v2/operating.csv
+  paired: experiments/test-modelos-v2/paired.csv
+  report_f10: experiments/test-f10-s42/report.json
+  subset: test
+  budgets_table: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+  null_model: gru_f10            # el nulo que se dibuja es el del finalista (conserva el largo de su historial)
+  models:                        # orden de la tabla y etiqueta; `role` decide el color
+    gru_f10: {label: "GRU ×3 (finalista)", role: focus}
+    cnn_lstm_x3: {label: "CNN-LSTM ×3", role: muted}
+    survival_stacking: {label: "Survival stacking", role: third, label_dy: 4}
+    lightgbm: {label: "LightGBM (53 features)", role: muted}
+    logistica_l2: {label: "Logística L2 (53 features)", role: muted}
+    ss_efecto_aleatorio: {label: "SS + efecto aleatorio (GPBoost)", role: muted}
+    piso-celda: {label: "Celda mercado × motor (sin modelo)", role: second, label_dy: -5}
+  # AUC por auto y dentro de mercado × motor: no están en report.json; tabla de f11-test-resultado.md §3.
+  auc_from_memo:
+    source: docs/memoria/f11-test-resultado.md §3
+    gru_f10: [0.794, 0.675]
+    cnn_lstm_x3: [0.790, 0.638]
+    survival_stacking: [0.710, 0.515]
+    lightgbm: [0.725, 0.619]
+    logistica_l2: [0.679, 0.556]
+    ss_efecto_aleatorio: [0.363, 0.377]
+  # Detección en dev (CV, 5 · 10 · 20%) de los mismos modelos: f11-test-resultado.md §3.
+  dev_from_memo:
+    source: docs/memoria/f11-test-resultado.md §3
+    gru_f10: "27 · 42 · 61"
+    cnn_lstm_x3: "22 · 41 · 62"
+    survival_stacking: "14 · 24 · 42"
+    lightgbm: "18 · 28 · 42"
+    logistica_l2: "15 · 23 · 37"
+    ss_efecto_aleatorio: "6 · 9 · 17"
+    piso-celda: "18 · 33 · 62"
+
+explain:
+  units: experiments/explain-gru-final/units.csv
+  source: configs/explain_gru_final.yaml (dev, semilla 42, repetición 0 de splits_r3)
+  labels:
+    static_SalesCountry_cd: "País"
+    trip_duration_min: "Duración de los viajes"
+    n_records: "Registros de señales"
+    acum_rise: "Subida de la acumulación del DPF"
+    static_Engine: "Motor"
+    n_trips: "Cantidad de viajes"
+    observed: "Bin con datos de señales"
+    acum_mean: "Acumulación media"
+    trip_km: "Km por viaje"
+    acum_max: "Acumulación máxima"
+    regen_drops: "Regeneraciones (caídas)"
+    static_ModelSeries: "Serie del modelo"
+    msg_cleaning_auto_frac: "Avisos de limpieza automática"
+    speed_kmh: "Velocidad"
+    below_regime_frac: "Motor bajo régimen (< 70 °C)"
+    msg_full_frac: "Avisos de filtro lleno"
+    msg_severe_frac: "Avisos severos"
+    idle_frac: "Ralentí (viajes de 0 km)"
+  families:
+    "hábitos": "Hábitos"
+    "estado DPF": "Estado del DPF"
+    "cobertura": "Cobertura"
+    "estática": "Contexto (estática)"
+
+features:
+  spec: configs/data/features_v1.yaml
+  sequence: configs/data/panel_seq_trips_v2_estaticas.yaml
+
+# --- tablas de docs/memoria/ ------------------------------------------------------------------------------
+from_memo:
+  profile:
+    source: docs/memoria/f9-eda-v2.md §E (dev, referencia = fecha registrada, contra sanos del mismo mercado y tramo de odómetro)
+    bins: ["4–8k km antes", "2–4k", "0–2k"]
+    series:
+      "Ralentí (viajes de 0 km)": {values: [0.60, 0.64, 0.76], role: focus}
+      "Motor bajo régimen": {values: [0.55, 0.62, 0.73], role: second}
+      "Refrigerante al terminar": {values: [0.47, 0.39, 0.29], role: third}
+      "Velocidad (entre los que se mueven)": {values: [0.51, 0.47, 0.49], role: muted}
+  risk_by_age:
+    source: docs/memoria/f9-eda-v2.md §B (dev, Poisson con exposición, días desde la venta)
+    bins: ["0–60", "60–120", "120–180", "180–240", "240–300", "300–360", "360–450", "450–720"]
+    values: [0.34, 2.11, 3.37, 3.22, 3.91, 3.11, 3.10, 5.91]
+  cells:
+    source: docs/memoria/f9-universo-v2.md §3 (universo de 557, autos y eventos)
+    markets: [ARG, BRA, CHL, COL, PER]
+    engines: [ENG_1, ENG_2, ENG_3]
+    autos:
+      ARG: [37, 41, 38]
+      BRA: [null, 51, 120]
+      CHL: [30, 64, 11]
+      COL: [20, 105, 14]
+      PER: [2, 18, 6]
+    eventos:
+      ARG: [7, 2, 1]
+      BRA: [null, 9, 46]
+      CHL: [4, 41, 0]
+      COL: [0, 67, 0]
+      PER: [0, 0, 0]
+  score_toward_event:
+    source: docs/memoria/f11-test-resultado.md §4 (test, rango percentil medio, promedio de las 3 semillas)
+    bins: ["Sanos", "> 10.000 km", "3.500–10.000 km", "< 3.500 km"]
+    values: [0.44, 0.58, 0.61, 0.72]

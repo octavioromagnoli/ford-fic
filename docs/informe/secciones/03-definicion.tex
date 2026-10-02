@@ -1,0 +1,146 @@
+% ============================================================================ 3 · Definición del desafío
+\section{Definición del desafío}
+\label{sec:definicion}
+
+\subsection{Desafío específico: anticipar el momento, sin hacer trampa}
+
+\textbf{Qué entendimos.} Ford pide un modelo que anticipe, a partir de patrones históricos de uso y
+variables de motor, \emph{el momento en que un vehículo se aproxima a un evento de degradación}, a tiempo
+para una acción preventiva antes de que el cliente perciba el problema.
+
+Esa frase tiene dos exigencias que tiran para lados distintos. \emph{Anticipar} pide no mirar los últimos
+kilómetros antes de la falla, que es donde está la señal más fuerte. \emph{El momento} pide saber
+\emph{cuándo}, y no solo \emph{qué auto}. La mayor parte del trabajo metodológico fue convertir esas dos
+exigencias en una pregunta medible que no se pudiera ganar con atajos.
+
+\subsubsection{La pregunta: un panel de cortes con gap de blanking}
+\label{sec:panel}
+
+Armamos un panel con una fila por par (vehículo, punto de corte). Los cortes caen cada
+\textbf{Δ = 500 km} de odómetro. En cada corte, el modelo ve solo los últimos \textbf{W = 1.000 km} y
+responde: ¿el evento cae entre \textbf{G = 500} y \textbf{G + H = 3.500 km} después del corte?
+(figura~\ref{fig:panel}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1.55cm,y=1cm,font=\sffamily\scriptsize]
+\fill[fordblue!18] (0,0) rectangle (1,0.7);
+\fill[muted!35] (1,0) rectangle (1.5,0.7);
+\fill[accent2!22] (1.5,0) rectangle (4.5,0.7);
+\draw[inksec] (-0.6,0) -- (5.1,0);
+\foreach \x/\l in {0/{−1.000},1/{corte},1.5/{+500},4.5/{+3.500}} {\draw[inksec] (\x,0) -- (\x,-0.1) node[below] {\l};}
+\node at (0.5,0.35) {\textbf{W} · lo que mira};
+\node at (1.25,0.35) {\textbf{G}};
+\node at (3,0.35) {\textbf{H} · ¿falla acá?};
+\draw[very thick,ink] (1,-0.15) -- (1,0.95);
+\node[above] at (1,0.95) {punto de corte};
+\node[below,text width=3.2cm,align=center] at (1.25,-0.45) {500 km ciegos: el modelo nunca los ve};
+\node[right] at (5.1,0) {km};
+\end{tikzpicture}
+\caption{El planteo: ventana W hacia atrás, gap G y horizonte H hacia adelante. La etiqueta vale 1 si el
+evento cae en el horizonte.}
+\label{fig:panel}
+\fuente{\repo{configs/\allowbreak{}data/\allowbreak{}panel\_v2.yaml}; \repo{docs/\allowbreak{}memoria/\allowbreak{}decisiones.md} (18-09).}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{G = 500 km} es la regla antirreactiva. Sin ese gap, un modelo que mire los últimos kilómetros
+    antes del evento memoriza los mensajes de “filtro sobrecargado” y reporta un número alto haciendo
+    detección reactiva.
+  \item \textbf{W = 1.000 km.} Con la primera entrega, cada 500 km más de ventana costaba unos tres eventos
+    con positivo, y ventanas de 1.000, 2.000 y 3.000 km daban la misma métrica dentro del ruido.
+  \item \textbf{H = 3.000 km} pone los positivos entre 500 y 3.500 km antes del evento, donde el perfil
+    alineado muestra que la señal existe (§\ref{sec:eda}).
+  \item \textbf{El eje es el odómetro} para cortar las ventanas, pero el evento se ordena por tiempo y no por
+    km: la dispersión del logaritmo es 0,38 en edad contra 0,91 en odómetro. Quien maneja más llega al
+    evento con más km, no antes. Por eso la anticipación se reporta en km y también en días aproximados.
+  \item \textbf{Sanos emparejados por odómetro y por mes.} Los eventos se concentran en ciertos meses. Sin
+    emparejar por mes, sumar tres columnas de calendario subía el ROC de 0,67 a 0,76; emparejando, de 0,57
+    a 0,60 (primera entrega). El calendario no es el auto.
+\end{itemize}
+
+Con la entrega v2, el panel de desarrollo tiene 11.703 filas de 426 autos con cortes (135 fallados, 291
+sanos) y 682 filas positivas: una tasa base de 0,058 por fila. Los autos sanos aportan en promedio 26,9
+cortes y los fallados 28,8: las bolsas quedaron casi simétricas, algo que con la primera entrega no pasaba
+(9,0 contra 18,3) y que obligó a corregir las métricas (abajo).
+
+\subsubsection{Las reglas que no se negocian}
+
+\begin{enumerate}
+  \item \textbf{Gap de blanking}: el modelo nunca ve los 500 km previos al evento.
+  \item \textbf{Split agrupado por vehículo}: un auto nunca está a la vez en entrenamiento y en validación.
+    La lógica vive en un solo módulo (\repo{src/\allowbreak{}eval/\allowbreak{}splits.py}). Los folds se estratifican por la etiqueta a
+    nivel vehículo, cruzada con mercado y motor, y la CV se repite tres veces.
+  \item \textbf{Holdout congelado}: 111 autos sorteados una vez, antes de mirar ninguna feature contra la
+    etiqueta. Todo lo que se mira es desarrollo; las filas de test no se tocan hasta tener el modelo elegido.
+  \item \textbf{Features solo hacia atrás}: nada posterior al corte. Escalado e imputación se ajustan con el
+    train de cada fold, dentro del pipeline.
+  \item \textbf{Auditorías obligatorias} antes de aceptar un número (§\ref{sec:metricas}, Anexo~\ref{anx:auditorias}).
+  \item \textbf{Nada se hardcodea}: paths, semillas e hiperparámetros salen de un YAML versionado.
+\end{enumerate}
+
+\subsubsection{Cómo medimos, y por qué cambiamos de métrica}
+\label{sec:metricas}
+
+Empezamos midiendo como manda el libro: PR-AUC por fila. Los primeros modelos daban números que parecían
+buenos, hasta que nos preguntamos qué pasaría con un modelo que solo reconoce \emph{qué auto} falla, sin
+saber nada del \emph{cuándo}.
+
+\begin{caja}[title={El techo de cohorte}]
+\small
+Todas las filas positivas del panel están dentro de los cortes de autos que fallan. Un modelo que
+puntúa cada fila con “¿este auto es de los que fallan?”, sin ninguna información del \emph{cuándo}, saca
+\textbf{PR-AUC 0,177 y lift 3,03×} en el dev v2 (0,263 y 2,10× con la primera entrega). La meta inicial del
+plan (lift de 1,6–2×) se alcanzaba sin anticipar nada. Ningún modelo superó ese techo: \textbf{un PR-AUC por
+fila de este panel mide sobre todo \emph{qué auto} y muy poco \emph{cuándo}.}
+\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}decisiones.md}, cierre de F3 (20-09); \repo{src/\allowbreak{}eval/\allowbreak{}metrics.py::cohort\_ceiling}.}
+\end{caja}
+
+Tres mediciones independientes llegaron al mismo lugar con la primera entrega: colapsar el puntaje de cada
+auto a su promedio \emph{mejoraba} la decisión por vehículo; la auditoría \aprime{} del modelo de control
+daba negativa en las tres repeticiones; y un nulo que permuta la etiqueta dentro de cada auto quedaba por
+encima del modelo. Desde entonces la pregunta que decide es una sola:
+
+\begin{quote}
+\emph{De los autos que van a fallar, ¿a cuántos les avisamos a tiempo si solo permitimos una cantidad fija
+de falsas alarmas entre los autos sanos?}
+\end{quote}
+
+\begin{itemize}
+  \item \textbf{Detección por auto} con umbral exacto: para cada presupuesto b (2 a 30\,\% de los sanos con
+    alguna falsa alarma), el umbral es el menor que deja a lo sumo b de los sanos alertados. Una alerta son
+    \textbf{dos cortes seguidos} sobre el umbral. El criterio primario es la detección media al 5, 10, 15
+    y 20\,\%.
+  \item \textbf{Contra el azar, con el mismo historial}: el puntaje permutado entre filas, 200 veces. Con la
+    primera entrega, las bolsas asimétricas “detectaban” 10\,\% al 5\,\% sin ninguna señal; toda métrica que
+    dependa del largo del historial se compara contra un nulo que lo conserve.
+  \item \textbf{Contra la celda mercado × motor}: la tasa de fallas de la celda del auto, calculada sin él.
+    Tres celdas (Chile × ENG\_2, Colombia × ENG\_2 y Brasil × ENG\_3) concentran 117 de los 135 fallados de
+    dev. Esa regla, sin mirar un viaje, detecta 18 · 33 · 62\,\% al 5 · 10 · 20\,\% \tagdev{}.
+  \item \textbf{Fuera de muestra}: el umbral se fija con los sanos de los otros folds y se mide la tasa de
+    falsas alarmas que realmente produce.
+  \item \textbf{Bootstrap pareado por vehículo} para comparar dos modelos, con 1.000 a 2.000 réplicas.
+  \item \textbf{AUC dentro de mercado × motor}: solo compara pares de autos de la misma celda. La diferencia
+    con el AUC agrupado es composición de la muestra.
+\end{itemize}
+
+Para elegir candidatos, además, cada comparación nueva gastaba un lugar de un \emph{presupuesto de
+comparaciones}: con unos 12 eventos por fold, sumar candidatos sobre la marcha garantiza que “el mejor” sea
+ruido. Las variantes importantes se preregistraron por escrito antes de medirlas (\repo{docs/\allowbreak{}memoria/\allowbreak{}*preregistro*}).
+
+\subsection{Impacto operativo}
+
+\textbf{Qué entendimos.} No anticipar estos eventos afecta la satisfacción del cliente, sube los costos de
+garantía y reparación, reduce la vida útil percibida y desordena la planificación de mantenimiento de la red
+de concesionarios.
+
+\textbf{Qué hicimos con cada punto.}
+\begin{itemize}
+  \item \textbf{Satisfacción}: un aviso a tiempo, en lenguaje humano y con algo concreto para hacer. Si el
+    auto no iba a fallar, el conductor igual recibió un consejo que le sirve.
+  \item \textbf{Garantía y reparación}: la alerta llega con una mediana de unos tres meses de margen
+    \tagtest{}, tiempo para cambiar un hábito o programar un turno en vez de una urgencia. Cuántas fallas se
+    evitan no se puede medir con estos datos: es la métrica central del piloto (§\ref{sec:viabilidad}).
+  \item \textbf{Planificación de concesionarios}: la bandeja semanal prioriza los casos, y la perilla deja que
+    Ford elija cuántas alertas acepta según su capacidad y el costo de cada una.
+\end{itemize}
