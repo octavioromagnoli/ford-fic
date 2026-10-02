@@ -260,6 +260,16 @@ html[data-dir="back"]::view-transition-new(root){animation-name:drive-in-back}
 .mrow.fin .bar{height:24px}
 .mrow.fin .bar i{background:linear-gradient(90deg,var(--guardsman-hi),var(--ford-soft),var(--white));box-shadow:0 0 30px rgba(127,178,255,.5)}
 .mrow.fin .val{color:var(--white);font:700 30px var(--display);font-stretch:112%}
+/* el recorrido: menos modelos, filas más altas para ocupar la pantalla */
+.recorrido .mrow{height:58px;grid-template-columns:150px 370px 1fr 140px}
+.recorrido .mrow .mod{font-size:22px}
+.recorrido .mrow .fam{font-size:12px}
+.recorrido .mrow .bar{height:20px}
+.recorrido .mrow .val{font-size:19px}
+.recorrido .mrow.fin{height:96px}
+.recorrido .mrow.fin .mod{font-size:27px}
+.recorrido .mrow.fin .bar{height:36px}
+.recorrido .mrow.fin .val{font-size:44px}
 
 /* gauges del conductor */
 .cluster{border:1px solid var(--line-strong);background:radial-gradient(420px 260px at 50% 30%,rgba(28,58,158,.14),transparent 70%),rgba(8,9,11,.9);
@@ -360,7 +370,7 @@ table.t td .mono{font-size:15px}
   <div class="wrap" style="display:grid;grid-template-columns:1fr 560px;gap:80px">
     <div style="display:flex;flex-direction:column">
       <p class="kicker f" data-step="0"><i></i>Una historia, no un gráfico</p>
-      <h2 class="title f" data-step="0" data-d="1">Pensemos en un conductor cualquiera.</h2>
+      <h2 class="title f" data-step="0" data-d="1">Un usuario común.</h2>
       <div style="margin-top:34px;display:flex;flex-direction:column;gap:22px;max-width:760px">
         <p class="body f" data-step="1" data-dim="4">Vive en la ciudad. Colegio, trabajo, compras: <b>viajes cortos</b>, muchas veces quieto en el tráfico con el motor en marcha.</p>
         <p class="body f" data-step="2" data-dim="4">Con ese uso, el motor <b>casi nunca llega a temperatura</b>. Durante meses, algo se va tapando sin que nadie lo note.</p>
@@ -394,7 +404,7 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~60 s">
-    <p>Pensemos en un conductor cualquiera. Vive en la ciudad y usa su camioneta para lo de todos los días: llevar a los chicos al colegio, ir al trabajo, hacer las compras. Viajes cortos, de pocos kilómetros, muchas veces con el motor en marcha y quieto en el tráfico.</p>
+    <p>Pensemos en un usuario común. Vive en la ciudad y usa su camioneta para lo de todos los días: llevar a los chicos al colegio, ir al trabajo, hacer las compras. Viajes cortos, de pocos kilómetros, muchas veces con el motor en marcha y quieto en el tráfico.</p>
     <p>No lo sabe, pero con ese uso el motor casi nunca llega a temperatura. Y durante meses, algo se va tapando sin que nadie lo note.</p>
     <p>Un día se prende un testigo. Al tiempo, la camioneta pierde fuerza: se protege a sí misma. Y termina con un turno en el taller que no tenía planeado. No pierde solo una reparación: pierde la sensación de que su Ford lo cuidaba. <b>Lo que más le molesta es que nadie le avisó.</b></p>
     <p>No es un cliente real. Pero sus hábitos sí: son los que encontramos, en los datos de Ford, en los autos que fallaron.</p>
@@ -655,7 +665,7 @@ table.t td .mono{font-size:15px}
 </section>
 
 <section class="slide" data-block="03 · El modelo" data-who="Santino" data-bg=".3">
-  <div class="wrap" style="display:grid;grid-template-rows:auto auto 1fr">
+  <div class="wrap recorrido" style="display:grid;grid-template-rows:auto auto 1fr">
     <div style="display:flex;justify-content:space-between;align-items:end;gap:40px">
       <div>
         <p class="kicker f" data-step="0"><i></i>El recorrido</p>
@@ -666,10 +676,10 @@ table.t td .mono{font-size:15px}
         <p class="body" style="font-size:19px;margin-top:6px">De los autos que van a fallar, <b>¿a cuántos avisamos a tiempo</b> si solo permitimos <b>5% de falsas alarmas</b>? Siempre al lado del azar.</p>
       </div>
     </div>
-    <div class="mrow" style="margin-top:22px;height:26px"><span></span><span></span><div style="display:flex;justify-content:space-between;font:11px var(--mono);color:var(--dim)"><span>0%</span><span>10%</span><span>20%</span><span>30%</span><span>40%</span></div><span class="lbl" style="text-align:right">al 5% · test</span></div>
+    <div class="mrow" style="margin-top:34px;height:30px"><span></span><span></span><div style="display:flex;justify-content:space-between;font:12px var(--mono);color:var(--dim)"><span>0%</span><span>10%</span><span>20%</span><span>30%</span><span>40%</span></div><span class="lbl" style="text-align:right">test · 5%</span></div>
     <div style="position:relative">
       <!-- línea del azar: lo que detecta un puntaje al azar con el mismo presupuesto -->
-      <div class="f fade" data-step="1" style="position:absolute;top:-6px;height:232px;left:calc(480px + (100% - 570px) * .175);width:0;border-left:2px dashed var(--muted);z-index:2">
+      <div class="f fade" data-step="1" style="position:absolute;top:-6px;height:368px;left:calc(520px + (100% - 660px) * .175);width:0;border-left:2px dashed var(--muted);z-index:2">
         <span style="position:absolute;top:-2px;right:10px;white-space:nowrap;font:500 12px var(--mono);color:var(--muted)">azar · 7%</span>
       </div>
       <div class="f fade" data-step="2">
@@ -680,10 +690,10 @@ table.t td .mono{font-size:15px}
         <div class="mrow"><span class="fam">Supervivencia</span><span class="mod">Survival stacking <span class="note">· finalista entrega 1</span></span><div class="bar" style="--w:47"><i></i></div><span class="val">19%</span></div>
         <div class="mrow"><span class="fam"></span><span class="mod">Con efecto aleatorio por auto</span><div class="bar" style="--w:23.5"><i></i></div><span class="val">9%</span></div>
       </div>
-      <div class="f fade" data-step="4" style="margin-top:14px;border-top:1px solid var(--line-strong);padding-top:8px">
+      <div class="f fade" data-step="4" style="margin-top:22px;border-top:1px solid var(--line-strong);padding-top:12px">
         <div class="mrow fin"><span class="fam" style="color:var(--ford-soft)">Finalista</span><span class="mod">GRU + viajes + estática</span><div class="bar" style="--w:78"><i></i></div><span class="val" style="view-transition-name:hero-num">31,2%</span></div>
       </div>
-      <p class="note f" data-step="4" style="margin:14px 0 0 480px">Test: 111 autos bajo llave, nunca usados para entrenar ni ajustar (103 con datos · 32 fallaron). Cada modelo, entrenado con todo dev.</p>
+      <p class="note f" data-step="4" style="margin:22px 0 0 520px">Test: 111 autos bajo llave, nunca usados para entrenar ni ajustar (103 con datos · 32 fallaron). Cada modelo, entrenado con todo dev.</p>
     </div>
   </div>
   <aside class="notes" data-time="~2 min">
