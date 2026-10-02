@@ -11,10 +11,11 @@
   ItalicFont=*-italic,BoldItalicFont=*-bolditalic]
 \setmonofont{texgyrecursor}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,Scale=0.95]
 
-\usepackage[a4paper,top=2.4cm,bottom=2.4cm,left=2.4cm,right=2.4cm,headheight=14pt]{geometry}
+\usepackage[a4paper,top=2.2cm,bottom=2.2cm,left=2.3cm,right=2.3cm,headheight=14pt]{geometry}
 \usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{float}
+\usepackage[section]{placeins}
 \usepackage{booktabs,tabularx,longtable,multirow,array}
 \usepackage{xcolor}
 \usepackage{tikz}
@@ -27,6 +28,7 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{bookmark}
 \usepackage{listings}
+\usepackage{multicol}
 \lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,breakatwhitespace=true,columns=fullflexible,
   keepspaces=true,frame=leftline,framerule=1.5pt,rulecolor=\color{fordblue!50},xleftmargin=8pt,
   commentstyle=\color{inksec},morecomment=[l]{\#},literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1
@@ -48,10 +50,17 @@
 \setlist{itemsep=2pt,topsep=4pt,parsep=0pt,leftmargin=1.4em}
 \captionsetup{font=small,labelfont={bf,sf},format=hang,justification=raggedright,singlelinecheck=false}
 \captionsetup[table]{position=top,skip=4pt}
-\setlength{\parskip}{4pt}
+\setlength{\parskip}{3pt}
 \setlength{\parindent}{0pt}
 \setlength{\emergencystretch}{2.5em}
 \renewcommand{\arraystretch}{1.15}
+\titlespacing*{\section}{0pt}{12pt}{6pt}
+\titlespacing*{\subsection}{0pt}{9pt}{4pt}
+\titlespacing*{\subsubsection}{0pt}{7pt}{3pt}
+\setcounter{tocdepth}{2}
+\renewcommand{\floatpagefraction}{0.8}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\textfraction}{0.1}
 \titleformat{\section}{\sffamily\Large\bfseries\color{ink}}{\thesection}{0.8em}{}
 \titleformat{\subsection}{\sffamily\large\bfseries\color{ink}}{\thesubsection}{0.7em}{}
 \titleformat{\subsubsection}{\sffamily\normalsize\bfseries\color{ink}}{\thesubsubsection}{0.6em}{}
@@ -80,47 +89,55 @@
 
 \begin{document}
 
-% ================================================================ portada
+% ================================================================ portada + resumen ejecutivo
 \begin{titlepage}
 \thispagestyle{empty}
-\vspace*{1.2cm}
-{\sffamily\small\color{inksec} Ford Innovation Challenge III · AI Edition\\
-Área: Data-Driven Powertrain Intelligence\par}
-\vspace{1.4cm}
-{\sffamily\fontsize{30}{36}\selectfont\bfseries\color{ink} Tu Ford te avisa antes\par}
-\vspace{0.5cm}
-{\sffamily\Large\color{inksec} Predicción temprana de la degradación del filtro de partículas\\
-en los diésel conectados de Ford\par}
-\vspace{1.2cm}
-{\large Informe final del equipo SOG\par}
-\vspace{0.3cm}
-{\normalsize Gonzalo · Santino · Octavio\par}
-\vspace{2.2cm}
-\begin{caja}[title={En una página}]
+\vspace*{0.2cm}
+{\sffamily\small\color{inksec} Ford Innovation Challenge III · AI Edition · Área: Data-Driven Powertrain Intelligence\par}
+\vspace{0.7cm}
+{\sffamily\fontsize{28}{34}\selectfont\bfseries\color{ink} Tu Ford te avisa antes\par}
+\vspace{0.25cm}
+{\sffamily\large\color{inksec} Predicción temprana de la degradación del filtro de partículas en los diésel conectados de
+Ford\par}
+\vspace{0.4cm}
+{\normalsize Informe final del equipo SOG · Gonzalo · Santino · Octavio · 2 de octubre de 2026\par}
+\vspace{0.7cm}
+\phantomsection\addcontentsline{toc}{section}{Resumen ejecutivo}
+\begin{caja}[title={Resumen ejecutivo}]
 \small
 \begin{itemize}
-  \item \textbf{Qué hicimos.} Un modelo que, cada 500 km, lee los últimos 1.000 km de telemetría de un auto
-    y marca a los que van camino a una falla del filtro de partículas (DPF). Nunca ve los 500 km previos
-    al evento. Alrededor del modelo armamos un circuito que convierte cada alerta en una acción: un consejo
-    al conductor o un llamado del concesionario. Los textos los redactan agentes de IA y los controla un
-    verificador en código.
-  \item \textbf{Cuánto detecta} \tagtest{}. Sobre 111 autos que estuvieron bajo llave todo el proyecto
-    (103 con datos, 32 fallados), la GRU finalista avisa a \textbf{\textasciitilde30\,\%} de los autos que
-    fallan con 5\,\% de autos sanos con falsa alarma, a \textbf{\textasciitilde40–50\,\%} con 10\,\% y a
-    \textbf{\textasciitilde50–60\,\%} con 20\,\%. El azar avisa a 7\,\% con 5\,\%.
-  \item \textbf{Con cuánto margen} \tagtest{}. La primera alerta llega con una mediana de
-    \textbf{\textasciitilde4.600 km, unos 3 meses}, antes de la falla registrada.
-  \item \textbf{Lo que no prometemos.} No le gana con evidencia a la regla "país × motor"; sabe sobre
-    todo \emph{qué auto} y poco \emph{cuándo}; con 32 fallas los intervalos son anchos; la prevalencia real
-    se mide en un piloto; no predecimos la fecha exacta.
+  \item \textbf{El problema.} El filtro de partículas (DPF) de los diésel se tapa según cómo se usa el auto, y hoy Ford se
+    entera tarde: cuando se prende el testigo o el auto ya está en el taller. El desafío pide anticiparlo con la
+    telemetría del auto conectado, con el mayor margen posible.
+  \item \textbf{Lo que encontramos.} La telemetría deja huella: comparando contra sanos del mismo mercado, los autos que
+    van a fallar pasan cada vez más tiempo en ralentí y con el motor frío. Pero los datos traían trampas que hacían que
+    cualquier modelo pareciera mejor de lo que es (cohortes muestreadas en períodos distintos, una fecha del evento
+    posterior al taller, un contador que se apaga). Las corregimos en un pipeline declarativo y trazable.
+  \item \textbf{Lo que hicimos.} Cada 500 km, un modelo lee los últimos 1.000 km del auto y estima si falla en los
+    próximos 3.000, sin ver nunca los 500 km previos a la falla. El finalista es una red recurrente (GRU) que lee la
+    secuencia de viajes y de señales del filtro, más país, motor y modelo, en un ensamble de tres semillas. Un circuito
+    convierte cada alerta en un consejo al conductor o en un llamado del concesionario, redactado por agentes de IA y
+    controlado por un verificador en código.
+  \item \textbf{Cuánto detecta} \tagtest{}. En 111 autos que nunca vio (103 con datos, 32 fallados), avisa a
+    \textbf{\textasciitilde30\,\%} de las fallas con 5\,\% de autos sanos con falsa alarma (10 de 32, donde el azar da
+    7\,\%), a \textbf{\textasciitilde40–50\,\%} con 10\,\% y a \textbf{\textasciitilde50–60\,\%} con 20\,\%. Con el umbral
+    fijado antes, en desarrollo, las falsas alarmas reales quedan en 5,8 · 8,9 · 18,2\,\%.
+  \item \textbf{Con cuánto margen} \tagtest{}. La primera alerta llega con una mediana de \textbf{\textasciitilde4.600 km,
+    unos 3 meses}, antes de la falla registrada.
+  \item \textbf{Cuánto cuesta.} Sin sensores nuevos y en CPU: \textasciitilde USD 0,07–0,10 por auto y por año para un
+    millón de autos (estimación propia, a validar con Ford).
+  \item \textbf{Lo que no prometemos.} No le gana con evidencia a la regla “país × motor” (+27,3 puntos, IC95 [−0,8;
+    46,1]). Sabe sobre todo \emph{qué auto} va a fallar y poco \emph{cuándo}. Con 32 fallas los intervalos son anchos y el
+    test se leyó más de una vez: por eso citamos rangos. La muestra está enriquecida en fallas, así que la prevalencia
+    real se mide en un piloto. No predecimos la fecha exacta.
 \end{itemize}
 \end{caja}
 \vfill
-{\small\color{inksec} 2 de octubre de 2026 · Repositorio \repo{ford-fic}, rama \repo{docs/informe}\par}
+{\footnotesize\color{inksec} Repositorio \repo{ford-fic}, rama \repo{docs/informe}. Cada número trae su fuente en
+\repo{docs/memoria/}, en el pitch o en un \repo{experiments/*/report.json}.\par}
 \end{titlepage}
 
 \tableofcontents
-\clearpage
 
 \input{secciones/00-resumen}
 \input{secciones/01-desafio}

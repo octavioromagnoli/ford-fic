@@ -1,124 +1,48 @@
-% ============================================================================ 7 · Anexos
-\section{Reproducibilidad: comandos y configuraciones}
+% ============================================================================ Anexos
+\section{Reproducibilidad}
 \label{anx:repro}
 
-Todo corre desde la raíz del repositorio con el entorno de \repo{requirements.txt} (más
-\repo{requirements-dl.txt} para las redes). Los datos no se versionan: la entrega v2 va en
-\repo{data/\allowbreak{}v2/\allowbreak{}raw/\allowbreak{}} y se apunta con \repo{FORD\_DATA\_DIR}. Sin red, \repo{WANDB\_MODE=disabled}. Cada número de
-este informe sale de alguna de estas líneas. La GRU no es reproducible bit a bit entre plataformas ni cantidades de
-hilos: una reproducción da números cercanos, no idénticos.
+Todo corre desde la raíz del repositorio (\repo{requirements.txt} y \repo{requirements-dl.txt}); la entrega v2 va en
+\repo{data/\allowbreak{}v2/\allowbreak{}raw/\allowbreak{}}. La GRU no es reproducible bit a bit entre plataformas: una reproducción da números cercanos, no
+idénticos. Cada comando lee su YAML de \repo{configs/\allowbreak{}}.
 
-\subsection*{Datos, universo y panel}
 \begin{lstlisting}
 export FORD_DATA_DIR=$PWD/data/v2 WANDB_MODE=disabled OMP_NUM_THREADS=1
-# entrega 1 vs v2
-python scripts/compare_deliveries.py --config configs/data/compare_deliveries.yaml
-# universo + holdout
+# universo, holdout, EDA y paneles
 python scripts/make_test_split.py --config configs/data/test_split.yaml --force
-# cache del EDA (solo dev)
-python scripts/build_eda_cache.py --config configs/data/eda_cache_v2.yaml
-# EDA dentro del mercado
 python scripts/eda_v2.py --config configs/eda_v2.yaml
-# panel agregado (53 features)
-python scripts/build_dataset.py --config configs/data/panel_v2.yaml
-# + motor y serie
 python scripts/build_dataset.py --config configs/data/panel_v2_estaticas.yaml
-# folds 5 x 3, semilla 42
 python scripts/make_splits.py --config configs/data/splits_panel_v2_r3.yaml
-# secuencia 20 x 15
 python scripts/build_seq_panel.py --config configs/data/panel_seq_trips_v2_estaticas.yaml
-# chequeos del harness
-python scripts/check_setup.py
-\end{lstlisting}
-
-\subsection*{El finalista en desarrollo}
-\begin{lstlisting}
-# semilla 42 (y _s1_r3, _s2_r3)
+# el finalista en dev: una corrida por semilla (y _s1_r3, _s2_r3), ensamble, auditorías, reporte, explicabilidad
 python scripts/train.py --config configs/exp_v2all_gru_trips_estaticas_r3.yaml
-# ensamble por rango
 python scripts/ensemble_rank.py --config configs/exp_v2all_seeds3_gru_trips_estaticas.yaml
-# (a0), (a'), (b)
 python scripts/audit_model.py --config configs/exp_v2all_gru_trips_estaticas_r3.yaml
-# los 42 modelos, misma cuenta
 python scripts/report_v2_models.py --config configs/report_v2_models.yaml
-# anticipación en dev
-python scripts/report_v2_leads.py --config configs/report_v2_leads.yaml
-# sweep bayesiano (F10)
-python scripts/sweep_gru.py --config configs/sweep_gru.yaml
-# en qué se apoya
 python scripts/explain_perm_seq.py --config configs/explain_gru_final.yaml
-\end{lstlisting}
-
-\subsection*{La medición en test}
-\begin{lstlisting}
-# el tiro preregistrado de F11
-python scripts/eval_test.py --config configs/eval_test_f11.yaml --fit <yaml>
-python scripts/eval_test.py --config configs/eval_test_f11.yaml --report
-python scripts/eval_test.py --config configs/eval_test_f10_s42.yaml --fit configs/exp_v2all_gru_trips_estaticas_r3.yaml
-# la GRU 42/1/2
+# la medición en test (ya hecha: el test no se vuelve a usar para elegir)
 python scripts/eval_test.py --config configs/eval_test_f10_s42.yaml --report
-# todos los modelos
 python scripts/eval_test.py --config configs/eval_test_modelos_v2.yaml --report
-\end{lstlisting}
-
-\subsection*{Este informe}
-\begin{lstlisting}
-# figuras y tablas generadas
+# este informe
 python scripts/make_report_figures.py --config configs/report_figures.yaml
-# PDF
 cd docs/informe && tectonic informe.tex
 \end{lstlisting}
 
-\begin{table}[H]
-\centering
-\caption{Las configuraciones que definen el finalista.}
-\small
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{6.4cm}>{\raggedright\arraybackslash}X@{}}
-\toprule
-Archivo & Qué fija \\
-\midrule
-\repo{configs/\allowbreak{}data/\allowbreak{}raw\_sources.yaml} & Esquema de los crudos y correcciones de la entrega v2 \\
-\repo{configs/\allowbreak{}data/\allowbreak{}vehicle\_dedupe.yaml} & Los 13 pares de clones \\
-\repo{configs/\allowbreak{}data/\allowbreak{}test\_split.yaml} & Universo (ventana de producción) y sorteo del holdout \\
-\repo{configs/\allowbreak{}data/\allowbreak{}panel\_v2.yaml}, \repo{panel\_v2\_estaticas.yaml} & W, G, H, Δ, referencia − 21 d, emparejado de
-  sanos \\
-\repo{configs/\allowbreak{}data/\allowbreak{}features\_v1.yaml} & Las 53 features, umbrales y topes físicos \\
-\repo{configs/\allowbreak{}data/\allowbreak{}panel\_seq\_trips\_v2\_estaticas.yaml} & Los 15 canales y los 20 tramos de la secuencia \\
-\repo{configs/\allowbreak{}exp\_v2all\_gru\_trips\_estaticas\{,\_s1,\_s2\}\_r3.yaml} & Arquitectura e hiperparámetros de la GRU, una
-  por semilla \\
-\repo{configs/\allowbreak{}exp\_v2all\_seeds3\_gru\_trips\_estaticas.yaml} & El ensamble por rango \\
-\repo{configs/\allowbreak{}eval\_test\_f10\_s42.yaml}, \repo{eval\_test\_modelos\_v2.yaml} & La medición en test \\
-\repo{configs/\allowbreak{}explain\_gru\_final.yaml} & La explicabilidad por permutación \\
-\repo{configs/\allowbreak{}report\_figures.yaml} & Las figuras y tablas de este informe \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
 % ----------------------------------------------------------------------------------------------
-\section{Auditorías de leakage}
+\section{Auditorías de leakage y el techo de cohorte}
 \label{anx:auditorias}
 
-\textbf{Las tres defensas de construcción.} (1) El gap de blanking de 500 km sobre la referencia corrida 21 días;
-(2) el split agrupado por vehículo, con los clones colapsados antes; (3) features solo hacia atrás y
-preprocesamiento ajustado por fold. Además, el corte en el fin de extracción de los sanos impide que la sola
-existencia de datos posteriores delate a un fallado.
+Además de las defensas de construcción (gap de 500 km sobre la referencia corrida, split por vehículo con los clones
+colapsados, features hacia atrás y corte en el fin de extracción de los sanos), toda corrida candidata pasa por
+\repo{scripts/\allowbreak{}audit\_model.py}:
+\textbf{(a0)}, que permuta las features entre todas las filas, reentrena y exige que el PR-AUC caiga a la tasa base (si no
+cae, hay leakage); \textbf{\aprime{}}, que colapsa el puntaje de cada auto a su promedio sin reentrenar (lo que cae es lo que el
+modelo sabía del \emph{cuándo}); y \textbf{(b)}, que le da al modelo las columnas de calendario y marca un atajo si el ROC sube
+más de 0,02. La permutación dentro del vehículo no es un nulo: conserva qué autos fallan y sube en vez de bajar.
 
-\textbf{Las auditorías obligatorias} (\repo{scripts/\allowbreak{}audit\_model.py}), que toda corrida candidata tiene que pasar:
-\begin{itemize}
-  \item \textbf{(a0) nulo global}: se permutan las features entre todas las filas y se reentrena. El PR-AUC tiene
-    que caer a la tasa base; si no cae, hay leakage.
-  \item \textbf{\aprime{} aporte del cuándo}: se colapsa el puntaje de cada auto a su promedio, sin reentrenar. Lo
-    que cae es lo que el modelo sabía del \emph{cuándo}.
-  \item \textbf{(b) atajo de calendario}: se le dan al modelo las columnas \texttt{aux\_} de calendario (fechas de
-    producción y venta, temperatura ambiente). Si el ROC sube más de 0,02, el modelo tiene un atajo disponible.
-  \item \textbf{(a) permutación dentro del vehículo}: es \emph{informativa y no es un nulo}. Conserva qué autos
-    fallan, así que sube en vez de bajar; no aprueba nada.
-\end{itemize}
-
-\begin{table}[H]
+\begin{table}[!htbp]
 \centering
-\caption{Auditorías de los modelos de la entrega v2 \tagdev{} (semilla 42 de cada secuencial). Tasa base de la
-(a0): 0,058.}
+\caption{Auditorías de la entrega v2 \tagdev{} (semilla 42 de cada secuencial; tasa base 0,058).}
 \label{tab:auditorias}
 \small
 \begin{tabular}{@{}lrrrl@{}}
@@ -128,41 +52,47 @@ Modelo & (a0) PR-AUC & \aprime{} & (b) calendario & Veredicto \\
 \textbf{GRU + viajes + estática (finalista)} & 0,061 & +0,001 & +0,004 & aprueba \\
 GRU + viajes & 0,061 & +0,003 & \textbf{+0,025: marca} & aprueba \\
 CNN-LSTM + viajes + estática & 0,057 & +0,009 & +0,018 & aprueba \\
-CNN-LSTM + viajes & 0,060 & +0,026 & +0,001 & aprueba \\
 CNN-LSTM de la tutora (señales + país) & 0,056 & +0,026 & \textbf{+0,028: marca} & aprueba \\
 Survival stacking + motor y serie & 0,056 & +0,025 & +0,009 & aprueba \\
 \bottomrule
 \end{tabular}
-\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-remedicion-completa-v2.md} (auditorías). Survival stacking sin estática: \aprime{}
-+0,016 ± 0,004 (\repo{f9-remedicion-v2.md}).}
+\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-remedicion-completa-v2.md}.}
 \end{table}
 
-\textbf{Lectura.} Ningún modelo filtra: con las features permutadas, todos caen a la tasa base. La \aprime{} es
-positiva en todos los modelos de la v2 pero chica: lo que separa es sobre todo \emph{qué auto}. El finalista no
-marca el atajo de calendario; la misma GRU sin estática sí lo marcaba (+0,025), igual que la CNN-LSTM de la tutora
-con solo señales.
+\begin{table}[!htbp]
+\centering
+\caption{PR-AUC por fila en el dev v2 \tagdev{}, al lado del techo de cohorte.}
+\label{tab:prauc}
+\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+ & PR-AUC (lift) & \aprime{} \\
+\midrule
+Tasa base & 0,057 (0,97×) & −0,002 \\
+LightGBM (control) & 0,112 (1,92×) & −0,019 \\
+Survival stacking & 0,125 (2,14×) & +0,016 \\
+GRU + viajes + estática ×3 & 0,160 & +0,006 \\
+\textbf{Techo de cohorte} (“¿este auto falla?”, sin nada del cuándo) & \textbf{0,177 (3,03×)} & — \\
+\bottomrule
+\end{tabular}
+\fuente{\repo{f9-remedicion-v2.md}; \repo{f9-remedicion-completa-v2.md} (la \aprime{} del ensamble es +0,006; la de la semilla
+42, +0,001).}
+\end{table}
 
-\textbf{La auditoría que llevó a cambiar la métrica.} Con la primera entrega, el nulo global caía exacto a la tasa
-base en tres modelos (pipeline limpio), pero el nulo dentro del vehículo quedaba \emph{por encima} de su propio
-modelo (0,1928 contra 0,1653 del control): permutar dentro del auto conserva qué autos fallan y le saca el ruido de
-qué ventana le tocó. Esa observación, junto con el techo de cohorte (Anexo~\ref{anx:prauc}), es la razón por la que
-el finalista se elige por detección por auto, \aprime{} y estabilidad, y no por PR-AUC por fila
-(\repo{decisiones.md}, cierre de F3).
-
-\textbf{Una trampa de exposición que también auditamos.} Con la primera entrega, los fallados conservaban 18,25
-cortes por bolsa y los sanos 9,00: el tamaño de la bolsa solo, como puntaje, daba lift 1,79×. Desde entonces toda
-detección se compara contra un nulo que conserva el largo del historial (\repo{scripts/\allowbreak{}audit\_mil\_bagsize.py},
-\repo{scripts/\allowbreak{}audit\_detection\_null.py}).
+Ningún modelo filtra: con las features permutadas, todos caen a la tasa base. Ninguno supera el techo de cohorte, y la
+\aprime{} es positiva pero chica en todos: lo que separa es sobre todo \emph{qué auto}. El finalista no marca el atajo de
+calendario, mientras que la misma GRU sin estática sí lo marcaba. Con la primera entrega, además, el tamaño de la bolsa solo
+(18 cortes por fallado contra 9 por sano) daba lift 1,79×: desde entonces toda detección se compara contra un nulo que conserva
+el largo del historial.
 
 % ----------------------------------------------------------------------------------------------
-\section{Todos los modelos en test}
+\section{Todos los modelos en test y en desarrollo}
 \label{anx:modelos}
 
-Cada modelo se entrenó con todo el desarrollo (semilla 42, salvo los ×3) y se midió con la misma cuenta: umbral
-exacto por presupuesto de falsas alarmas, alerta de dos cortes seguidos, 103 autos (32 fallados). Se midieron
-después del tiro preregistrado: describen, no eligen.
+Cada modelo se entrenó con todo el desarrollo (semilla 42, salvo los ×3) y se midió con la misma cuenta en los 103 autos de
+test. Se midieron después del tiro preregistrado: describen, no eligen.
 
-\begin{table}[H]
+\begin{table}[!htbp]
 \centering
 \caption{Detección (\%) en test por presupuesto de falsas alarmas \tagtest{}. “Prim.” es la media al 5–20\,\%.}
 \label{tab:modelos-test}
@@ -171,165 +101,61 @@ después del tiro preregistrado: describen, no eligen.
 \repo{docs/\allowbreak{}memoria/\allowbreak{}f11-test-resultado.md} §3.}
 \end{table}
 
-\textbf{Comparaciones pareadas} (bootstrap por vehículo, 2.000 réplicas, diferencia en puntos de primario):
-\begin{itemize}
-  \item GRU − celda mercado × motor: +27,3, IC95 [−0,8; 46,1], p(dif ≤ 0) = 0,028.
-  \item Survival stacking − GRU: −24,2, IC95 [−43,0; −0,8] (no preregistrada).
-  \item GRU 42/1/2 − GRU 101–103 (la misma configuración con otras semillas): +6,2, IC95 [−7,8; +18,0].
-  \item GRU con etiqueta suave − GRU con etiqueta dura (el tiro preregistrado de F11, semillas 101–103 las dos):
-    −13,3, IC95 [−25,0; +3,9].
-\end{itemize}
-
-\begin{table}[H]
+\begin{table}[!htbp]
 \centering
-\caption{El tiro preregistrado de F11 \tagtest{}: detección (\%).}
-\label{tab:f11}
-\scriptsize
-\begin{tabular}{@{}lrrrrrrrr@{}}
-\toprule
- & 2\,\% & 5\,\% & 10\,\% & 15\,\% & 20\,\% & 25\,\% & 30\,\% & Primario \\
-\midrule
-GRU con etiqueta suave (candidato) & 15,6 & 18,8 & 21,9 & 34,4 & 50,0 & 56,2 & 68,8 & 31,2 \\
-GRU con etiqueta dura (referencia, 101–103) & 15,6 & 28,1 & 50,0 & 50,0 & 50,0 & 62,5 & 68,8 & 44,5 \\
-Celda mercado × motor & 0,0 & 0,0 & 21,9 & 21,9 & 50,0 & 50,0 & 50,0 & 23,4 \\
-\bottomrule
-\end{tabular}
-\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f11-test-resultado.md} §1; \repo{experiments/\allowbreak{}test-f11/\allowbreak{}}.}
+\caption{Con el umbral fijado en dev \tagtest{}: detección y falsas alarmas reales en test (15 modelos de fold).}
+\label{tab:operacion}
+\small
+\input{tablas/test_operacion}
+\fuente{\repo{experiments/\allowbreak{}test-modelos-v2/\allowbreak{}operating.csv} (tabla generada).}
 \end{table}
 
-\textbf{Notas.} La CNN-LSTM es inestable a presupuestos bajos (15,6\,\% al 5\,\%, 56,2\,\% al 10\,\%). GPBoost
-invierte el orden: un auto nuevo entra sin su efecto aleatorio, y su AUC por auto ya estaba invertido en desarrollo
-(0,34). La celda detecta 0\,\% por debajo del 10\,\% porque alerta celdas enteras.
+\textbf{Comparaciones pareadas en test} (bootstrap por vehículo, diferencia de primario): GRU − celda, +27,3 [−0,8; 46,1];
+survival stacking − GRU, −24,2 [−43,0; −0,8]; GRU 42/1/2 − GRU 101–103, +6,2 [−7,8; +18,0]; GRU suave − GRU dura (tiro
+preregistrado de F11), −13,3 [−25,0; +3,9].
+
+\begin{table}[!htbp]
+\centering
+\caption{Los modelos principales en el dev v2 \tagdev{}: detección (\%) con umbral exacto, promedio de 3 repeticiones.}
+\label{tab:dev}
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Modelo & AUC auto & AUC celda & 5\,\% & 10\,\% & 20\,\% \\
+\midrule
+\textbf{GRU + viajes + estática ×3 (finalista)} & 0,82 & 0,65 & 27 & 42 & 61 \\
+CNN-LSTM + viajes + estática ×3 & 0,81 & 0,62 & 22 & 41 & 62 \\
+CNN-LSTM de la tutora + estática ×3 & 0,82 & 0,62 & 27 & 40 & 68 \\
+Survival stacking (F3) & 0,72 & 0,57 & 14 & 24 & 42 \\
+LightGBM (control, 53 features) & 0,72 & 0,57 & 18 & 28 & 42 \\
+Logística L2 & 0,71 & 0,58 & 15 & 23 & 37 \\
+Celda mercado × motor (sin modelo) & 0,81 & 0,46 & 18 & 33 & 62 \\
+Azar (historial conservado) & — & — & 5 & 11 & 21 \\
+\bottomrule
+\end{tabular}
+\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-remedicion-completa-v2.md} (42 modelos).}
+\end{table}
 
 % ----------------------------------------------------------------------------------------------
 \section{Diccionario de features}
 \label{anx:features}
 
-\subsection*{Las 53 features agregadas (modelos tabulares y de supervivencia)}
-
-Cada feature se calcula sobre la ventana (corte − 1.000 km, corte] del odómetro, solo con viajes y señales
-anteriores al corte. Las \texttt{aux\_} quedan en el panel para auditar y no entran a ningún modelo. Agregadores:
-\texttt{mean}/\texttt{median}/\texttt{p25}/\texttt{max} sobre los viajes de la ventana; \texttt{per\_1000km}, conteo
-por 1.000 km recorridos; \texttt{per\_day}, por día calendario; \texttt{half\_*}, diferencia entre la segunda y la
-primera mitad de la ventana (tendencia); \texttt{gap\_*}, distancia entre eventos; \texttt{km\_since\_last}, km desde
-el último evento; \texttt{any}, si ocurrió alguna vez.
+Las 53 features agregadas se calculan sobre la ventana (corte − 1.000 km, corte], solo con datos anteriores al corte, como
+\texttt{agregador(columna derivada)}. Las \texttt{aux\_} quedan para auditar y no entran a ningún modelo. Agregadores:
+\texttt{per\_1000km}, conteo por 1.000 km; \texttt{per\_day}, por día; \texttt{half\_*}, segunda mitad de la ventana menos la
+primera (tendencia); \texttt{gap\_*}, distancia entre eventos; \texttt{any}, si ocurrió alguna vez.
 
 {\scriptsize
 \input{tablas/features}
 }
-\fuente{\repo{configs/\allowbreak{}data/\allowbreak{}features\_v1.yaml} (tabla generada); derivadas en \repo{src/\allowbreak{}features/\allowbreak{}trips.py} y
+\fuente{\repo{configs/\allowbreak{}data/\allowbreak{}features\_v1.yaml} (lista generada); derivadas en \repo{src/\allowbreak{}features/\allowbreak{}trips.py} y
 \repo{src/\allowbreak{}features/\allowbreak{}signals.py}.}
 
-\subsection*{Los 15 canales de la secuencia (la GRU)}
-
-La ventana de 1.000 km se divide en 20 tramos de 50 km; un viaje cae en el tramo de su odómetro de fin. “zero”
-rellena con cero un tramo sin datos (los conteos); “carry” arrastra el último valor dentro de la misma ventana,
-siempre anterior al corte (un tramo sin viajes no es un tramo con ralentí cero).
+\textbf{Los 15 canales de la GRU.} La ventana se divide en 20 tramos de 50 km; “zero” rellena con cero un tramo sin datos y
+“carry” arrastra el último valor dentro de la misma ventana. Más país, motor y serie en one-hot.
 
 \begin{center}
 \scriptsize
 \input{tablas/canales}
 \end{center}
-\fuente{\repo{configs/\allowbreak{}data/\allowbreak{}panel\_seq\_trips\_v2\_estaticas.yaml} (tabla generada). Más país, motor y serie en
-one-hot como \texttt{static\_}.}
-
-% ----------------------------------------------------------------------------------------------
-\section{Las tablas de Ford: anexo contra archivos}
-\label{anx:tablas}
-
-\begin{table}[H]
-\centering
-\caption{\emph{Trip Summary}: las 40 columnas del anexo 7.1 y lo que llegó.}
-\label{tab:trips-cols}
-\scriptsize
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{5.6cm}>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}X@{}}
-\toprule
-Columna del anexo & Llegó & Uso \\
-\midrule
-\texttt{Vin} & como \texttt{VehicleCode} & Identificador anonimizado \\
-\texttt{TripDatetimeStart/\allowbreak{}End} & sí & Duración, reposo entre viajes, emparejado por mes (dos formatos mezclados) \\
-\texttt{OdometerTripStart/\allowbreak{}End} & sí & Eje de km, km por viaje, ventanas \\
-\texttt{KilometerPerHour} & sí & Nulo en los viajes de 0 km; se recalcula como km/duración \\
-\texttt{FuelLvlStartPc/\allowbreak{}EndPc} & sí & Consumo como índice relativo (supera 100) \\
-\texttt{FuelLvlAutonomyStart} & no & — \\
-\texttt{EngineOilLifePCStart/\allowbreak{}End} & sí & Pendiente del nivel en la ventana (no cambia dentro del viaje) \\
-\texttt{EngineTemperatureMin/\allowbreak{}Max/\allowbreak{}Avg} & sí & Bajo régimen (máx. < 70 °C), temperaturas \\
-\texttt{CoolantTemperatureStart/\allowbreak{}End} & sí & Arranque en frío, refrigerante al terminar \\
-\texttt{DieselParticulateFilterStart/\allowbreak{}End} & no, por ese nombre & Llega como \texttt{AirRegenerationStart/\allowbreak{}End} (= \texttt{Acumulation}, 99,8\,\%) \\
-\texttt{VehicleGPSLat/\allowbreak{}LongDataStart/\allowbreak{}End} (4) & no & Sin GPS no hay ubicación ni altura por viaje \\
-\texttt{VehicleElevationRangeStart/\allowbreak{}End} & no & Proxy probado: altura de la ciudad de venta \\
-\texttt{TirePressure\{LF,RF,LR,RR\}\{Start,End\}} (8) & no & — \\
-\texttt{AirTemperatureStart/\allowbreak{}End/\allowbreak{}Min/\allowbreak{}Max/\allowbreak{}Avg} & sí & Solo auditoría: deriva con el mes y el lugar \\
-\texttt{ManualRegenerationSootStart/\allowbreak{}End} & no & Los mensajes de limpieza manual marcan el evento (rarísimos) \\
-\texttt{TripNumber} & sí & — \\
-\emph{No está en el anexo}: \texttt{AirFilterStart/\allowbreak{}End} & sí & Nivel categórico del filtro (= \texttt{Message}, 99,97\,\%) \\
-\bottomrule
-\end{tabularx}
-\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f2-diccionario-trips-incompleto.md}, \repo{f2-columnas-airfilter-airregeneration.md};
-\repo{configs/\allowbreak{}data/\allowbreak{}raw\_sources.yaml}.}
-\end{table}
-
-\begin{table}[H]
-\centering
-\caption{\emph{DynamicInformation} y \emph{Vehicle General Information}.}
-\label{tab:otras-cols}
-\scriptsize
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}X@{}}
-\toprule
-Columna & Qué encontramos y cómo se usa \\
-\midrule
-\texttt{VehicleCode} & Clave de las seis tablas; 13 vehículos con dos códigos \\
-\texttt{EventTimestamp} & Llega como \texttt{eventTimestamp}, dos formatos mezclados \\
-\texttt{OdometerValue} & Nulos concentrados en pocos autos; la ventana se ubica por el odómetro de los viajes \\
-\texttt{Acumulation} & Nivel del filtro, escala 0–100 en pasos de 5; la misma variable que \texttt{AirRegeneration} \\
-\texttt{Message} & 9 niveles del filtro (“Normal Operation”, “Full”, “Overloaded”, “Over Limit”, limpiezas…); tasas
-  por 1.000 km como severidad \\
-\texttt{Regenerations} & El texto \texttt{“Regeneration”} marcando una fila; se corta el 25-05-2026: solo auditoría \\
-\texttt{DistanceBetweenRegenerations} & Distancia al marcador anterior; hereda el corte: solo auditoría \\
-\midrule
-\texttt{VehCode} & Como \texttt{VehicleCode}; en v2 los fallados traen una fila por evento \\
-\texttt{IdentificationDate} & Días desde producción del evento; nula en todos los sanos: es la etiqueta. En los
-  fallados de v2 llega renombrada \\
-\texttt{daysUntilSale} & Solo auditoría (cohorte) \\
-\texttt{ProductionDay} & En el eje del calendario con origen común (IQR 0 días); en los fallados de v2, +538 días;
-  solo auditoría \\
-\texttt{Engine}, \texttt{ModelSeries} & Candidatas en v2; se reporta siempre dentro de mercado × motor \\
-\texttt{SalesCountryCd} & Llega como \texttt{SalesCountry\_cd}; en v2 con código ISO \\
-\emph{Nueva en v2}: \texttt{SalesCity} & Altura de la ciudad de venta (probada, no entra) \\
-\bottomrule
-\end{tabularx}
-\fuente{\repo{f1-datos-reales.md}, \repo{f1-anclaje-temporal.md}, \repo{f9-entrega-v2.md}.}
-\end{table}
-
-% ----------------------------------------------------------------------------------------------
-\section{Anexo técnico: el PR-AUC por fila y el techo de cohorte}
-\label{anx:prauc}
-
-Lo dejamos acá, y no en el cuerpo, porque en este panel no mide lo que Ford necesita: un PR-AUC por fila por
-debajo del techo de cohorte no demuestra anticipación.
-
-\begin{table}[H]
-\centering
-\caption{PR-AUC por fila en el dev v2 \tagdev{}, al lado del techo de cohorte.}
-\label{tab:prauc}
-\small
-\begin{tabular}{@{}lrrr@{}}
-\toprule
- & PR-AUC (lift) & ROC por fila & \aprime{} \\
-\midrule
-Tasa base & 0,057 (0,97×) & 0,489 & −0,002 \\
-LightGBM (control) & 0,112 (1,92×) & 0,690 & −0,019 \\
-Survival stacking & 0,125 (2,14×) & 0,709 & +0,016 \\
-GRU + viajes + estática ×3 & 0,160 & — & +0,006 \\
-\midrule
-\textbf{Techo de cohorte} (“¿este auto falla?”, sin nada del cuándo) & \textbf{0,177 (3,03×)} & — & — \\
-\bottomrule
-\end{tabular}
-\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-remedicion-v2.md}; GRU: \repo{f9-remedicion-completa-v2.md} (la \aprime{} del
-ensamble es +0,006; la de la semilla 42 sola, +0,001).}
-\end{table}
-
-\textbf{Cómo se lee.} Todas las filas positivas del panel están dentro de los cortes de autos que fallan. Puntuar
-cada fila con la cohorte del auto ya da 0,177; ningún modelo llega. Lo que un modelo agrega sobre ese techo se mide
-con \aprime{} y con el PR-AUC restringido a los cortes de autos que fallan. Con la primera entrega el techo era
-0,263 (2,10×), y la meta del plan inicial (lift de 1,6–2×) quedaba toda por debajo.
+\fuente{\repo{configs/\allowbreak{}data/\allowbreak{}panel\_seq\_trips\_v2\_estaticas.yaml} (tabla generada).}

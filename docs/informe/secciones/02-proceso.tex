@@ -2,77 +2,42 @@
 \section{Contexto del proceso}
 \label{sec:proceso}
 
-\subsection{El proceso actual: la detección es reactiva}
+\textbf{Qué entendimos.} La telemetría llega a la nube de forma continua, pero la degradación se identifica una vez
+manifestada, en un service o cuando el cliente la reporta. El desafío se ubica en la posventa.
 
-\textbf{Qué entendimos.} El vehículo tiene sensores que reportan por telemetría a una base en la nube, con
-triggers que arman y envían los paquetes. Los datos se generan de forma continua durante el uso normal.
-Hoy la degradación se identifica una vez manifestada: en un service o cuando el cliente la reporta.
+\textbf{Qué encontramos en los datos: el proceso reactivo está escrito en la telemetría.} La fecha registrada del evento
+llega después del taller. En la primera entrega coincidía con la intervención (el cambio de aceite se concentraba en
+±3 días). En la entrega v2, la fecha de los mismos autos cae una mediana de 14 días después, y en las dos semanas previas
+ya aparecen el cambio de aceite y el ralentí largo de la regeneración forzada (1,5–1,8 veces la base). Después del evento,
+además, el uso cambia: la fracción de viajes bajo régimen térmico baja en el 72\,\% de los autos.
 
-\textbf{Qué encontramos en los datos.} El proceso reactivo está escrito en la telemetría, y eso es un riesgo
-para cualquier modelo:
-\begin{itemize}
-  \item \textbf{La fecha registrada llega después del taller.} En la primera entrega, la fecha del evento
-    coincidía con la intervención: el cambio de aceite se concentraba en ±3 días, unas cinco veces la base.
-    En la entrega v2, la fecha de los mismos autos cae siempre después, con una mediana de 14 días. En las
-    dos semanas previas a la fecha nueva ya aparecen el cambio de aceite y el ralentí largo (≥ 15 minutos a
-    0 km, la regeneración forzada con el auto detenido), con 1,5–1,8 veces la base
-    (\repo{f9-entrega-v2.md} §6, \repo{f9-eda-v2.md} §H).
-  \item \textbf{Después del evento el uso cambia.} Después de la fecha, la fracción de viajes bajo régimen
-    térmico baja en el 72\,\% de los autos y la velocidad sube en el 79\,\%.
-\end{itemize}
+\textbf{Qué hicimos.} Si el modelo viera el taller, haría la detección reactiva que Ford ya tiene. Por eso la referencia
+del evento es la \textbf{fecha registrada menos 21 días}, el modelo nunca ve los \textbf{500 km previos} a esa referencia
+(§\ref{sec:panel}) y nada posterior al evento entra a ninguna ventana. En la posventa, la alerta entra a un circuito que
+termina en una acción (figura~\ref{fig:circuito}): con un hábito para nombrar, un consejo al conductor en la app; sin
+hábito, un llamado del concesionario; si el riesgo sigue alto dos revisiones después, un escalamiento. El gerente de
+posventa recibe cada lunes una bandeja priorizada y redactada, lista para aprobar.
 
-\textbf{Qué hicimos.} Si el modelo viera el taller o lo posterior al evento, estaría haciendo exactamente la
-detección reactiva que Ford ya tiene. Por eso:
-\begin{enumerate}
-  \item la referencia del evento es la \textbf{fecha registrada menos 21 días}, entre la mediana y el p75
-    del corrimiento medido;
-  \item el modelo nunca ve los \textbf{500 km previos} a esa referencia (el gap de blanking, §\ref{sec:panel});
-  \item nada posterior al evento entra a ninguna ventana, ni como positivo ni como negativo.
-\end{enumerate}
-
-\subsection{Ubicación en el flujo: posventa}
-
-\textbf{Qué entendimos.} El desafío se ubica en la posventa, con el vehículo ya en manos del cliente y a
-partir de la telemetría remota. La detección temprana impacta en el servicio (mantenimiento predictivo) y
-en la percepción de calidad.
-
-\textbf{Qué hicimos.} Una alerta en un servidor no evita ninguna falla. El producto la convierte en una
-acción dentro del circuito de posventa (figura~\ref{fig:circuito}):
-
-\begin{figure}[H]
+\begin{figure}[!htbp]
 \centering
 \begin{tikzpicture}[
-  node distance=4mm and 4mm,
+  node distance=4mm and 3.5mm,
   box/.style={draw=fordblue!70,fill=softbg,rounded corners=2pt,align=center,font=\sffamily\scriptsize,
-    minimum height=11mm,text width=22mm,inner sep=2pt},
+    minimum height=10mm,text width=21mm,inner sep=2pt},
   pol/.style={box,draw=accent2!80,fill=warnbg},
   arr/.style={-{Stealth[length=2mm]},draw=inksec,thick}]
-\node[box] (t) {\textbf{1 · Telemetría}\\viajes + señales del filtro, diaria};
-\node[box,right=of t] (s) {\textbf{2 · Puntaje GRU}\\cada 500 km, últimos 1.000 km};
-\node[box,right=of s] (a) {\textbf{3 · Alerta}\\2 cortes seguidos sobre el umbral de Ford};
+\node[box] (t) {\textbf{1 · Telemetría}\\viajes y señales del filtro};
+\node[box,right=of t] (s) {\textbf{2 · Puntaje GRU}\\cada 500 km};
+\node[box,right=of s] (a) {\textbf{3 · Alerta}\\2 cortes sobre el umbral de Ford};
 \node[box,right=of a] (w) {\textbf{4 · Por qué}\\hábitos contra los sanos del mercado};
-\node[pol,below=7mm of w] (p) {\textbf{5 · Política}\\determinista, la define Ford};
-\node[box,left=of p] (g) {\textbf{6 · Agentes}\\redactan; un verificador en código controla};
-\node[box,left=of g,text width=26mm] (u) {\textbf{Destinatarios}\\conductor (app) · concesionario · posventa};
-\node[box,left=of u] (r) {\textbf{7 · Retorno}\\¿hubo intervención? monitoreo y reentrenamiento};
+\node[pol,right=of w] (p) {\textbf{5 · Política}\\determinista, la define Ford};
+\node[box,below=5mm of p] (g) {\textbf{6 · Agentes}\\redactan; un verificador controla};
+\node[box,left=of g,text width=30mm] (u) {\textbf{Destinatarios}\\conductor · concesionario · posventa};
+\node[box,left=of u,text width=30mm] (r) {\textbf{7 · Retorno del taller}\\monitoreo y reentrenamiento};
 \draw[arr] (t) -- (s); \draw[arr] (s) -- (a); \draw[arr] (a) -- (w); \draw[arr] (w) -- (p);
-\draw[arr] (p) -- (g); \draw[arr] (g) -- (u); \draw[arr] (u) -- (r); \draw[arr] (r) -- (t);
+\draw[arr] (p) -- (g); \draw[arr] (g) -- (u); \draw[arr] (u) -- (r); \draw[arr] (r) -| (t);
 \end{tikzpicture}
-\caption{El circuito de posventa propuesto, de la telemetría a la acción. El modelo decide, el agente
-comunica y el código cuida lo que se dice.}
+\caption{El circuito de posventa: el modelo decide, el agente comunica y el código cuida lo que se dice.}
 \label{fig:circuito}
 \fuente{\repo{docs/\allowbreak{}pitch/\allowbreak{}presentacion-contenido.md} bloque 4; \repo{feat/\allowbreak{}demo-gru:PRODUCT.md}.}
 \end{figure}
-
-\begin{itemize}
-  \item \textbf{Con hábitos para nombrar}, el conductor recibe un consejo en la app (“comparado con autos
-    sanos de tu zona, tu camioneta hace muchos viajes cortos; un tramo de ruta de 20 minutos por semana
-    ayuda a que el filtro se limpie solo”).
-  \item \textbf{Sin hábitos para nombrar}, lo contacta el concesionario con un resumen técnico.
-  \item \textbf{Si el riesgo sigue alto dos revisiones después} (una revisión es un corte, cada 500 km), se
-    escala al concesionario.
-  \item \textbf{El gerente de posventa} recibe cada lunes una bandeja priorizada con todo redactado, lista
-    para aprobar o editar.
-\end{itemize}
-
-El detalle del producto, la demo y sus números están en §\ref{sec:producto}.

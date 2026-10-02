@@ -2,96 +2,31 @@
 \section{Información complementaria}
 \label{sec:complementaria}
 
-\subsection{Documentación disponible}
+\textbf{Documentación y referentes.} Recibimos el dataset y el diccionario en dos entregas, y contrastamos el diccionario
+contra los archivos columna por columna (§\ref{sec:datos}). Todo lo que encontramos quedó en el repositorio: un archivo por
+hallazgo con su comando en \repo{docs/\allowbreak{}memoria/\allowbreak{}}, cada decisión con su fecha y su motivo en \repo{decisiones.md}, y cada
+corrida como YAML en \repo{configs/\allowbreak{}}. La CNN-LSTM propuesta por la tutora del equipo fue el primer baseline secuencial y una
+de las familias medidas en test.
 
-\textbf{Qué recibimos.} Un .zip con el dataset de telemetría y el diccionario de variables, en dos entregas (15-09
-y 26-09-2026).
-
-\textbf{Qué hicimos con ella.} Contrastamos el diccionario contra los archivos columna por columna
-(Anexo~\ref{anx:tablas}): lo que faltaba, lo que venía con otro nombre y lo que no decía (escalas, formatos,
-semántica de las fechas). Todo lo que encontramos quedó escrito en el repositorio:
-\begin{itemize}
-  \item \repo{docs/\allowbreak{}memoria/\allowbreak{}}: un archivo por hallazgo, con el número y el comando que lo reproduce;
-  \item \repo{docs/\allowbreak{}memoria/\allowbreak{}decisiones.md}: qué se decidió, cuándo y por qué, la más nueva arriba;
-  \item \repo{configs/\allowbreak{}}: todas las corridas, paneles, holdouts y figuras como YAML versionados;
-  \item \repo{results/\allowbreak{}}: las métricas y la configuración completa de cada corrida que valió la pena.
-\end{itemize}
-
-\subsection{Referentes técnicos}
-
-El desafío nombra como referentes técnicos a dos mentores del área de Ford. La
-solución de referencia de la tutora del equipo (una CNN-LSTM sobre las señales más el país) fue el primer
-baseline secuencial del proyecto y una de las familias medidas en test.
-
-\subsection{Lo que solo Ford tiene: preguntas abiertas}
-\label{sec:preguntas}
-
-El límite del proyecto hoy no es el modelo: es la información. Estas son las preguntas cuya respuesta cambia los
-números, ordenadas por impacto:
-
-\begin{table}[H]
-\centering
-\caption{Lo que le pedimos a Ford y qué destraba cada pedido.}
-\label{tab:pedidos}
-\small
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{5cm}>{\raggedright\arraybackslash}X@{}}
-\toprule
-Pedido & Qué destraba \\
-\midrule
-La tasa real de falla del DPF por país × motor en la flota & Separa la física de cómo se armaron las listas: es la
-  duda más grande del proyecto. Si coincide con la de la muestra, motor y país entran sin reserva; si no, se
-  reponderan las celdas \\
-Qué eran los 278 fallados con fecha por defecto que salieron entre entregas, y con qué criterio se armó la lista de
-  fallados & Explica por qué la tasa cambia tanto de un país a otro y por qué ningún fallado se produjo después de
-  julio de 2025 \\
-Qué registra la fecha del evento de la entrega v2 & Hoy la corremos 21 días a ojo, porque cae \textasciitilde2
-  semanas después del taller \\
-Más fallas registradas (hoy son 177) & La semilla mueve más que los hiperparámetros: más eventos bajan la varianza
-  y suben el techo de información \\
-Dónde se usa el auto, no dónde se vendió & La altura y el clima van en la dirección de la física, pero con la ciudad
-  de venta no se separan del cero \\
-Los costos reales (reparación, inspección, retención) & Convierten la perilla en una decisión con números de Ford \\
-Un piloto en sombra de 3 meses en un país & La prevalencia real, las falsas alarmas reales y la detección realizada,
-  sobre la flota completa \\
-\bottomrule
-\end{tabularx}
-\fuente{\repo{f9-entrega-v2.md} (“Lo que queda para preguntarle a Ford”); \repo{docs/\allowbreak{}pitch/\allowbreak{}presentacion-contenido.md}
-bloque 7.}
-\end{table}
-
-\subsection{Trabajo futuro}
-
-\begin{itemize}
-  \item Reentrenar con los 557 autos y escribir el empaquetado del modelo (\repo{export\_model.py}).
-  \item Validar en datos nuevos: una extracción posterior al 14-09-2026 de los mismos autos permitiría medir una
-    mejora sin volver a usar el test.
-  \item Medir en el piloto lo que estos datos no permiten: si los avisos cambian hábitos, cuántas fallas se evitan
-    y cuánto consumo se ahorra.
-  \item Explorar un punto de operación al 20\,\%: allí un ensamble heterogéneo (GRU + CNN-LSTM) sumó +6 puntos en
-    desarrollo, sin llegar a la evidencia que pedía el preregistro.
-  \item Extender el mismo circuito a otras fallas del postratamiento: el costo marginal de una segunda falla
-    cubierta es bajo.
-\end{itemize}
-
-\subsection{Conclusiones}
-
+\textbf{Lo que solo Ford tiene.} Hoy el límite no es el modelo, es la información:
 \begin{enumerate}
-  \item \textbf{La telemetría que Ford ya recibe anticipa la falla del DPF}: comparando contra sanos del mismo
-    mercado, el ralentí y el motor frío crecen hacia el evento, y se ven desde los primeros meses de uso.
-  \item \textbf{Leerla bien fue la mitad del trabajo}: cohortes muestreadas en períodos distintos, una fecha
-    posterior al taller, un contador que se apaga y cinco trampas de formato hacían que cualquier modelo pareciera
-    mejor de lo que es.
-  \item \textbf{La métrica importa tanto como el modelo}: el PR-AUC por fila se alcanzaba sin anticipar nada. La
-    detección por auto, contra el azar y contra la regla “país × motor”, es la que mide lo que Ford necesita.
-  \item \textbf{La GRU finalista avisa a \textasciitilde30\,\% de las fallas con 5\,\% de falsas alarmas}, y a
-    \textasciitilde50–60\,\% con 20\,\%, con unos tres meses de margen, en autos que nunca vio \tagtest{}. Le
-    duplica la detección a los modelos tabulares y de supervivencia, sin ganarle con evidencia a la celda.
-  \item \textbf{El producto convierte la alerta en una acción confiable}: un consejo en lenguaje humano, redactado
-    por IA y verificado por código, con la perilla de falsas alarmas en manos de Ford.
-  \item \textbf{Lo que sigue lo destraba Ford}: la prevalencia real por país × motor, más eventos y un piloto en
-    sombra.
+  \item \textbf{La tasa real de falla por país × motor} en la flota. Separa la física de cómo se armaron las listas, y es la
+    duda más grande del proyecto.
+  \item \textbf{Qué eran los 278 fallados con fecha por defecto} que salieron entre entregas, y con qué criterio se armó la
+    lista de fallados.
+  \item \textbf{Qué registra la fecha del evento}: hoy la corremos 21 días porque cae unas dos semanas después del taller.
+  \item \textbf{Más fallas registradas} (hoy son 177), \textbf{dónde se usa el auto} (no dónde se vendió) y \textbf{los costos
+    reales} de una falla y de una inspección.
+  \item \textbf{Un piloto en sombra de 3 meses en un país}, para medir la prevalencia, las falsas alarmas y la detección
+    reales.
 \end{enumerate}
 
-\begin{center}
-\sffamily\large\bfseries\color{ink} Del testigo en el tablero al aviso a tiempo. Tu Ford te avisa antes.
-\end{center}
+\textbf{Trabajo futuro.} Reentrenar con los 557 autos y empaquetar el modelo. Validar cualquier mejora con datos nuevos (una
+extracción posterior al 14-09-2026), no con este test. Medir en el piloto lo que estos datos no permiten: si los avisos cambian
+hábitos, cuántas fallas se evitan y cuánto consumo se ahorra. Extender el circuito a otras fallas del postratamiento.
+
+\textbf{Conclusión.} La telemetría que Ford ya recibe anticipa la falla del DPF, pero leerla bien fue la mitad del trabajo, y
+medir bien la otra mitad. La GRU finalista avisa a \textasciitilde30\,\% de las fallas con 5\,\% de falsas alarmas y a
+\textasciitilde50–60\,\% con 20\,\%, con unos tres meses de margen, en autos que nunca vio. Le duplica la detección a los
+modelos tabulares y de supervivencia, sin ganarle con evidencia a la celda. Y el producto convierte esa alerta en un consejo
+confiable, con la perilla en manos de Ford. \emph{Del testigo en el tablero al aviso a tiempo: tu Ford te avisa antes.}

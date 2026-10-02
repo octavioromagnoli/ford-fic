@@ -97,7 +97,7 @@ def fig_test_curve(cfg: dict, c: dict, curve: pd.DataFrame, out: Path, width: fl
     t = cfg["test"]
     num = curve[curve["b"].notna()].copy()
     num["budget"] = num["b"]
-    fig, ax = plt.subplots(figsize=(width, 3.6))
+    fig, ax = plt.subplots(figsize=(width, 3.1))
     null = num[num["model"] == t["null_model"]].sort_values("budget")
     ax.fill_between(100 * null["budget"], 0, 100 * null["null_p95"], color=c["null_band"], lw=0,
                     label="Azar: hasta el p95 del nulo")
@@ -130,28 +130,6 @@ def fig_test_curve(cfg: dict, c: dict, curve: pd.DataFrame, out: Path, width: fl
     save(fig, out, "curva_test")
 
 
-def fig_test_bars(cfg: dict, c: dict, curve: pd.DataFrame, out: Path, width: float, budget: float = 0.05) -> None:
-    t = cfg["test"]
-    d = curve[np.isclose(curve["b"], budget)].set_index("model")
-    models = [m for m in t["models"] if m in d.index]
-    models = sorted(models, key=lambda m: d.loc[m, "detection"])
-    fig, ax = plt.subplots(figsize=(width, 2.6))
-    y = np.arange(len(models))
-    colors = [c[t["models"][m]["role"]] for m in models]
-    ax.barh(y, 100 * d.loc[models, "detection"], color=colors, height=0.62)
-    for i, m in enumerate(models):
-        v = 100 * d.loc[m, "detection"]
-        ax.text(v + 0.6, i, pct(d.loc[m, "detection"]) + " %", va="center", fontsize=8, color=c["text"])
-    null_mean = 100 * d.loc[t["null_model"], "null_mean"]
-    ax.axvline(null_mean, color=c["text_secondary"], lw=1)
-    ax.text(null_mean + 0.4, -0.75, f"azar (media del nulo) {pct(null_mean / 100)} %", fontsize=7.5,
-            color=c["text_secondary"], va="bottom")
-    ax.set_yticks(y, [t["models"][m]["label"] for m in models])
-    ax.grid(axis="y", visible=False)
-    ax.set_xlim(0, 40)
-    ax.set_xlabel(f"Detección con {int(100 * budget)} % de sanos con falsa alarma (%)")
-    ax.set_title(f"Todos los modelos al {int(100 * budget)} % [test]")
-    save(fig, out, "barras_test_5")
 
 
 def table_test(cfg: dict, curve: pd.DataFrame, out: Path) -> None:
@@ -211,7 +189,7 @@ def fig_permutation(cfg: dict, c: dict, out: Path, width: float) -> None:
     u = pd.read_csv(resolve_path(e["units"]))
     u = u.sort_values("detection_drop_pts")
     base = u["detection"].iloc[0]
-    fig, ax = plt.subplots(figsize=(width, 4.2))
+    fig, ax = plt.subplots(figsize=(width, 3.4))
     y = np.arange(len(u))
     ax.barh(y, u["detection_drop_pts"], color=c["focus"], height=0.62)
     labels = [f"{e['labels'].get(r.unit, r.unit)}  ·  {e['families'].get(r.family, r.family)}" for r in u.itertuples()]
@@ -229,36 +207,23 @@ def fig_permutation(cfg: dict, c: dict, out: Path, width: float) -> None:
 def fig_profile(cfg: dict, c: dict, out: Path, width: float) -> None:
     p = cfg["from_memo"]["profile"]
     x = np.arange(len(p["bins"]))
-    fig, ax = plt.subplots(figsize=(width, 3.0))
+    fig, ax = plt.subplots(figsize=(width * 0.55, 2.6))
     ax.axhline(0.5, color=c["text_secondary"], lw=1)
-    ax.text(1.05, 0.507, "0,5 = no distingue", fontsize=7.5, color=c["text_secondary"], va="bottom")
+    ax.text(0.9, 0.507, "0,5 = no distingue", fontsize=7, color=c["text_secondary"], va="bottom")
     for name, s in p["series"].items():
         col = c[s["role"]]
         ax.plot(x, s["values"], color=col, lw=2 if s["role"] != "muted" else 1.2, marker="o", ms=4)
-        ax.annotate(name, (x[-1], s["values"][-1]), xytext=(8, 0), textcoords="offset points", va="center",
-                    fontsize=8, color=c["text"])
+        ax.annotate(name, (x[-1], s["values"][-1]), xytext=(6, s.get("label_dy", 0)), textcoords="offset points",
+                    va="center", fontsize=7.5, color=c["text"])
     ax.set_xticks(x, p["bins"])
     ax.set_xlim(-0.2, len(x) - 0.6)
     ax.set_ylim(0.2, 0.85)
-    ax.set_ylabel("P(fallado > sano del mismo mercado)")
-    ax.set_title("La huella crece hacia el evento [dev]")
-    fig.subplots_adjust(right=0.7)
+    ax.set_ylabel("P(fallado > sano del mercado)")
+    ax.tick_params(axis="x", labelsize=7.5)
+    ax.set_title("La huella crece hacia el evento [dev]", fontsize=9)
     save(fig, out, "perfil_evento")
 
 
-def fig_risk_age(cfg: dict, c: dict, out: Path, width: float) -> None:
-    r = cfg["from_memo"]["risk_by_age"]
-    fig, ax = plt.subplots(figsize=(width, 2.5))
-    x = np.arange(len(r["bins"]))
-    ax.bar(x, r["values"], color=c["focus"], width=0.66)
-    for i, v in enumerate(r["values"]):
-        ax.text(i, v + 0.1, f"{v:.2f}".replace(".", ","), ha="center", fontsize=7.5, color=c["text"])
-    ax.set_xticks(x, r["bins"])
-    ax.grid(axis="x", visible=False)
-    ax.set_xlabel("Días desde la venta")
-    ax.set_ylabel("Eventos por 100 autos-mes")
-    ax.set_title("Eventos por 100 autos-mes según la edad desde la venta [dev]")
-    save(fig, out, "riesgo_edad")
 
 
 def fig_cells(cfg: dict, c: dict, seq: list[str], out: Path, width: float) -> None:
@@ -270,7 +235,7 @@ def fig_cells(cfg: dict, c: dict, seq: list[str], out: Path, width: float) -> No
             a, e = k["autos"][m][j], k["eventos"][m][j]
             if a:
                 rate[i, j] = e / a
-    fig, ax = plt.subplots(figsize=(width * 0.62, 2.9))
+    fig, ax = plt.subplots(figsize=(width * 0.5, 2.6))
     cmap = matplotlib.colors.LinearSegmentedColormap.from_list("seq", seq)
     cmap.set_bad("#f5f4f1")
     im = ax.imshow(rate, cmap=cmap, vmin=0, vmax=0.7, aspect="auto")
@@ -291,13 +256,13 @@ def fig_cells(cfg: dict, c: dict, seq: list[str], out: Path, width: float) -> No
     cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.03)
     cb.outline.set_visible(False)
     cb.set_label("tasa de eventos", color=c["text_secondary"])
-    ax.set_title("Eventos / autos por mercado × motor (universo)")
+    ax.set_title("Eventos / autos por mercado × motor", fontsize=9)
     save(fig, out, "celdas")
 
 
 def fig_score_toward_event(cfg: dict, c: dict, out: Path, width: float) -> None:
     s = cfg["from_memo"]["score_toward_event"]
-    fig, ax = plt.subplots(figsize=(width * 0.62, 2.4))
+    fig, ax = plt.subplots(figsize=(width * 0.5, 2.3))
     x = np.arange(len(s["bins"]))
     colors = [c["muted"]] + [c["focus"]] * (len(x) - 1)
     ax.bar(x, s["values"], color=colors, width=0.62)
@@ -314,30 +279,30 @@ def fig_score_toward_event(cfg: dict, c: dict, out: Path, width: float) -> None:
 
 # --------------------------------------------------------------------------------------------- features
 def table_features(cfg: dict, out: Path) -> None:
+    """Diccionario de features en dos columnas (anexo): `nombre: agregador(columna derivada)` por familia."""
     spec = yaml.safe_load(resolve_path(cfg["features"]["spec"]).read_text(encoding="utf-8"))
     fam_names = {"A_thermal": "A · Térmica y trayectos cortos", "B_regeneration": "B · Regeneración (DPF)",
                  "C_usage": "C · Uso", "D_severity": "D · Severidad (mensajes, aceite, consumo)"}
-    rows, n_model, n_aux = [], 0, 0
-    for fam, items in spec["families"].items():
-        rows.append(r"\midrule" + f"\n\\multicolumn{{4}}{{@{{}}l}}{{\\textbf{{{fam_names.get(fam, fam)}}}}} \\\\")
+    brk = lambda t: tex_escape(t).replace("\\_", "\\_\\allowbreak{}")  # noqa: E731
+    lines, n_model, n_aux = [], 0, 0
+    families = list(spec["families"].items()) + [("window", [
+        {"name": "n_trips_window", "column": "*", "agg": "count"},
+        {"name": "window_km_covered", "column": "OdometerTripEnd", "agg": "rango"}])]
+    fam_names["window"] = "Control de ventana"
+    for fam, items in families:
+        lines.append(f"\\item[] \\textbf{{{fam_names.get(fam, fam)}}}")
         for it in items:
             aux = it.get("aux", False)
             n_aux += aux
             n_model += not aux
-            name = (("aux\\_" if aux else "feat\\_") + tex_escape(it["name"])).replace("\\_", "\\_\\allowbreak{}")
-            brk = lambda t: tex_escape(t).replace("\\_", "\\_\\allowbreak{}")  # noqa: E731
-            rows.append(f"\\texttt{{{name}}} & {it['source']} & \\texttt{{{brk(it['column'])}}} & "
-                        f"\\texttt{{{brk(it['agg'])}}} \\\\")
-    rows.append(r"\midrule" + "\n\\multicolumn{4}{@{}l}{\\textbf{Control de ventana (los emite \\texttt{windows.py})}} \\\\")
-    for name, col, agg in [("n_trips_window", "*", "count"), ("window_km_covered", "OdometerTripEnd", "rango")]:
-        n_model += 1
-        rows.append(f"\\texttt{{feat\\_{tex_escape(name)}}} & trips & \\texttt{{{tex_escape(col)}}} & "
-                    f"\\texttt{{{agg}}} \\\\")
+            prefix = "aux\\_" if aux else ""
+            lines.append(f"\\item[] \\texttt{{{prefix}{brk(it['name'])}}}: {brk(it['agg'])}"
+                         f"(\\texttt{{{brk(it['column'])}}})")
     tex = (
         "% Generado por scripts/make_report_figures.py desde " + cfg["features"]["spec"] + " (no editar a mano).\n"
         f"% {n_model} features de modelo + {n_aux} aux.\n"
-        "\\begin{longtable}{@{}>{\\raggedright\\arraybackslash}p{5.4cm}l>{\\raggedright\\arraybackslash}p{4.6cm}>{\\raggedright\\arraybackslash}p{3.2cm}@{}}\n\\toprule\nFeature & Fuente & Columna derivada & Agregador \\\\\n"
-        "\\endhead\n" + "\n".join(rows) + "\n\\bottomrule\n\\end{longtable}\n"
+        "\\begin{multicols}{2}\n\\raggedright\n\\begin{itemize}[leftmargin=0pt,itemsep=0pt,label={}]\n"
+        + "\n".join(lines) + "\n\\end{itemize}\n\\end{multicols}\n"
     )
     (out / "features.tex").write_text(tex, encoding="utf-8")
     print(f"  {out / 'features.tex'}  ({n_model} de modelo, {n_aux} aux)")
@@ -345,20 +310,19 @@ def table_features(cfg: dict, out: Path) -> None:
         raise SystemExit(f"se esperaban 53 features de modelo, salieron {n_model}")
 
     seq = yaml.safe_load(resolve_path(cfg["features"]["sequence"]).read_text(encoding="utf-8"))
-    s = seq["sequence"]
+    sq = seq["sequence"]
     rows = []
-    for ch in s["channels"]:
+    for ch in sq["channels"]:
         rows.append(f"\\texttt{{{tex_escape(ch['name'])}}} & {ch['source']} & \\texttt{{{tex_escape(ch['column'])}}} & "
                     f"{ch['agg']} & {ch['fill']}{(' · ' + ch['transform']) if ch.get('transform') else ''} \\\\")
     tex = (
         "% Generado por scripts/make_report_figures.py desde " + cfg["features"]["sequence"] + " (no editar a mano).\n"
-        f"% ventana {s['lookback_km']} km en bins de {s['bin_km']} km = {s['lookback_km'] // s['bin_km']} tramos.\n"
-        "\\begin{tabular}{@{}lllll@{}}\n\\toprule\nCanal & Fuente & Columna & Agregado por tramo & Relleno \\\\\n"
+        f"% ventana {sq['lookback_km']} km en bins de {sq['bin_km']} km = {sq['lookback_km'] // sq['bin_km']} tramos.\n"
+        "\\begin{tabular}{@{}lllll@{}}\n\\toprule\nCanal & Fuente & Columna & Por tramo & Relleno \\\\\n"
         "\\midrule\n" + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n"
     )
     (out / "canales.tex").write_text(tex, encoding="utf-8")
-    print(f"  {out / 'canales.tex'}  ({len(s['channels'])} canales)")
-
+    print(f"  {out / 'canales.tex'}  ({len(sq['channels'])} canales)")
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
@@ -372,11 +336,9 @@ def main() -> None:
 
     curve = load_test(cfg)
     fig_test_curve(cfg, c, curve, figs, w)
-    fig_test_bars(cfg, c, curve, figs, w)
     table_test(cfg, curve, tabs)
     fig_permutation(cfg, c, figs, w)
     fig_profile(cfg, c, figs, w)
-    fig_risk_age(cfg, c, figs, w)
     fig_cells(cfg, c, cfg["style"]["sequential"], figs, w)
     fig_score_toward_event(cfg, c, figs, w)
     table_features(cfg, tabs)
