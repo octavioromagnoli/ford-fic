@@ -48,3 +48,6 @@ umbral exacto a cada presupuesto de sanos de test con falsa alarma (2–30%).
 - Anticipación mediana de la primera alerta al 10%.
 
 Script: `scripts/eval_test.py`, config `configs/eval_test_f11.yaml`.
+
+**Resultado (01-10-2026):** no se sostiene (−13,3 puntos de primario, IC95 [−25,0; +3,9]). Ver
+[f11-test-resultado.md](f11-test-resultado.md). Este protocolo no se editó después del tiro.

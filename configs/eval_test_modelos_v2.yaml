@@ -1,0 +1,39 @@
+# Test de los modelos de la re-medición v2 (F9) con la cuenta de eval_test.py: LightGBM de control, survival
+# stacking (F3), logística L2 sobre las 53 features, SS con efecto aleatorio por auto (GPBoost) y CNN-LSTM +
+# TripSummary + estática ×3 semillas, al lado de la GRU de F10 (semillas 42/1/2). Diagnóstico posterior al tiro
+# de F11, no preregistrado: no elige modelo.
+#
+#   FORD_DATA_DIR=data/v2 WANDB_MODE=disabled python scripts/eval_test.py --config configs/eval_test_modelos_v2.yaml --fit <yaml>
+#   FORD_DATA_DIR=data/v2 python scripts/eval_test.py --config configs/eval_test_modelos_v2.yaml --report
+seed: 28
+output_name: test-modelos-v2
+experiments_dir: experiments
+
+k_consecutive: 2
+budgets: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+primary_budgets: [0.05, 0.10, 0.15, 0.20]
+operating_budgets: [0.05, 0.10, 0.20]
+null_permutations: 200
+n_boot: 2000
+cell_columns: [static_SalesCountry_cd, static_Engine]
+
+candidate: survival_stacking
+reference: gru_f10
+groups:
+  # primero un grupo con motor como static_: el piso de celda sale del panel del primer grupo
+  gru_f10:
+    - configs/exp_v2all_gru_trips_estaticas_r3.yaml
+    - configs/exp_v2all_gru_trips_estaticas_s1_r3.yaml
+    - configs/exp_v2all_gru_trips_estaticas_s2_r3.yaml
+  lightgbm:
+    - configs/exp_v2_lgbm_r3.yaml
+  survival_stacking:
+    - configs/exp_v2_ss_r3.yaml
+  logistica_l2:
+    - configs/exp_v2all_logistic_l2_r3.yaml
+  ss_efecto_aleatorio:
+    - configs/exp_v2all_gpboost_ss_r3.yaml
+  cnn_lstm_x3:
+    - configs/exp_v2all_cnn_lstm_trips_estaticas_r3.yaml
+    - configs/exp_v2all_cnn_lstm_trips_estaticas_s1_r3.yaml
+    - configs/exp_v2all_cnn_lstm_trips_estaticas_s2_r3.yaml
