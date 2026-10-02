@@ -720,10 +720,12 @@ table.t td .mono{font-size:15px}
       <div class="cell f" data-step="4" style="min-height:0"><span class="lbl" style="margin-bottom:0">Qué entrega</span><p style="font-size:19px;color:#b3b3b8">Un puntaje por auto, cada 500 km. <b style="color:var(--white)">Tres redes</b> entrenadas con semillas distintas votan juntas. Es chica: corre en una CPU.</p></div>
     </div>
   </div>
-  <aside class="notes" data-time="~1 min">
-    <p>Nuestro finalista es una red recurrente, una GRU. Cada 500 km toma los últimos 1.000 km del auto, cortados en 20 tramos. En cada tramo ve cómo se viaja, la duración de los viajes, el ralentí, el motor frío, la velocidad, y qué hace el filtro: cuánto hollín acumula, cuándo regenera, qué avisos da. Además sabe el país, el motor y el modelo.</p>
-    <p><b>Lo importante es que lee los tramos en orden y recuerda.</b> No mira un promedio: pasa una memoria de un tramo al siguiente, así que nota si el hollín viene subiendo o si los viajes se vienen acortando.</p>
-    <p>Al final da un puntaje por auto. Entrenamos tres redes con semillas distintas y las hacemos votar, porque con pocas fallas una sola red depende demasiado de la suerte. Y es chica: corre en una computadora común.</p>
+  <aside class="notes" data-time="~1 min 30 s">
+    <p>Nuestro finalista es una red recurrente, una GRU, y la idea es simple. Piensen en cómo leen un libro: no leen todas las páginas a la vez. Las leen en orden y van guardando en la cabeza lo importante. La GRU hace eso con el auto.</p>
+    <p>Cada 500 km toma los últimos 1.000 km del auto y los corta en 20 tramos. Cada tramo es una página: cuánto duraron los viajes, cuánto ralentí, cuánto tiempo con el motor frío, a qué velocidad, y qué hizo el filtro: cuánto hollín juntó, si regeneró, qué avisos dio.</p>
+    <p><b>Lee los tramos en orden y lleva una memoria.</b> En cada tramo decide cuánto de lo nuevo vale la pena anotar y cuánto de lo viejo conviene dejar de lado: esas son las <i>compuertas</i> que le dan el nombre. Por eso ve tendencias, que el hollín viene subiendo o que los viajes se vienen acortando. Un promedio de los 1.000 km eso lo borra.</p>
+    <p>Al final repasa los tramos, les da más peso a los que le llamaron la atención, suma país, motor y modelo, y da un puntaje de riesgo: cuanto más alto, más se parece a los autos que fallaron en los 3.000 km siguientes.</p>
+    <p>Aprendió de casi 12.000 recortes de autos de desarrollo, sabiendo cuáles fallaron después. Nadie le explicó el filtro: eso lo encontró en los datos. Es chica a propósito, unos 4.000 números, porque con 135 fallas una red grande memorizaría autos. Y entrenamos tres con semillas distintas que votan, porque con pocas fallas una sola depende de la suerte.</p>
   </aside>
 </section>
 
