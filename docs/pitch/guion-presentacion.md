@@ -30,24 +30,25 @@ fecha) y nada más.** Ningún número del deck se copia a mano de otro lado: sal
 
 ## 1 · Métricas (tabla abierta: se actualiza acá)
 
-Todas sobre **dev v2, fuera de fold** (446 autos, 135 fallados con cortes, R = 3). **El test (111
-autos) no se tocó** y no hay finalista elegido sobre v2. Cuando lo haya, se agrega la columna de test
-y esa pasa a ser la que se cita.
+La columna "valor hoy" es **dev v2, fuera de fold** (446 autos, 135 fallados con cortes, R = 3). **El
+finalista v2 es la GRU + TripSummary + estática con `label`, semillas 42/1/2** (01-10,
+`docs/memoria/f11-test-resultado.md`), y su columna **test** (103 autos con datos, 32 fallados, cada
+semilla entrenada con todo dev) es la que se cita.
 
-| id | qué | valor hoy | fuente | fecha | dueño |
-|---|---|---|---|---|---|
-| ⟦M-01⟧ | detección al **5%** de falsas alarmas (mejor modelo) | 27% | GRU + TripSummary + estática ×3 semillas, `f9-remedicion-completa-v2.md` | 26-09 | Track B |
-| ⟦M-02⟧ | detección al **10%** de falsas alarmas | 42% ± 2 | ídem | 26-09 | Track B |
-| ⟦M-03⟧ | detección al **20%** de falsas alarmas | 61% | ídem | 26-09 | Track B |
-| ⟦M-04⟧ | lo mismo, **al azar** (score permutado, bolsa conservada) | 5 · 11 · 21% | ídem, fila "Nulo" | 26-09 | Track C |
-| ⟦M-05⟧ | lo mismo, **solo sabiendo mercado × motor** (sin modelo) | 18 · 33 · 62% | ídem, fila "Tasa de la celda" | 26-09 | Track C |
-| ⟦M-06⟧ | anticipación mediana de la primera alerta (al 10%) | ~7.500 km (~80–90 días) | `report_v2_leads.py`, ídem §7 | 26-09 | Track C |
-| ⟦M-07⟧ | dispersión de la anticipación (p25–p75) | 3.700–12.300 km | ídem | 26-09 | Track C |
-| ⟦M-08⟧ | AUC por auto, agrupado / dentro de mercado × motor | 0,82 / 0,65 | ídem | 26-09 | Track C |
-| ⟦M-09⟧ | ¿el umbral se sostiene fuera de muestra? | sí en K2 (5% pedido → 3,5% real); **falta re-medir en v2** | `f8-capa-decision-k2.md` | 24-09 | Track C |
-| ⟦M-10⟧ | explicaciones que coinciden con la física del DPF | 10 de 15 hábitos accionables; 30 de 32 alertas nombran un hábito (K2) | `f4-explicabilidad-k2.md` | 24-09 | Track C |
-| ⟦M-11⟧ | ahorro esperado por 1.000 autos (escenario medio, e = 0,8, π = 5%) | ~USD 6.200, de los cuales ~5.300 son mérito del modelo (K2) | `f8-costos-k2.md` | 24-09 | Track C |
-| ⟦M-12⟧ | test final (holdout, una sola vez) | **pendiente** | — | — | todos |
+| id | qué | valor hoy (dev) | test | fuente | fecha | dueño |
+|---|---|---|---|---|---|---|
+| ⟦M-01⟧ | detección al **5%** de falsas alarmas (mejor modelo) | 27% | 31% | GRU + TripSummary + estática ×3 semillas, `f9-remedicion-completa-v2.md` | 26-09 | Track B |
+| ⟦M-02⟧ | detección al **10%** de falsas alarmas | 42% ± 2 | 47% | ídem | 26-09 | Track B |
+| ⟦M-03⟧ | detección al **20%** de falsas alarmas | 61% | 63% | ídem | 26-09 | Track B |
+| ⟦M-04⟧ | lo mismo, **al azar** (score permutado, bolsa conservada) | 5 · 11 · 21% | 7 · 14 · 24% | ídem, fila "Nulo" | 26-09 | Track C |
+| ⟦M-05⟧ | lo mismo, **solo sabiendo mercado × motor** (sin modelo) | 18 · 33 · 62% | 0 · 22 · 50% | ídem, fila "Tasa de la celda" | 26-09 | Track C |
+| ⟦M-06⟧ | anticipación mediana de la primera alerta (al 10%) | ~7.500 km (~80–90 días) | ~4.600 km (~100 días) | `report_v2_leads.py`, ídem §7 | 26-09 | Track C |
+| ⟦M-07⟧ | dispersión de la anticipación (p25–p75) | 3.700–12.300 km | 2.400–9.300 km | ídem | 26-09 | Track C |
+| ⟦M-08⟧ | AUC por auto, agrupado / dentro de mercado × motor | 0,82 / 0,65 | 0,79 / 0,68 | ídem | 26-09 | Track C |
+| ⟦M-09⟧ | ¿el umbral se sostiene fuera de muestra? | sí en K2 (5% pedido → 3,5% real); **falta re-medir en v2** | umbral de dev: 5% pedido → 5,8% real (20% detectado) | `f8-capa-decision-k2.md` | 24-09 | Track C |
+| ⟦M-10⟧ | explicaciones que coinciden con la física del DPF | 10 de 15 hábitos accionables; 30 de 32 alertas nombran un hábito (K2) | — | `f4-explicabilidad-k2.md` | 24-09 | Track C |
+| ⟦M-11⟧ | ahorro esperado por 1.000 autos (escenario medio, e = 0,8, π = 5%) | ~USD 6.200, de los cuales ~5.300 son mérito del modelo (K2) | — | `f8-costos-k2.md` | 24-09 | Track C |
+| ⟦M-12⟧ | test final (holdout) | — | **medido el 01-10**: la columna test | `f11-test-resultado.md` | 01-10 | todos |
 
 **Reglas para citar (que no se negocian en el deck):**
 - Todo número de detección va **al lado de ⟦M-04⟧ y ⟦M-05⟧**. Un 42% solo no dice nada; "42% donde
@@ -311,8 +312,8 @@ Se arma **después** de que haya finalista v2 y test. Ideas para no perder:
 
 ## 9 · Pendientes para cerrar el guion
 
-- [ ] Preregistro y elección del finalista v2 → actualizar ⟦M-01⟧–⟦M-08⟧.
-- [ ] Test final → ⟦M-12⟧.
+- [x] Preregistro y elección del finalista v2 → actualizar ⟦M-01⟧–⟦M-08⟧ (la GRU de F10).
+- [x] Test final → ⟦M-12⟧ (01-10).
 - [ ] Capa de decisión, costos y explicabilidad sobre el finalista v2 → ⟦M-09⟧–⟦M-11⟧.
 - [ ] Si el finalista es la GRU: el porqué hoy existe solo para K2 (TreeSHAP). Hay que decidir si se
       explica la GRU (otro método) o si el mensaje sale de un modelo de árboles al lado.

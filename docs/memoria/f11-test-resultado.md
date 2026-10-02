@@ -158,6 +158,31 @@ preregistrado: describen, no eligen.
 - La CNN-LSTM va con estática completa: el panel `panel_seq_trips_v2.parquet` (sin estática) no está
   construido en `data/v2`.
 
+## 4 · Lo que cita el pitch del finalista (agregado el 01-10)
+
+El deck (`docs/pitch/deck/index.html`) cita la GRU de F10 en test. Además de §1–§3, usa:
+
+- **Anticipación en test** (umbral exacto al 10%, ensamble 42/1/2): mediana 4.646 km (p25–p75 2.403–9.263), y
+  **~99 días** aproximados con los km por día de cada auto (pendiente odómetro ~ fecha de sus cortes, como
+  `report_v2_leads.py`). Al 5%: 3.987 km, ~72 días; al 20%: 5.969 km, ~109 días. Los autos detectados de test
+  andan menos km por día que los de dev: en km da menos que dev (~7.500), en días parecido.
+- **El score sube hacia el evento, en test:** rango percentil medio (promedio de las 3 semillas) 0,44 en sanos,
+  0,58 a más de 10.000 km, 0,61 a 3.500–10.000 y 0,72 a menos de 3.500.
+- **En qué se apoya** (dev, semilla 42, repetición 0 de `splits_r3`, `configs/explain_gru_final.yaml`): caída de
+  la detección media al 5–20% (base 51,9) al permutar cada señal en la validación. País −28,1; duración del viaje
+  −24,1; registros −23,4; subida de la acumulación −22,2; motor −15,1; viajes −13,4; nivel medio de acumulación
+  −10,2; km por viaje −9,8; máximo de acumulación −9,2; regeneraciones −9,0; serie −8,3; velocidad −5,9; bajo
+  régimen −4,8; ralentí −2,2. **Las sumas por familia no se citan:** pasan la detección base (estado del DPF 63,9),
+  porque permutar una señal sola no es esconder la familia.
+- **La demo** (`demo-bundle-gru-final`, dev, repetición 0) al 5 · 10 · 15 · 20%: 39 · 56 · 69 · 82 de 135 fallas
+  avisadas, 14 · 29 · 43 · 58 de 291 sanos con aviso, 53 · 85 · 112 · 140 alertas (48 · 73 · 101 · 125 con hábito),
+  7 · 10 · 22 · 36 escalamientos, anticipación mediana 15 · 16 · 16 · 21 semanas. Los agentes escribieron 465 textos,
+  el verificador rechazó 103 intentos y no hizo falta ninguna plantilla.
+
+```bash
+FORD_DATA_DIR=$PWD/data/v2 WANDB_MODE=disabled python scripts/explain_perm_seq.py --config configs/explain_gru_final.yaml   # -> experiments/explain-gru-final/
+```
+
 ## Reproduce
 
 Todo con los datos v2 (`FORD_DATA_DIR=$PWD/data/v2`), sin wandb. Cada `--fit` entrena el modelo final y

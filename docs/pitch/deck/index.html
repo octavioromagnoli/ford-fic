@@ -644,13 +644,13 @@ table.t td .mono{font-size:15px}
     <div class="cols" style="grid-template-columns:repeat(4,1fr);align-self:end">
       <div class="cell f" data-step="1"><span class="lbl">01</span><strong>El modelo nunca ve los 500 km antes de la falla.</strong><p>Si los viera, detectaría lo que el tablero ya detecta.</p></div>
       <div class="cell f" data-step="2"><span class="lbl">02</span><strong>Un auto nunca está en entrenamiento y validación a la vez.</strong><p>El split es por vehículo, siempre.</p></div>
-      <div class="cell f" data-step="3"><span class="lbl">03</span><strong>111 autos bajo llave desde el primer día.</strong><p>El test se mide una sola vez.</p></div>
+      <div class="cell f" data-step="3"><span class="lbl">03</span><strong>111 autos bajo llave desde el primer día.</strong><p>Nunca se usan para entrenar ni para ajustar: solo para medir.</p></div>
       <div class="cell f" data-step="4"><span class="lbl">04</span><strong>Cada modelo, auditado.</strong><p>Si mezclamos los datos al azar y el resultado no cae al azar, hay una fuga: se descarta.</p></div>
     </div>
   </div>
   <aside class="notes" data-time="~1 min">
     <p><b>[Retomar, ~15 s]</b> Gonzalo les dejó una pregunta: cada 500 km, mirando los últimos 1.000, ¿este auto falla en los próximos 3.000? La huella existe, pero es tenue. Mi trabajo fue encontrar un modelo que la lea a tiempo. Y antes de contarles cuál, les cuento cómo nos cuidamos de engañarnos.</p>
-    <p><b>[Las reglas, ~45 s]</b> Primero, el modelo nunca ve los 500 km antes de la falla. Segundo, un mismo auto nunca está a la vez en entrenamiento y en validación. Tercero, los 111 autos del test están bajo llave desde el primer día y se miden una sola vez. Y cuarto, cada modelo se audita: si le mezclamos los datos al azar y el resultado no cae al azar, hay una fuga, y el modelo se descarta.</p>
+    <p><b>[Las reglas, ~45 s]</b> Primero, el modelo nunca ve los 500 km antes de la falla. Segundo, un mismo auto nunca está a la vez en entrenamiento y en validación. Tercero, los 111 autos del test están bajo llave desde el primer día: nunca se usan para entrenar ni para ajustar, solo para medir. Y cuarto, cada modelo se audita: si le mezclamos los datos al azar y el resultado no cae al azar, hay una fuga, y el modelo se descarta.</p>
   </aside>
 </section>
 
@@ -666,39 +666,31 @@ table.t td .mono{font-size:15px}
         <p class="body" style="font-size:19px;margin-top:6px">De los autos que van a fallar, <b>¿a cuántos avisamos a tiempo</b> si solo permitimos <b>5% de falsas alarmas</b>? Siempre al lado del azar.</p>
       </div>
     </div>
-    <div class="mrow" style="margin-top:22px;height:26px"><span></span><span></span><div style="display:flex;justify-content:space-between;font:11px var(--mono);color:var(--dim)"><span>0%</span><span>10%</span><span>20%</span><span>30%</span><span>40%</span></div><span class="lbl" style="text-align:right">al 5%</span></div>
+    <div class="mrow" style="margin-top:22px;height:26px"><span></span><span></span><div style="display:flex;justify-content:space-between;font:11px var(--mono);color:var(--dim)"><span>0%</span><span>10%</span><span>20%</span><span>30%</span><span>40%</span></div><span class="lbl" style="text-align:right">al 5% · test</span></div>
     <div style="position:relative">
-      <!-- línea de la celda: el golpe de humildad -->
-      <div class="f fade" data-step="6" style="position:absolute;top:-6px;bottom:0;left:calc(480px + (100% - 570px) * .45);width:0;border-left:2px dashed var(--tail);z-index:2">
-        <span style="position:absolute;top:-2px;left:10px;white-space:nowrap;font:500 12px var(--mono);color:var(--tail-soft)">saber mercado × motor, sin modelo · 18%</span>
+      <!-- línea del azar: lo que detecta un puntaje al azar con el mismo presupuesto -->
+      <div class="f fade" data-step="1" style="position:absolute;top:-6px;height:232px;left:calc(480px + (100% - 570px) * .175);width:0;border-left:2px dashed var(--muted);z-index:2">
+        <span style="position:absolute;top:-2px;right:10px;white-space:nowrap;font:500 12px var(--mono);color:var(--muted)">azar · 7%</span>
       </div>
       <div class="f fade" data-step="2">
-        <div class="mrow"><span class="fam">Tabulares</span><span class="mod">Logística sobre 53 indicadores</span><div class="bar" style="--w:37.5"><i></i></div><span class="val">15%</span></div>
-        <div class="mrow"><span class="fam"></span><span class="mod">LightGBM</span><div class="bar" style="--w:45"><i></i></div><span class="val">18%</span></div>
+        <div class="mrow"><span class="fam">Tabulares</span><span class="mod">Logística sobre 53 indicadores</span><div class="bar" style="--w:15.5"><i></i></div><span class="val">6%</span></div>
+        <div class="mrow"><span class="fam"></span><span class="mod">LightGBM</span><div class="bar" style="--w:39"><i></i></div><span class="val">16%</span></div>
       </div>
       <div class="f fade" data-step="3">
-        <div class="mrow"><span class="fam">Supervivencia</span><span class="mod">Survival stacking <span class="note">· finalista entrega 1</span></span><div class="bar" style="--w:35"><i></i></div><span class="val">14%</span></div>
-        <div class="mrow"><span class="fam"></span><span class="mod">Con efecto aleatorio por auto</span><div class="bar" style="--w:15"><i></i></div><span class="val">6%</span></div>
+        <div class="mrow"><span class="fam">Supervivencia</span><span class="mod">Survival stacking <span class="note">· finalista entrega 1</span></span><div class="bar" style="--w:47"><i></i></div><span class="val">19%</span></div>
+        <div class="mrow"><span class="fam"></span><span class="mod">Con efecto aleatorio por auto</span><div class="bar" style="--w:23.5"><i></i></div><span class="val">9%</span></div>
       </div>
-      <div class="f fade" data-step="4">
-        <div class="mrow"><span class="fam">Series</span><span class="mod">MiniRocket <span class="note">· TimesFM no sumó</span></span><div class="bar" style="--w:40"><i></i></div><span class="val">16%</span></div>
+      <div class="f fade" data-step="4" style="margin-top:14px;border-top:1px solid var(--line-strong);padding-top:8px">
+        <div class="mrow fin"><span class="fam" style="color:var(--ford-soft)">Finalista</span><span class="mod">GRU + viajes + estática</span><div class="bar" style="--w:78"><i></i></div><span class="val" style="view-transition-name:hero-num">31,2%</span></div>
       </div>
-      <div class="f fade" data-step="5">
-        <div class="mrow seq"><span class="fam">Secuenciales</span><span class="mod">CNN-LSTM sobre los viajes</span><div class="bar" style="--w:62.5"><i></i></div><span class="val">25%</span></div>
-        <div class="mrow seq"><span class="fam"></span><span class="mod">GRU + viajes + estática</span><div class="bar" style="--w:67.5"><i></i></div><span class="val">27%</span></div>
-      </div>
-      <p class="f" data-step="6" style="margin:14px 0 0 480px;font-size:19px;color:#b3b3b8">Un golpe de humildad: <b style="color:var(--white)">ninguno le ganaba con evidencia</b> a saber país y motor.</p>
-      <div class="f fade" data-step="7" style="margin-top:14px;border-top:1px solid var(--line-strong);padding-top:8px">
-        <div class="mrow fin"><span class="fam" style="color:var(--ford-soft)">Finalista</span><span class="mod">GRU con etiqueta suave</span><div class="bar" style="--w:86.5"><i></i></div><span class="val" style="view-transition-name:hero-num">34,6%</span></div>
-      </div>
+      <p class="note f" data-step="4" style="margin:14px 0 0 480px">Test: 111 autos bajo llave, nunca usados para entrenar ni ajustar (103 con datos · 32 fallaron). Cada modelo, entrenado con todo dev.</p>
     </div>
   </div>
   <aside class="notes" data-time="~2 min">
-    <p>Probamos más de 40 modelos, todos medidos con la misma cuenta. Empezamos por lo clásico: logística y árboles sobre 53 indicadores. Daban números que parecían buenos. Hasta que nos preguntamos: ¿y si el modelo solo reconoce qué auto falla? Ese día cambiamos cómo medimos: <b>de los autos que van a fallar, ¿a cuántos avisamos a tiempo, con una cantidad fija de falsas alarmas?</b></p>
-    <p>Después, modelos de supervivencia, los que usa la medicina: con la primera entrega fueron nuestros finalistas. TimesFM de Google, sin entrenar: lo que parecía señal era calendario. MiniRocket: detectó la mitad que nuestro mejor modelo.</p>
-    <p>Con la segunda entrega, con tres veces más fallas, las redes que leen la secuencia de viajes pasaron adelante.</p>
-    <p><b>Pero nos llevamos un golpe de humildad.</b> Sin mirar un solo viaje, solo sabiendo el país y el motor, se detectaba casi lo mismo. Ninguno le ganaba con evidencia. 130 pruebas automáticas de hiperparámetros: la semilla movía más que cualquier ajuste. <b>El problema no era cómo afinábamos: era qué le estábamos enseñando.</b></p>
-    <p class="note">Barras: re-medición común de dev del 26-09. Finalista: confirmación preregistrada (folds y semillas nuevas).</p>
+    <p>Probamos más de 40 modelos, todos medidos con la misma cuenta. Empezamos por lo clásico: logística y árboles sobre 53 indicadores. Daban números que parecían buenos. Hasta que nos preguntamos: ¿y si el modelo solo reconoce qué auto falla? Ese día cambiamos cómo medimos: <b>de los autos que van a fallar, ¿a cuántos avisamos a tiempo, con una cantidad fija de falsas alarmas?</b> Y siempre al lado del azar: con 5% de falsas alarmas, un puntaje al azar avisa a un 7%.</p>
+    <p>Lo que ven son los números en el test, los 111 autos que estuvieron bajo llave. La logística y LightGBM quedan cerca del azar. Después, modelos de supervivencia, los que usa la medicina: con la primera entrega fueron nuestros finalistas, y en el test llegan a 19%. También probamos TimesFM de Google y MiniRocket: en desarrollo no sumaron, y no llegaron al test.</p>
+    <p>Con la segunda entrega, con tres veces más fallas, las redes que leen la secuencia de viajes pasaron adelante. <b>Nuestro finalista es una GRU: en el test avisa a 31% de las fallas con 5% de falsas alarmas</b>, más de cuatro veces el azar y el doble de survival stacking.</p>
+    <p class="note">Barras: test, umbral exacto al 5% de los sanos de test, cada modelo entrenado con todo dev (docs/memoria/f11-test-resultado.md §3). La GRU es el ensamble por rango de las semillas 42, 1 y 2. Azar: media del nulo que conserva el largo del historial (7,0%; p95 15,6%).</p>
   </aside>
 </section>
 
@@ -706,38 +698,38 @@ table.t td .mono{font-size:15px}
   <div class="wrap" style="display:grid;grid-template-rows:auto 1fr auto">
     <div style="display:flex;justify-content:space-between;align-items:end">
       <div>
-        <p class="kicker blue f" data-step="0"><i></i>La idea que hizo la diferencia</p>
+        <p class="kicker blue f" data-step="0"><i></i>El finalista</p>
         <h2 class="title sm f" data-step="0" data-d="1">Una red que lee los viajes<br><em>en orden</em>, y recuerda.</h2>
       </div>
       <p class="note f" data-step="0" data-d="2" style="text-align:right;max-width:380px">GRU · red recurrente · <span style="color:var(--dim)">esquema ilustrativo</span></p>
     </div>
     <svg id="gru" viewBox="0 0 1380 420" width="1380" style="align-self:center;margin-top:14px" class="f fade" data-step="0" data-d="2"></svg>
     <div class="cols" style="grid-template-columns:repeat(3,1fr)">
-      <div class="cell f" data-step="2" style="min-height:0;box-shadow:inset 0 2px 0 var(--tail)"><span class="lbl" style="color:var(--tail-soft);margin-bottom:0">Antes</span><p style="font-size:19px;color:#b3b3b8">Lejos de la falla, a ese auto le enseñábamos <b style="color:var(--white)">"sano": 0</b>. Lo castigábamos cada vez que sospechaba.</p></div>
-      <div class="cell f" data-step="3" style="min-height:0;box-shadow:inset 0 2px 0 var(--ford-soft);background:linear-gradient(180deg,rgba(28,58,158,.2),transparent)"><span class="lbl" style="color:var(--ford-soft);margin-bottom:0">Ahora</span><p style="font-size:19px;color:#b3b3b8">Esos cortes valen <b style="color:var(--white)">0,15: "un poco sospechoso"</b>. Misma red, mismos datos, mismos ajustes.</p></div>
-      <div class="cell f" data-step="4" style="min-height:0"><span class="lbl" style="margin-bottom:0">De dónde viene</span><p style="font-size:19px;color:#b3b3b8">Inspirada en el mantenimiento predictivo de <b style="color:var(--white)">motores de avión</b> (Heimes, PHM 2008). Regla escrita <b style="color:var(--white)">antes</b> de medir.</p></div>
+      <div class="cell f" data-step="2" style="min-height:0"><span class="lbl" style="margin-bottom:0">Qué lee</span><p style="font-size:19px;color:#b3b3b8">Los últimos 1.000 km en <b style="color:var(--white)">20 tramos</b>: cómo se viaja (duración, ralentí, motor frío, velocidad) y qué hace el filtro. Más país, motor y modelo.</p></div>
+      <div class="cell f" data-step="3" style="min-height:0;box-shadow:inset 0 2px 0 var(--ford-soft);background:linear-gradient(180deg,rgba(28,58,158,.2),transparent)"><span class="lbl" style="color:var(--ford-soft);margin-bottom:0">Cómo recuerda</span><p style="font-size:19px;color:#b3b3b8">Lee los tramos <b style="color:var(--white)">en orden</b> y pasa una memoria de uno al siguiente: ve si el hollín sube o los viajes se acortan, no solo el promedio.</p></div>
+      <div class="cell f" data-step="4" style="min-height:0"><span class="lbl" style="margin-bottom:0">Qué entrega</span><p style="font-size:19px;color:#b3b3b8">Un puntaje por auto, cada 500 km. <b style="color:var(--white)">Tres redes</b> entrenadas con semillas distintas votan juntas. Es chica: corre en una CPU.</p></div>
     </div>
   </div>
   <aside class="notes" data-time="~1 min">
-    <p>Volvamos a nuestro conductor. Tres meses antes de la falla, su auto ya tiene la huella: más tiempo parado con el motor en marcha, motor frío. Pero como la falla todavía queda lejos, <b>al modelo le enseñábamos que en ese momento su auto estaba perfectamente sano.</b> Y lo castigábamos cada vez que sospechaba.</p>
-    <p>Entonces cambiamos una sola cosa. Esos momentos lejanos de un auto que termina fallando ya no valen 0, "sano", sino <b>0,15: "un poco sospechoso"</b>. Misma red, mismos datos, mismos ajustes. Es una idea inspirada en el mantenimiento predictivo de motores de avión, adaptada a nuestro problema.</p>
-    <p>Y como ya habíamos visto demasiados números bonitos, escribimos la regla antes de medir: folds nuevos, semillas nuevas, una sola confirmación.</p>
+    <p>Nuestro finalista es una red recurrente, una GRU. Cada 500 km toma los últimos 1.000 km del auto, cortados en 20 tramos. En cada tramo ve cómo se viaja, la duración de los viajes, el ralentí, el motor frío, la velocidad, y qué hace el filtro: cuánto hollín acumula, cuándo regenera, qué avisos da. Además sabe el país, el motor y el modelo.</p>
+    <p><b>Lo importante es que lee los tramos en orden y recuerda.</b> No mira un promedio: pasa una memoria de un tramo al siguiente, así que nota si el hollín viene subiendo o si los viajes se vienen acortando.</p>
+    <p>Al final da un puntaje por auto. Entrenamos tres redes con semillas distintas y las hacemos votar, porque con pocas fallas una sola red depende demasiado de la suerte. Y es chica: corre en una computadora común.</p>
   </aside>
 </section>
 
 <section class="slide" data-block="03 · El modelo" data-who="Santino" data-bg=".2">
   <div class="wrap" style="display:grid;grid-template-columns:560px 1fr;gap:60px">
     <div style="display:flex;flex-direction:column">
-      <p class="kicker blue f" data-step="0"><i></i>El resultado · confirmación preregistrada</p>
+      <p class="kicker blue f" data-step="0"><i></i>El resultado · test, autos que nunca vio</p>
       <div class="f" data-step="0" data-d="1" style="margin-top:22px">
-        <div style="font:800 128px/.85 var(--display);font-stretch:118%;letter-spacing:-.05em;color:var(--white)">1 de<br>cada 3</div>
-        <p class="lede" style="margin-top:22px;font-size:22px">autos que van a fallar, avisados con <b>5% de falsas alarmas</b>.</p>
-        <div style="margin-top:14px;display:flex;align-items:baseline;gap:10px"><span style="font:700 46px var(--display);font-stretch:112%;color:var(--ford-soft);view-transition-name:hero-num">34,6%</span><span class="dev">dev</span></div>
+        <div style="font:800 128px/.85 var(--display);font-stretch:118%;letter-spacing:-.05em;color:var(--white)">10 de<br>32</div>
+        <p class="lede" style="margin-top:22px;font-size:22px">autos que fallaron, avisados con <b>5% de falsas alarmas</b>. Casi 1 de cada 3.</p>
+        <div style="margin-top:14px;display:flex;align-items:baseline;gap:10px"><span style="font:700 46px var(--display);font-stretch:112%;color:var(--ford-soft);view-transition-name:hero-num">31,2%</span><span class="dev">test</span></div>
       </div>
       <div style="margin-top:auto;display:flex;flex-direction:column;gap:0">
-        <div class="f" data-step="5" style="display:grid;grid-template-columns:130px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line-strong)"><b style="font:700 28px var(--display);color:var(--white)">+9,6 pts</b><span class="note" style="color:#b3b3b8">contra la GRU anterior · IC95 [3,0; 14,4] · p = 0,0015</span></div>
-        <div class="f" data-step="6" style="display:grid;grid-template-columns:130px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line)"><b style="font:700 28px var(--display);color:var(--ford-soft)">+14,6 pts</b><span class="note" style="color:#b3b3b8"><span style="color:var(--white)">el primero que le gana con evidencia a saber país y motor</span> · IC95 [3,7; 22,5]</span></div>
-        <div class="f" data-step="7" style="display:grid;grid-template-columns:130px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line)"><b style="font:700 28px var(--display);color:var(--white)">34,3%</b><span class="note" style="color:#b3b3b8">con el umbral fijado en otros autos: 5,0% de falsas alarmas en esos autos</span></div>
+        <div class="f" data-step="4" style="display:grid;grid-template-columns:130px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line-strong)"><b style="font:700 28px var(--display);color:var(--white)">4,5×</b><span class="note" style="color:#b3b3b8">el azar, que avisa a 7% · y por encima de lo que el azar logra 19 de cada 20 veces (16%)</span></div>
+        <div class="f" data-step="5" style="display:grid;grid-template-columns:130px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line)"><b style="font:700 28px var(--display);color:var(--ford-soft)">×2</b><span class="note" style="color:#b3b3b8"><span style="color:var(--white)">el doble que survival stacking</span>, el finalista de la primera entrega, en promedio entre 5% y 20% de falsas alarmas</span></div>
+        <div class="f" data-step="6" style="display:grid;grid-template-columns:130px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line)"><b style="font:700 28px var(--display);color:var(--white)">20%</b><span class="note" style="color:#b3b3b8">con el umbral fijado antes, en dev: 5,8% de falsas alarmas reales en test. Al 20%, 57%</span></div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column">
@@ -753,33 +745,30 @@ table.t td .mono{font-size:15px}
         </g>
         <line x1="180" y1="30" x2="180" y2="450" stroke="#f3f1ea" stroke-opacity=".25" stroke-dasharray="3 5"/>
         <g class="f fade" data-step="1">
-          <polyline class="draw" pathLength="1" points="70,450 114,428.2 180,409.7 290,383.6 400,358.4 510,337 730,294.6" fill="none" stroke="#6f7079" stroke-width="2.5" stroke-dasharray="1"/>
-          <text x="740" y="299" fill="#8b8c93" font-family="JetBrains Mono" font-size="12">azar</text>
-          <circle cx="180" cy="409.7" r="5" fill="#6f7079"/><text x="190" y="424" fill="#8b8c93" font-family="JetBrains Mono" font-size="12">9,6%</text>
+          <polyline class="draw" pathLength="1" points="70,450 114,435.7 180,420.6 290,392.5 400,371.9 510,347.5 620,329.9 730,307.6" fill="none" stroke="#6f7079" stroke-width="2.5" stroke-dasharray="1"/>
+          <text x="740" y="312" fill="#8b8c93" font-family="JetBrains Mono" font-size="12">azar</text>
+          <circle cx="180" cy="420.6" r="5" fill="#6f7079"/><text x="190" y="436" fill="#8b8c93" font-family="JetBrains Mono" font-size="12">7,0%</text>
         </g>
         <g class="f fade" data-step="2">
-          <polyline class="draw" pathLength="1" points="70,450 114,434.5 180,388.7 290,322.3 400,248 510,189.6 730,189.6" fill="none" stroke="#e1262d" stroke-width="2.5"/>
-          <text x="740" y="196" fill="#ff6b6f" font-family="JetBrains Mono" font-size="12">país × motor</text>
-          <circle cx="180" cy="388.7" r="5" fill="#e1262d"/><text x="126" y="382" fill="#ff6b6f" font-family="JetBrains Mono" font-size="12">14,6%</text>
+          <polyline class="draw" pathLength="1" points="70,450 114,437.0 180,371.0 290,358.0 400,358.0 510,266.0 620,227.0 730,227.0" fill="none" stroke="#3d66e0" stroke-width="3"/>
+          <text x="740" y="224" fill="#7fb2ff" font-family="JetBrains Mono" font-size="12"><tspan x="740">survival</tspan><tspan x="740" dy="15">stacking</tspan></text>
+          <circle cx="180" cy="371.0" r="5" fill="#3d66e0"/><text x="190" y="387" fill="#7fb2ff" font-family="JetBrains Mono" font-size="12">18,8%</text>
         </g>
         <g class="f fade" data-step="3">
-          <polyline class="draw" pathLength="1" points="70,450 114,378.6 180,349.2 290,273.6 400,233.3 510,208.5 730,146.3" fill="none" stroke="#3d66e0" stroke-width="3"/>
-          <text x="740" y="152" fill="#7fb2ff" font-family="JetBrains Mono" font-size="12">GRU anterior</text>
-          <circle cx="180" cy="349.2" r="5" fill="#3d66e0"/><text x="190" y="344" fill="#7fb2ff" font-family="JetBrains Mono" font-size="12">24,0%</text>
-        </g>
-        <g class="f fade" data-step="4">
-          <polyline class="draw" pathLength="1" points="70,450 114,381.5 180,304.7 290,245.9 400,197.2 510,155.6 730,119" fill="none" stroke="#f3f1ea" stroke-width="4.5" style="filter:drop-shadow(0 0 8px rgba(127,178,255,.8))"/>
-          <text x="740" y="118" fill="#f3f1ea" font-family="Archivo" font-weight="700" font-size="15">etiqueta suave</text>
-          <circle cx="180" cy="304.7" r="8" fill="#f3f1ea"/><text x="192" y="298" fill="#f3f1ea" font-family="JetBrains Mono" font-size="14" font-weight="700">34,6%</text>
-          <circle cx="510" cy="155.6" r="6" fill="#f3f1ea"/><text x="498" y="140" text-anchor="end" fill="#f3f1ea" font-family="JetBrains Mono" font-size="13">70,1% al 20%</text>
+          <polyline class="draw" pathLength="1" points="70,450 114,384.5 180,319.0 290,253.0 400,187.5 510,187.5 620,174.5 730,161.0" fill="none" stroke="#f3f1ea" stroke-width="4.5" style="filter:drop-shadow(0 0 8px rgba(127,178,255,.8))"/>
+          <text x="740" y="165" fill="#f3f1ea" font-family="Archivo" font-weight="700" font-size="15">GRU</text>
+          <circle cx="180" cy="319.0" r="8" fill="#f3f1ea"/><text x="168" y="306" text-anchor="end" fill="#f3f1ea" font-family="JetBrains Mono" font-size="14" font-weight="700">31,2%</text>
+          <circle cx="510" cy="187.5" r="6" fill="#f3f1ea"/><text x="498" y="172" text-anchor="end" fill="#f3f1ea" font-family="JetBrains Mono" font-size="13">62,5% al 20%</text>
         </g>
       </svg>
-      <p class="note" style="margin-top:4px">Dev · 446 autos · validación cruzada 5 folds × 3 repeticiones · ensamble de 3 semillas. El test (111 autos) se mide una sola vez y reemplaza estos números.</p>
+      <p class="note" style="margin-top:4px">Test · 111 autos bajo llave (103 con datos: 32 fallaron, 71 sanos) · cada modelo entrenado con todo dev · GRU: ensamble de 3 semillas. Con 32 fallas, cada auto mueve 3 puntos: lo citamos como ~30% al 5% y ~60% al 20%.</p>
     </div>
   </div>
   <aside class="notes" data-time="~1 min">
-    <p>Con 5% de falsas alarmas, el modelo avisa a <b>1 de cada 3 autos que van a fallar: 35% [dev]</b>. El azar da 10%. Saber solo el país y el motor da 15%. Si Ford acepta 20% de falsas alarmas, llegamos al <b>70% [dev]</b>.</p>
-    <p>Le gana a nuestro modelo anterior por casi 10 puntos [dev], con evidencia estadística. Y es <b>el primer modelo que le gana con evidencia a "saber país y motor"</b>. Es decir: lee algo más que la lista, lee cómo se usa el auto. Y cuando fijamos el umbral con otros autos, las falsas alarmas en esos autos quedan en el 5% prometido.</p>
+    <p>Este es el resultado en el test: 111 autos que estuvieron bajo llave todo el proyecto. Con 5% de falsas alarmas, el modelo avisa a <b>10 de los 32 autos que fallaron: casi 1 de cada 3 [test]</b>. El azar avisa a 7%. Si Ford acepta 20% de falsas alarmas, llegamos a <b>6 de cada 10 [test]</b>.</p>
+    <p>Le duplica la detección a survival stacking, nuestro finalista de la primera entrega. Y el test repitió lo que veíamos en desarrollo, donde daba 27% al 5% y 61% al 20%: no era un número inflado.</p>
+    <p>Una cosa más, la que importa para operar: el umbral no se puede elegir mirando los autos del test. Si lo fijamos antes, con los autos de desarrollo, en el test las falsas alarmas quedan en 5,8% y avisamos a 20% al 5%, o a 57% al 20%.</p>
+    <p class="note">Son 32 fallas: cada auto mueve 3 puntos. La GRU se leyó tres veces en test con la misma configuración (31 · 34 · 28% al 5%): citar ~30% al 5%, ~40–50% al 10%, ~50–60% al 20%. Sin los 36 autos que estaban en el dev viejo: 36% al 5%.</p>
   </aside>
 </section>
 
@@ -787,7 +776,7 @@ table.t td .mono{font-size:15px}
   <div class="wrap" style="display:grid;grid-template-columns:1fr 1fr;gap:80px">
     <div style="display:flex;flex-direction:column">
       <p class="kicker f" data-step="0"><i></i>Cuánto antes</p>
-      <h2 class="title sm f" data-step="0" data-d="1">Más de <em>tres meses</em><br>de margen.</h2>
+      <h2 class="title sm f" data-step="0" data-d="1">Unos <em>tres meses</em><br>de margen.</h2>
       <div class="f" data-step="1" style="margin-top:44px">
         <div style="position:relative;height:120px">
           <div style="position:absolute;left:0;right:0;top:60px;height:2px;background:var(--line-strong)"></div>
@@ -796,34 +785,35 @@ table.t td .mono{font-size:15px}
           <span style="position:absolute;left:4%;top:0;font:500 12px var(--mono);color:var(--ford-soft);letter-spacing:.08em">PRIMERA ALERTA</span>
           <div style="position:absolute;right:0;top:30px;width:3px;height:60px;background:var(--tail);box-shadow:0 0 14px var(--tail)"></div>
           <span style="position:absolute;right:0;top:0;font:500 12px var(--mono);color:var(--tail-soft);letter-spacing:.08em">FALLA</span>
-          <span style="position:absolute;left:50%;top:78px;transform:translateX(-50%);font:700 40px var(--display);font-stretch:112%;color:var(--white);white-space:nowrap">~8.300 km <span style="color:var(--muted);font-weight:400;font-size:26px">· ~106 días</span></span>
+          <span style="position:absolute;left:50%;top:78px;transform:translateX(-50%);font:700 40px var(--display);font-stretch:112%;color:var(--white);white-space:nowrap">~4.600 km <span style="color:var(--muted);font-weight:400;font-size:26px">· ~100 días</span></span>
         </div>
-        <p class="note" style="margin-top:24px">Mediana entre los autos detectados, al 10% de falsas alarmas <span class="dev">dev</span>. Los marcamos con margen; no predecimos la fecha.</p>
+        <p class="note" style="margin-top:24px">Mediana entre los autos detectados, al 10% de falsas alarmas <span class="dev">test</span>. Días aproximados, con los km por día de cada auto. Los marcamos con margen; no predecimos la fecha.</p>
       </div>
       <div class="f" data-step="2" style="margin-top:auto">
-        <span class="lbl">El puntaje sube a medida que se acerca la falla · percentil medio</span>
+        <span class="lbl">El puntaje sube a medida que se acerca la falla · percentil medio <span class="dev">test</span></span>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end;height:150px;margin-top:14px">
-          <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="vbar" style="height:40.6%;background:#2a2c33"></div><span class="note" style="margin-top:8px">sanos<br><b style="color:var(--white)">0,41</b></span></div>
-          <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="vbar" style="height:66.3%;background:linear-gradient(0deg,var(--guardsman),var(--guardsman-hi))"></div><span class="note" style="margin-top:8px">&gt;10.000 km<br><b style="color:var(--white)">0,66</b></span></div>
-          <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="vbar" style="height:70.3%;background:linear-gradient(0deg,var(--guardsman-hi),var(--ford-soft))"></div><span class="note" style="margin-top:8px">3.500–10.000<br><b style="color:var(--white)">0,70</b></span></div>
-          <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="vbar" style="height:74.3%;background:linear-gradient(0deg,var(--ford-soft),var(--white))"></div><span class="note" style="margin-top:8px">&lt;3.500 km<br><b style="color:var(--white)">0,74</b></span></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="vbar" style="height:43.6%;background:#2a2c33"></div><span class="note" style="margin-top:8px">sanos<br><b style="color:var(--white)">0,44</b></span></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="vbar" style="height:57.5%;background:linear-gradient(0deg,var(--guardsman),var(--guardsman-hi))"></div><span class="note" style="margin-top:8px">&gt;10.000 km<br><b style="color:var(--white)">0,58</b></span></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="vbar" style="height:61.4%;background:linear-gradient(0deg,var(--guardsman-hi),var(--ford-soft))"></div><span class="note" style="margin-top:8px">3.500–10.000<br><b style="color:var(--white)">0,61</b></span></div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="vbar" style="height:72.4%;background:linear-gradient(0deg,var(--ford-soft),var(--white))"></div><span class="note" style="margin-top:8px">&lt;3.500 km<br><b style="color:var(--white)">0,72</b></span></div>
         </div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column">
       <p class="kicker blue f" data-step="3"><i></i>En qué se apoya</p>
-      <h2 class="title sm f" data-step="3" style="font-size:44px">Si le escondemos una familia de señales, <em>¿cuánto detecta menos?</em></h2>
+      <h2 class="title sm f" data-step="3" style="font-size:44px">Si le escondemos una señal, <em>¿cuánto detecta menos?</em></h2>
       <div class="f" data-step="4" style="margin-top:40px;display:flex;flex-direction:column;gap:22px">
-        <div><div style="display:flex;justify-content:space-between"><span style="font-size:21px;color:var(--white);font-weight:600">Estado del filtro</span><span class="mono" style="color:var(--ford-soft);font-size:18px">−38 pts</span></div><span class="note">acumulación, regeneraciones, avisos</span><div class="bar" style="height:12px;margin-top:8px;--w:79"><i style="background:linear-gradient(90deg,var(--guardsman),var(--ford-soft))"></i></div></div>
-        <div><div style="display:flex;justify-content:space-between"><span style="font-size:21px;color:var(--white);font-weight:600">Hábitos</span><span class="mono" style="color:var(--ford-soft);font-size:18px">−23 pts</span></div><span class="note">ralentí, motor frío · <span style="color:var(--white)">la duración de los viajes es el que más pesa</span></span><div class="bar" style="height:12px;margin-top:8px;--w:48"><i style="background:linear-gradient(90deg,var(--guardsman),var(--ford-soft))"></i></div></div>
-        <div><div style="display:flex;justify-content:space-between"><span style="font-size:21px;color:var(--muted);font-weight:600">Contexto</span><span class="mono" style="color:var(--muted);font-size:18px">−48 pts</span></div><span class="note">país, motor, modelo · por eso lo comparamos contra la celda</span><div class="bar" style="height:12px;margin-top:8px;--w:100"><i style="background:#3a3b42"></i></div></div>
+        <div><div style="display:flex;justify-content:space-between"><span style="font-size:21px;color:var(--white);font-weight:600">Duración de los viajes</span><span class="mono" style="color:var(--ford-soft);font-size:18px">−24 pts</span></div><span class="note">hábitos · el que más pesa, por delante de ralentí, motor frío y velocidad</span><div class="bar" style="height:12px;margin-top:8px;--w:80"><i style="background:linear-gradient(90deg,var(--guardsman),var(--ford-soft))"></i></div></div>
+        <div><div style="display:flex;justify-content:space-between"><span style="font-size:21px;color:var(--white);font-weight:600">Cuánto sube el hollín en el filtro</span><span class="mono" style="color:var(--ford-soft);font-size:18px">−22 pts</span></div><span class="note">estado del filtro · junto con regeneraciones y avisos</span><div class="bar" style="height:12px;margin-top:8px;--w:74"><i style="background:linear-gradient(90deg,var(--guardsman),var(--ford-soft))"></i></div></div>
+        <div><div style="display:flex;justify-content:space-between"><span style="font-size:21px;color:var(--muted);font-weight:600">País</span><span class="mono" style="color:var(--muted);font-size:18px">−28 pts</span></div><span class="note">contexto · el riesgo no es el mismo en todos los mercados</span><div class="bar" style="height:12px;margin-top:8px;--w:93"><i style="background:#3a3b42"></i></div></div>
+        <p class="note">Sobre 52% de detección <span class="dev">dev</span> · una semilla · permutando cada señal en la validación</p>
       </div>
       <p class="body f" data-step="5" style="margin-top:auto;font-size:21px;border-top:1px solid var(--line-strong);padding-top:18px">Viajes cortos que no dejan terminar la limpieza del filtro. <b>No le dimos ninguna regla del filtro: esa relación la aprendió de los datos.</b></p>
     </div>
   </div>
   <aside class="notes" data-time="~50 s + puente">
-    <p><b>[Cuánto antes]</b> La primera alerta llega con una mediana de <b>más de tres meses de margen [dev]</b>. Y el puntaje sube a medida que se acerca la falla: el modelo no solo sabe qué auto, también nota que el momento se acerca.</p>
-    <p><b>[En qué se apoya]</b> Si le escondemos al modelo el estado del filtro, pierde 38 puntos de detección. Si le escondemos los hábitos de manejo, 23; el que más pesa es la duración de los viajes. Es la misma física que les contó Gonzalo. No le dimos ninguna regla del filtro: esa relación la aprendió de los datos.</p>
+    <p><b>[Cuánto antes]</b> La primera alerta llega con una mediana de <b>unos tres meses de margen [test]</b>: unos 4.600 km antes de la falla. Y el puntaje sube a medida que se acerca la falla: el modelo no solo sabe qué auto, también nota que el momento se acerca.</p>
+    <p><b>[En qué se apoya]</b> Si le escondemos al modelo la duración de los viajes, detecta 24 puntos menos [dev]: es el hábito que más pesa. Si le escondemos cuánto sube el hollín en el filtro, 22. Es la misma física que les contó Gonzalo. El país también pesa: el riesgo no es el mismo en todos los mercados. No le dimos ninguna regla del filtro: esa relación la aprendió de los datos.</p>
     <p><b>[Puente a Octavio]</b> Ahora el modelo marcó el auto de nuestro conductor, con meses de margen. Pero una alerta en un servidor no le sirve al conductor. ¿Qué le decimos, y cómo, sin asustarlo? Eso se los cuenta Octavio.</p>
   </aside>
 </section>
@@ -888,9 +878,9 @@ table.t td .mono{font-size:15px}
         <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl">El verificador rechaza, en código</span><span class="check">✓ ningún texto llega sin pasar las reglas</span></div>
         <div class="veto" style="margin-top:14px"><span>"porque…"</span><span>"el sistema lo marcó por…"</span><span>"el riesgo va a bajar"</span><span>"probabilidad"</span><span>"se parece a autos que fallaron"</span><span>un número que no está en los hechos</span></div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);margin-top:22px">
-          <div><div style="font:700 40px var(--display);font-stretch:112%;color:var(--white)"><span data-count="517">0</span></div><span class="note">textos en la temporada</span></div>
-          <div><div style="font:700 40px var(--display);font-stretch:112%;color:var(--tail-soft)"><span data-count="106">0</span></div><span class="note">intentos rechazados y corregidos</span></div>
-          <div><div style="font:700 40px var(--display);font-stretch:112%;color:var(--white)"><span data-count="2">0</span></div><span class="note">plantillas aprobadas de respaldo</span></div>
+          <div><div style="font:700 40px var(--display);font-stretch:112%;color:var(--white)"><span data-count="465">0</span></div><span class="note">textos en la temporada</span></div>
+          <div><div style="font:700 40px var(--display);font-stretch:112%;color:var(--tail-soft)"><span data-count="103">0</span></div><span class="note">intentos rechazados y corregidos</span></div>
+          <div><div style="font:700 40px var(--display);font-stretch:112%;color:var(--white)"><span data-count="0">0</span></div><span class="note">veces que hizo falta la plantilla de respaldo</span></div>
         </div>
       </div>
     </div>
@@ -898,7 +888,7 @@ table.t td .mono{font-size:15px}
   <aside class="notes" data-time="~1 min 10 s">
     <p>Cada persona recibe lo suyo. El conductor recibe esto en la app de su Ford: <b>"Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo."</b> Sin códigos de error, sin porcentajes, sin miedo. Algo que puede hacer el sábado.</p>
     <p>El taller recibe las señales técnicas del filtro y qué revisar. Y la persona de posventa de Ford recibe, cada lunes, una bandeja con todo priorizado y redactado.</p>
-    <p><b>[Por qué es confiable]</b> En toda la temporada, los agentes escribieron 517 textos. El verificador rechazó 106 intentos en el camino: frases causales, promesas, atribuciones. Los agentes corrigieron. En dos casos no lo lograron, y el sistema no forzó nada: usó una plantilla aprobada.</p>
+    <p><b>[Por qué es confiable]</b> En toda la temporada, los agentes escribieron 465 textos. El verificador rechazó 103 intentos en el camino: frases causales, promesas, atribuciones. Los agentes corrigieron, y siempre lo lograron. Si un día no lo logran, el sistema no fuerza nada: usa una plantilla aprobada.</p>
   </aside>
 </section>
 
@@ -917,20 +907,20 @@ table.t td .mono{font-size:15px}
         <div class="dial" id="dial"><button data-k="0" class="sel">5%</button><button data-k="1">10%</button><button data-k="2">15%</button><button data-k="3">20%</button></div>
       </div>
       <div class="cols readout f" data-step="1" style="grid-template-columns:repeat(4,1fr);margin-top:30px">
-        <div class="cell hot"><span class="lbl">Fallas avisadas antes</span><div class="num"><span id="r-caught">44</span><span style="color:var(--dim);font-size:26px"> / 135</span></div><p id="r-lead">16 semanas antes · ~7.200 km</p></div>
+        <div class="cell hot"><span class="lbl">Fallas avisadas antes</span><div class="num"><span id="r-caught">39</span><span style="color:var(--dim);font-size:26px"> / 135</span></div><p id="r-lead">15 semanas antes · ~7.000 km</p></div>
         <div class="cell"><span class="lbl">Sanos con un aviso de más</span><div class="num"><span id="r-fp">14</span><span style="color:var(--dim);font-size:26px"> / 291</span></div><p>consejos que no hacían falta</p></div>
-        <div class="cell"><span class="lbl">Alertas · escalamientos</span><div class="num"><span id="r-alerts">58</span><span style="color:var(--dim);font-size:26px"> · </span><span id="r-esc">9</span></div><p><span id="r-habit">56 de 58</span> con un hábito para nombrar</p></div>
-        <div class="cell"><span class="lbl">Detección oficial <span class="dev">dev</span></span><div class="num"><span id="r-det">34,8%</span></div><p>país × motor: <span id="r-cell">14,6%</span></p></div>
+        <div class="cell"><span class="lbl">Alertas · escalamientos</span><div class="num"><span id="r-alerts">53</span><span style="color:var(--dim);font-size:26px"> · </span><span id="r-esc">7</span></div><p><span id="r-habit">48 de 53</span> con un hábito para nombrar</p></div>
+        <div class="cell"><span class="lbl">Detección oficial <span class="dev">dev</span></span><div class="num"><span id="r-det">28,1%</span></div><p>azar: <span id="r-null">5,4%</span></p></div>
       </div>
     </div>
     <p class="note f" data-step="1">Replay de una repetición de dev: 426 autos (135 que fallan, 291 sanos). La muestra está enriquecida en fallas: los conteos no se trasladan a una flota real. El test nunca aparece en la demo.</p>
   </div>
   <aside class="notes" data-time="~2 min 30 s (demo)">
     <p><i>(Abrir la demo en la bandeja, unos minutos antes: es serverless y el primer pedido puede dar 502. Entrar por la raíz.)</i></p>
-    <p>Esta es la bandeja del lunes 25 de agosto de 2025. Estamos reproduciendo, semana a semana, los autos reales del estudio. Esta semana hay cuatro avisos. <i>(Abrir una tarjeta.)</i> Acá está el mensaje al conductor, el resumen para el taller y los hechos en los que se apoya el texto. El tilde verde es el verificador.</p>
+    <p>Esta es la bandeja del lunes 29 de septiembre de 2025. Estamos reproduciendo, semana a semana, los autos reales del estudio. Esta semana hay cuatro avisos: dos son un consejo al conductor y en dos lo llama el concesionario. <i>(Abrir una tarjeta.)</i> Acá está el mensaje al conductor, el resumen para el taller y los hechos en los que se apoya el texto. El tilde verde es el verificador.</p>
     <p><i>(Ficha.)</i> El puntaje fue subiendo, cruzó el umbral y se confirmó la alerta. Y acá está el porqué.</p>
-    <p><i>(Perilla 5% → 20%.)</i> Esta perilla es la decisión de Ford. Con 5% avisamos a un tercio de las fallas. Con 20%, a siete de cada diez [dev], pero con cuatro veces más avisos de más. Como el primer aviso es un consejo, Ford puede permitirse girarla.</p>
-    <p><i>("Qué pasó después".)</i> De esos cuatro avisos, tres eran de autos que después fallaron. Uno era de un auto sano, y lo mostramos igual. En esta temporada, al 5%, avisamos a 44 de los 135 autos que fallaron, <b>unas 16 semanas antes: casi cuatro meses</b>. Y 14 de 291 autos sanos recibieron un aviso de más.</p>
+    <p><i>(Perilla 5% → 20%.)</i> Esta perilla es la decisión de Ford. Con 5% avisamos a más de un cuarto de las fallas [dev]. Con 20%, a seis de cada diez [dev], pero con cuatro veces más avisos de más. Como el primer aviso es un consejo, Ford puede permitirse girarla.</p>
+    <p><i>("Qué pasó después".)</i> Los cuatro avisos de esa semana eran de autos que después fallaron. No siempre es así, y lo mostramos igual: en esta temporada, al 5%, avisamos a 39 de los 135 autos que fallaron, <b>unas 15 semanas antes: más de tres meses</b>. Y 14 de 291 autos sanos recibieron un aviso de más.</p>
     <p><b>[Puente]</b> Todo esto lo vieron con 426 autos. La pregunta de Ford es otra: ¿funciona con un millón?</p>
   </aside>
 </section>
@@ -973,7 +963,7 @@ table.t td .mono{font-size:15px}
     </div>
     <div class="stages" style="align-self:center">
       <div class="stages-road"></div>
-      <div class="stage f" data-step="1"><span class="n">0</span><strong>Congelar</strong><p>Test final, reentrenar con los 557 autos, empaquetar.</p><span class="t">1–2 semanas</span></div>
+      <div class="stage f" data-step="1"><span class="n">0</span><strong>Congelar</strong><p>Reentrenar con los 557 autos, test incluido, y empaquetar.</p><span class="t">1–2 semanas</span></div>
       <div class="stage key f" data-step="2"><span class="n">1</span><strong>Piloto en sombra</strong><p>Puntuar la flota real de Colombia o Chile <b style="color:var(--white)">sin avisar a nadie</b>. Primera medición de la tasa real de fallas y de las falsas alarmas.</p><span class="t">3–6 meses</span></div>
       <div class="stage f" data-step="3"><span class="n">2</span><strong>Piloto activo</strong><p>Avisos en una región, con un grupo control sin aviso. Fallas evitadas contra el control.</p><span class="t">6 meses</span></div>
       <div class="stage f" data-step="3" data-d="1"><span class="n">3</span><strong>Escala</strong><p>Todos los mercados validados, con el umbral recalibrado por mercado.</p><span class="t">continuo</span></div>
@@ -986,7 +976,7 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~2 min + puente">
-    <p>¿Cómo llega a la calle? En cuatro pasos. Primero, congelamos el modelo y lo medimos una sola vez en el test. Después, el paso que más nos importa: un <b>piloto en sombra</b>. Durante tres a seis meses, el sistema puntúa todos los autos reales de un país, Colombia o Chile, pero no le avisa a nadie. Solo mira.</p>
+    <p>¿Cómo llega a la calle? En cuatro pasos. Primero, congelamos el modelo, que ya medimos en el test, y lo reentrenamos con los 557 autos. Después, el paso que más nos importa: un <b>piloto en sombra</b>. Durante tres a seis meses, el sistema puntúa todos los autos reales de un país, Colombia o Chile, pero no le avisa a nadie. Solo mira.</p>
     <p>¿Por qué tanto cuidado? Porque todo lo que medimos salió de las listas que Ford armó para este desafío. En la sombra vamos a ver por primera vez cuántos autos fallan de verdad y cuántas falsas alarmas daríamos. Recién con eso, un piloto activo con grupo control. Y después, el resto de los países.</p>
     <p><b>[Lo que puede salir mal]</b> Si las alertas de un país se disparan, el umbral quedó viejo. Si un dato deja de llegar, nos damos cuenta: ya nos pasó. Cada falla que llega al taller se vuelve una pregunta que alimenta el reentrenamiento, cada tres meses o con muchas fallas nuevas. Y donde no pudimos validar, como en Perú, no se enciende.</p>
     <p><b>[Puente a Gonzalo]</b> Escala, y no necesita hardware nuevo. Pero la pregunta que importa es otra: ¿cuánto pierde hoy el cliente, y cuánto cuesta evitarlo?</p>
@@ -1056,10 +1046,10 @@ table.t td .mono{font-size:15px}
       </svg>
       <div style="display:flex;flex-direction:column;gap:22px">
         <div class="f" data-step="2"><span class="lbl">El primer contacto, casi siempre, es un consejo y no un turno</span>
-          <div style="display:flex;align-items:baseline;gap:14px;margin-top:6px"><span style="font:800 84px/.9 var(--display);font-stretch:115%;color:var(--white)"><span data-count="97">0</span>%</span><span class="note" style="max-width:220px">de las alertas al 5% llevan un hábito para nombrar <span class="dev">dev</span></span></div>
+          <div style="display:flex;align-items:baseline;gap:14px;margin-top:6px"><span style="font:800 84px/.9 var(--display);font-stretch:115%;color:var(--white)"><span data-count="91">0</span>%</span><span class="note" style="max-width:220px">de las alertas al 5% llevan un hábito para nombrar <span class="dev">dev</span></span></div>
           <p class="body" style="font-size:18px;margin-top:8px">Si el auto no iba a fallar, el conductor recibió un consejo que igual le hace bien a su motor.</p></div>
         <div class="f" data-step="3" style="border-top:1px solid var(--line);padding-top:16px"><span class="lbl">Y el que decide cuánto pesa cada plato es Ford</span>
-          <p class="body" style="font-size:18px;margin-top:8px">Al <b>5%</b>: 1 de cada 20 sanos recibe un consejo de más, y avisamos a <b>1 de cada 3</b> fallas. Al <b>20%</b>: <b>7 de cada 10</b> fallas <span class="dev">dev</span>, con cuatro veces más consejos de más.</p></div>
+          <p class="body" style="font-size:18px;margin-top:8px">Al <b>5%</b>: 1 de cada 20 sanos recibe un consejo de más, y avisamos a <b>casi 1 de cada 3</b> fallas. Al <b>20%</b>: <b>6 de cada 10</b> fallas <span class="dev">test</span>, con cuatro veces más consejos de más.</p></div>
       </div>
     </div>
     <div class="cols f" data-step="4" style="grid-template-columns:1.2fr repeat(4,1fr)">
@@ -1090,7 +1080,7 @@ table.t td .mono{font-size:15px}
     </div>
     <div class="cols" style="grid-template-columns:repeat(4,1fr);margin-top:34px">
       <div class="cell f" data-step="1"><span class="lbl">01</span><strong>Anticipa de verdad.</strong><p>Nunca ve los últimos 500 km y aun así avisa con meses de margen.</p></div>
-      <div class="cell f" data-step="1" data-d="1"><span class="lbl">02</span><strong>No exagera.</strong><p>Cada número, al lado del azar y de saber país y motor.</p></div>
+      <div class="cell f" data-step="1" data-d="1"><span class="lbl">02</span><strong>No exagera.</strong><p>Cada número, al lado del azar, y medido en autos que nunca vio.</p></div>
       <div class="cell f" data-step="1" data-d="2"><span class="lbl">03</span><strong>Habla como una persona, sin inventar.</strong><p>La IA redacta; el código decide y verifica.</p></div>
       <div class="cell f" data-step="1" data-d="3"><span class="lbl">04</span><strong>No toca ni un auto.</strong><p>La telemetría que Ford ya recibe. El dial lo gira Ford.</p></div>
     </div>
@@ -1112,7 +1102,7 @@ table.t td .mono{font-size:15px}
     </div>
   </div>
   <aside class="notes" data-time="~1 min 45 s">
-    <p>Primero, <b>anticipa de verdad.</b> El modelo nunca ve los últimos 500 km antes de la falla, y aun así avisa con meses de margen. Segundo, <b>no exageramos.</b> Cada número está al lado del azar y de lo que se sabe sin modelo. Les contamos qué descartamos, qué falló y dónde no conviene usarlo. Tercero, <b>habla como una persona, y un verificador en código controla que no invente.</b> Y cuarto, <b>no hay que tocar ni un auto</b>, y el que decide cuántos avisos manda es Ford.</p>
+    <p>Primero, <b>anticipa de verdad.</b> El modelo nunca ve los últimos 500 km antes de la falla, y aun así avisa con meses de margen. Segundo, <b>no exageramos.</b> Cada número está al lado del azar, y lo medimos en autos que el modelo nunca vio. Les contamos qué descartamos, qué falló y dónde no conviene usarlo. Tercero, <b>habla como una persona, y un verificador en código controla que no invente.</b> Y cuarto, <b>no hay que tocar ni un auto</b>, y el que decide cuántos avisos manda es Ford.</p>
     <p><b>[Lo que les pedimos]</b> No les pedimos que nos crean. Les pedimos una cosa concreta: un piloto en sombra de tres meses, en un país, con los datos que Ford ya tiene. Sin avisarle a ningún cliente. Al final, Ford va a saber cuántos autos fallan de verdad, cuántas falsas alarmas daríamos y a cuántas fallas llegamos a tiempo. Con sus autos, no con los nuestros.</p>
     <p>Y si quieren que esto mejore más rápido, hay cuatro cosas que solo Ford tiene.</p>
   </aside>
@@ -1282,7 +1272,6 @@ setInterval(drawTimer, 250); drawTimer();
   const YO = 92, YH = [150, 182, 214, 246, 278], YI = [340, 340, 340], XI = [-30, 0, 30];
   const score = [.2,.24,.28,.35,.46,.6,.76];           // puntaje (ilustrativo)
   const inAct = [[.25,.2,.3],[.3,.22,.32],[.36,.28,.35],[.44,.34,.4],[.55,.42,.46],[.66,.55,.5],[.78,.66,.58]];
-  const oldT = ['0','0','0','0','0','1','1'], newT = ['0,15','0,15','0,15','0,15','0,15','1','1'];
   const dur = 5.2, step = dur / 10;                     // la onda cruza la red y descansa
   let rs = 11; const rnd = () => (rs = (rs*9301 + 49297) % 233280) / 233280;
   const colX = i => X0 + i*DX;
@@ -1305,17 +1294,13 @@ setInterval(drawTimer, 250); drawTimer();
     #gru .lay.b{fill:#7fb2ff}
     #gru .later{opacity:0;transition:opacity .7s calc(var(--i) * .22s)}
     .slide.s1 #gru .later{opacity:1}
-    #gru .tag{opacity:0;transform:translateY(8px);transform-box:fill-box;transition:opacity .5s,transform .6s cubic-bezier(.16,1,.3,1)}
-    .slide.s2 #gru .tag{opacity:1;transform:none}
-    #gru .tag text{font:700 19px Archivo;text-anchor:middle}
   </style>`;
 
   // qué es cada capa (se lee con la primera columna sola)
   const lead = (y, x2) => `<path d="M232 ${y} H${x2}" stroke="#5d5e66" stroke-dasharray="2 4"/>`;
-  s += `<g class="tag"><text x="0" y="24" class="lay" style="text-anchor:start;font:600 17px Archivo;fill:#f3f1ea">Le enseñamos</text><text x="0" y="42" style="text-anchor:start;font:12px 'JetBrains Mono';fill:#8b8c93">en cada corte</text></g>`;
   s += `<text x="0" y="${YO-4}" class="lay">Puntaje</text><text x="0" y="${YO+16}" class="glbl">¿va camino a la falla?</text>` + lead(YO, colX(0)-26);
-  s += `<text x="0" y="${YH[2]-12}" class="lay b">Memoria</text><text x="0" y="${YH[2]+8}" class="glbl">lo que la red recuerda</text><text x="0" y="${YH[2]+24}" class="glbl">del auto hasta ahora</text>` + lead(YH[2], colX(0)-18);
-  s += `<text x="0" y="${YI[0]-8}" class="lay">Uso del auto</text><text x="0" y="${YI[0]+12}" class="glbl">ralentí · motor frío · filtro</text><text x="0" y="${YI[0]+28}" class="glbl">en los últimos 1.000 km</text>` + lead(YI[0], colX(0)-44);
+  s += `<text x="0" y="${YH[2]-12}" class="lay b">Memoria</text><text x="0" y="${YH[2]+8}" class="glbl">lo que la red recuerda</text><text x="0" y="${YH[2]+24}" class="glbl">de los tramos anteriores</text>` + lead(YH[2], colX(0)-18);
+  s += `<text x="0" y="${YI[0]-8}" class="lay">Uso del auto</text><text x="0" y="${YI[0]+12}" class="glbl">viajes · ralentí · filtro</text><text x="0" y="${YI[0]+28}" class="glbl">en un tramo de 50 km</text>` + lead(YI[0], colX(0)-44);
 
   const edges = [], nodes = [];
   for (let i = 0; i < N; i++) {
@@ -1349,48 +1334,36 @@ setInterval(drawTimer, 250); drawTimer();
     const r = 9 + score[i]*14;
     n += `<circle class="n" cx="${x}" cy="${YO}" r="${(r+5).toFixed(1)}" style="animation-delay:${(t + step*.45 - dur).toFixed(2)}s;${hot ? 'stroke:#e1262d;stroke-opacity:.8' : ''}"/>`;
     n += `<circle cx="${x}" cy="${YO}" r="${r.toFixed(1)}" fill="${hot ? '#ff6b6f' : 'url(#gout)'}" opacity="${(.35 + score[i]*.8).toFixed(2)}"/>`;
-    n += `<text x="${x}" y="${YI[0]+34}" text-anchor="middle" class="glbl">corte ${i+1}</text>`;
-    n += `<g class="tag" id="tgt${i}" style="transition-delay:${(i*.07).toFixed(2)}s"><rect x="${x-36}" y="10" width="72" height="32" rx="16" fill="rgba(11,12,15,.92)" stroke="${hot ? '#f3f1ea' : '#e1262d'}" stroke-opacity=".7"/><text x="${x}" y="33" fill="${hot ? '#f3f1ea' : '#ff6b6f'}">${oldT[i]}</text></g>`;
+    n += `<text x="${x}" y="${YI[0]+34}" text-anchor="middle" class="glbl">tramo ${i+1}</text>`;
     const cls = i ? 'later' : '';
     edges.push(`<g class="${cls}" style="--i:${i}">${e}</g>`);
     nodes.push(`<g class="${cls}" style="--i:${i}">${n}</g>`);
   }
   s += edges.join('') + nodes.join('');
 
-  // el tiempo: cada 500 km la misma red avanza y le pasa su memoria al corte siguiente
+  // la ventana: la misma red lee tramo por tramo y le pasa su memoria al siguiente; después, el gap ciego
   const xe = colX(N-1), gx = xe + 50;
   s += `<g class="later" style="--i:7">
     <rect x="${gx}" y="${YO-30}" width="40" height="${YI[0]-YO+40}" fill="url(#hatch)"/><text x="${gx+20}" y="${YI[0]+34}" text-anchor="middle" class="glbl">ciego</text>
     <rect x="${gx+52}" y="${YO-40}" width="4" height="${YI[0]-YO+60}" fill="#e1262d" style="filter:drop-shadow(0 0 10px #e1262d)"/><text x="${gx+54}" y="${YO-48}" text-anchor="middle" class="glbl" style="fill:#ff6b6f">falla</text>
     <path d="M${colX(0)} 402 H${gx+40}" stroke="#7fb2ff" stroke-width="1.5" marker-end="url(#garr)"/>
-    <text x="${colX(0)}" y="394" class="glbl" style="fill:#7fb2ff">cada 500 km, la misma red lee el tramo nuevo y le pasa su memoria al corte siguiente</text>
+    <text x="${colX(0)}" y="394" class="glbl" style="fill:#7fb2ff">la misma red lee los últimos 1.000 km tramo por tramo y le pasa su memoria al siguiente</text>
   </g>`;
   svg.innerHTML = s;
 
-  // pasos: 1 = se desenrolla, 2 = etiqueta dura, 3 = etiqueta suave
-  const slide = svg.closest('.slide');
-  new MutationObserver(() => {
-    const soft = slide.classList.contains('s3');
-    for (let i = 0; i < 5; i++) {
-      const g = svg.querySelector('#tgt'+i);
-      g.querySelector('text').textContent = soft ? newT[i] : oldT[i];
-      g.querySelector('text').setAttribute('fill', soft ? '#7fb2ff' : '#ff6b6f');
-      g.querySelector('rect').setAttribute('stroke', soft ? '#7fb2ff' : '#e1262d');
-    }
-  }).observe(slide, {attributes:true, attributeFilter:['class']});
 })();
 
 /* ── dial de la demo (replay de dev, una repetición) ── */
 (function(){
   const D = [
-    {caught:44, fp:14, alerts:58, esc:9,  habit:'56 de 58',  lead:'16 semanas antes · ~7.200 km', det:'34,8%', cell:'14,6%'},
-    {caught:61, fp:29, alerts:90, esc:13, habit:'82 de 90',  lead:'17 semanas antes · ~7.800 km', det:'48,6%', cell:'30,4%'},
-    {caught:78, fp:43, alerts:121,esc:30, habit:'107 de 121',lead:'19 semanas antes · ~8.500 km', det:'60,5%', cell:'48,1%'},
-    {caught:95, fp:58, alerts:153,esc:43, habit:'134 de 153',lead:'21 semanas antes · ~8.700 km', det:'70,4%', cell:'62,0%'}];
+    {caught:39, fp:14, alerts:53, esc:7,  habit:'48 de 53',  lead:'15 semanas antes · ~7.000 km', det:'28,1%', null:'5,4%'},
+    {caught:56, fp:29, alerts:85, esc:10, habit:'73 de 85',  lead:'16 semanas antes · ~7.200 km', det:'42,5%', null:'10,7%'},
+    {caught:69, fp:43, alerts:112,esc:22, habit:'101 de 112',lead:'16 semanas antes · ~7.500 km', det:'53,1%', null:'15,7%'},
+    {caught:82, fp:58, alerts:140,esc:36, habit:'125 de 140',lead:'21 semanas antes · ~8.100 km', det:'61,0%', null:'20,7%'}];
   const set = k => {
     const d = D[k];
     document.querySelectorAll('#dial button').forEach(b => b.classList.toggle('sel', +b.dataset.k === k));
-    for (const [id, v] of Object.entries({caught:d.caught, fp:d.fp, alerts:d.alerts, esc:d.esc, habit:d.habit, lead:d.lead, det:d.det, cell:d.cell}))
+    for (const [id, v] of Object.entries({caught:d.caught, fp:d.fp, alerts:d.alerts, esc:d.esc, habit:d.habit, lead:d.lead, det:d.det, null:d.null}))
       document.getElementById('r-'+id).textContent = v;
   };
   document.querySelectorAll('#dial button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); set(+b.dataset.k); }));
