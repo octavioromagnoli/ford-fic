@@ -1,32 +1,57 @@
 % ============================================================================ 1 · Descripción general
+% fuente: docs/memoria/f1-*.md (columnas del DPF, coincidencia 99,8 / 99,97 %), f9-eda-v2.md (EDA dentro del mercado),
+% decisiones.md (proceso gamma descartado).
 \section{Descripción general del desafío}
 \label{sec:desafio}
 
-\textbf{Título.} Ford pide una metodología de IA para predecir eventos de degradación de la eficiencia de combustión e
-ingreso de oxígeno al motor, a partir de datos de vehículos conectados.
+El desafío pide una metodología basada en inteligencia artificial para predecir eventos de degradación de la eficiencia de
+combustión y del ingreso de oxígeno al motor a partir de datos de vehículos conectados~\cite{ford}. En un motor diésel, el
+componente que se degrada por el uso y que afecta a la vez la combustión y el flujo de gases es el filtro de partículas
+(DPF): una restricción del escape aumenta la contrapresión, empeora el llenado de los cilindros y obliga a la unidad de
+control a modificar la estrategia de inyección~\cite{guan2015}.
 
-\textbf{Qué entendimos.} En un diésel, el componente que se degrada por el uso y afecta a la vez la combustión y el flujo
-de gases es el filtro de partículas (DPF). El filtro atrapa el hollín y lo quema para limpiarse (regenera), pero para eso
-necesita temperatura: un tramo de ruta con el motor caliente. Con viajes cortos, la regeneración empieza y no termina, el
-hollín se acumula y, si sigue así, el auto entra en modo de protección y termina en el taller. Para el cliente, eso es un
-testigo que nadie le explicó y la sensación de que nadie le avisó.
+\subsection{Física del filtro de partículas}
+\label{sec:fisica}
 
-\textbf{Qué encontramos en los datos.}
-\begin{itemize}
-  \item \textbf{El evento es del filtro, con otro nombre.} \emph{TripSummary} no trae las columnas del DPF del anexo, pero sí
-    \texttt{AirRegenerationStart/\allowbreak{}End} y \texttt{AirFilterStart/\allowbreak{}End}, que el anexo no menciona. Son la foto, al inicio y al
-    final de cada viaje, de la acumulación (0–100) y de los nueve niveles de mensaje del filtro que trae
-    \emph{DynamicInformation} (coinciden en el 99,8 y el 99,97\,\% de los pares). Ford no lo confirmó, así que hablamos de
-    “nivel de acumulación del filtro”.
-  \item \textbf{Es saturación por uso, no desgaste.} El evento cae a una mediana de \textasciitilde12.800 km, y la ceniza
-    es un fenómeno de más de 100.000 km. Buscamos una carga irreversible medible (la premisa de un proceso de degradación
-    tipo gamma) y no la hay. Eso orientó todo hacia los hábitos de manejo y el estado reciente del filtro.
-  \item \textbf{No todo “uso indebido” se sostiene.} Comparando contra sanos \emph{del mismo mercado}, lo que crece hacia el
-    evento es estar detenido con el motor en marcha y no llegar a temperatura. La velocidad y la fracción de viajes
-    cortos no distinguen dentro del mercado: con la primera entrega, la velocidad parecía la mejor señal y era Colombia
-    contra Chile.
-\end{itemize}
+El DPF retiene el hollín del escape en las paredes de un monolito cerámico. La masa de hollín acumulada $m_s$ evoluciona
+según un balance entre lo que ingresa y lo que se oxida,
+\begin{equation}
+  \frac{dm_s}{dt} = \dot m_{\mathrm{in}} - k(T)\, m_s, \qquad k(T) = A \exp\!\left(-\frac{E_a}{R\,T}\right),
+  \label{eq:balance}
+\end{equation}
+donde $\dot m_{\mathrm{in}}$ es el caudal de hollín emitido por el motor, $T$ la temperatura del filtro y $k(T)$ una
+constante de oxidación de tipo Arrhenius~\cite{guan2015}. Por la dependencia exponencial con $T$, la oxidación solo es
+apreciable por encima de umbrales de temperatura: la regeneración pasiva con $\mathrm{NO_2}$ opera aproximadamente entre
+250 y 450\,°C, y la activa con $\mathrm{O_2}$ requiere más de $\sim 550$\,°C, que la unidad de control fuerza con
+postinyección cuando la carga estimada supera un umbral~\cite{guan2015}. Una regeneración activa necesita, por lo tanto,
+varios minutos de motor caliente con carga sostenida. En un uso con viajes cortos, ralentí prolongado o motor por debajo de
+su temperatura de régimen, la regeneración comienza y se interrumpe; el segundo término de la ecuación~\eqref{eq:balance}
+queda chico frente al primero, la carga crece y el vehículo termina en un modo de protección y en el taller.
 
-\textbf{Qué hicimos.} Un modelo de deep learning que lee la secuencia de los últimos 1.000 km del auto y un producto que
-convierte cada alerta en una acción. Al conductor no le hablamos de “uso indebido” ni de fallas: le hablamos de hábitos
-que puede cambiar, comparados con autos sanos de su zona.
+De la ecuación~\eqref{eq:balance} se desprenden dos consecuencias que orientaron el trabajo. Primero, el estado del filtro es
+\emph{reversible}: la carga de hollín se reduce con cada regeneración completa, a diferencia de la ceniza, que se acumula de
+forma irreversible pero en escalas de más de $10^5$\,km~\cite{guan2015}. Segundo, el riesgo depende de la \emph{historia de
+uso reciente} (temperaturas alcanzadas, duración de los viajes, tiempo detenido) más que del kilometraje acumulado.
+
+\subsection{Lo que se encontró en los datos}
+
+\textbf{El evento es del filtro, con otra denominación.} La tabla de viajes no trae las columnas del DPF que documenta el
+anexo de datos, pero sí \texttt{AirRegenerationStart/End} y \texttt{AirFilterStart/End}, que el anexo no menciona. Son el
+valor, al inicio y al final de cada viaje, del nivel de acumulación del filtro (escala 0--100) y de los nueve niveles de
+mensaje del sistema que reporta la tabla de señales: coinciden con ella en el $99{,}8$ y el $99{,}97\,\%$ de los pares
+viaje--señal. Como el significado no fue confirmado por Ford, en este informe se habla de \emph{nivel de acumulación del
+filtro}.
+
+\textbf{Es saturación por uso, no desgaste.} El evento ocurre con una mediana de $\sim 12.800$\,km, dos órdenes de
+magnitud antes de la escala de la ceniza. Se buscó una variable de daño monótona e irreversible, que es la premisa de los
+modelos de degradación por procesos gamma~\cite{vannoortwijk2009}, y no se encontró ninguna. Esto descartó ese enfoque y
+orientó el modelado hacia los hábitos de manejo y el estado reciente del filtro, en línea con la ecuación~\eqref{eq:balance}.
+
+\textbf{No todo ``uso indebido'' se sostiene.} Comparando contra vehículos sanos \emph{del mismo mercado}, lo que crece hacia
+el evento es el tiempo detenido con el motor en marcha y la fracción de viajes que no alcanzan la temperatura de régimen. La
+velocidad media y la fracción de viajes cortos no separan dentro del mercado: con la primera entrega de datos, la velocidad
+parecía la mejor variable y medía en realidad la diferencia entre dos países.
+
+\textbf{Lo que se propone.} Un modelo secuencial que lee los últimos 1.000\,km del vehículo y un circuito que convierte
+cada alerta en una acción. Al conductor no se le habla de fallas: se le comunican hábitos modificables, comparados con
+vehículos sanos de su zona.

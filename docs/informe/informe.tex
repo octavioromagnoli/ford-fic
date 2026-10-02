@@ -1,140 +1,84 @@
 % Informe final · Ford Innovation Challenge III (AI Edition) · Data-Driven Powertrain Intelligence
 % Compilar desde docs/informe/:   tectonic informe.tex
 % Las figuras y las tablas generadas salen de:   python scripts/make_report_figures.py --config configs/report_figures.yaml
+% Formato de informe técnico (article, Latin Modern, ecuaciones numeradas, referencias numeradas). El documento que
+% se entrega no cita el repositorio: la fuente de cada número queda en un comentario `% fuente:` al lado.
 \documentclass[11pt,a4paper]{article}
 
 \usepackage{fontspec}
 \usepackage[spanish,es-noshorthands,es-tabla]{babel}
-\setmainfont{texgyrepagella}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,
-  ItalicFont=*-italic,BoldItalicFont=*-bolditalic]
-\setsansfont{texgyreheros}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,
-  ItalicFont=*-italic,BoldItalicFont=*-bolditalic]
-\setmonofont{texgyrecursor}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,Scale=0.95]
-
-\usepackage[a4paper,top=2.2cm,bottom=2.2cm,left=2.3cm,right=2.3cm,headheight=14pt]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{icomma}
+\AtBeginDocument{\chardef\%=37 }  % el \% de babel spanish falla dentro de math
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
 \usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage[section]{placeins}
-\usepackage{booktabs,tabularx,longtable,multirow,array}
+\usepackage{booktabs,tabularx,multirow,array}
 \usepackage{xcolor}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric}
-\usepackage[most]{tcolorbox}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,patterns}
 \usepackage{enumitem}
-\usepackage{caption}
-\usepackage{fancyhdr}
+\usepackage{caption,subcaption}
 \usepackage{titlesec}
-\usepackage[hidelinks]{hyperref}
-\usepackage{bookmark}
-\usepackage{listings}
 \usepackage{multicol}
-\lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,breakatwhitespace=true,columns=fullflexible,
-  keepspaces=true,frame=leftline,framerule=1.5pt,rulecolor=\color{fordblue!50},xleftmargin=8pt,
-  commentstyle=\color{inksec},morecomment=[l]{\#},literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1
-  {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1 {×}{{$\times$}}1 {'}{{'}}1,
-  postbreak=\mbox{\textcolor{inksec}{$\hookrightarrow$}\space}}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=blue,urlcolor=blue,
+  pdftitle={Predicción temprana de la degradación del filtro de partículas · Ford FIC III},pdfauthor={Equipo SOG}}
 
-% ---------------------------------------------------------------- colores (paleta de las figuras)
-\definecolor{fordblue}{HTML}{2A78D6}
-\definecolor{accent2}{HTML}{EB6834}
-\definecolor{accent3}{HTML}{1BAF7A}
-\definecolor{ink}{HTML}{0B0B0B}
-\definecolor{inksec}{HTML}{52514E}
-\definecolor{muted}{HTML}{A3A29D}
-\definecolor{softbg}{HTML}{F4F7FC}
-\definecolor{warnbg}{HTML}{FDF3EE}
-\definecolor{rulec}{HTML}{D9D8D3}
-
-% ---------------------------------------------------------------- estilo
-\setlist{itemsep=2pt,topsep=4pt,parsep=0pt,leftmargin=1.4em}
-\captionsetup{font=small,labelfont={bf,sf},format=hang,justification=raggedright,singlelinecheck=false}
-\captionsetup[table]{position=top,skip=4pt}
-\setlength{\parskip}{3pt}
-\setlength{\parindent}{0pt}
-\setlength{\emergencystretch}{2.5em}
+% ---------------------------------------------------------------- estilo (informe técnico)
+\setlength{\parindent}{1.5em}
+\setlength{\parskip}{0pt}
+\setlength{\emergencystretch}{2em}
+\setlist{itemsep=1pt,topsep=3pt,parsep=0pt,leftmargin=1.6em}
 \renewcommand{\arraystretch}{1.15}
-\titlespacing*{\section}{0pt}{12pt}{6pt}
-\titlespacing*{\subsection}{0pt}{9pt}{4pt}
-\titlespacing*{\subsubsection}{0pt}{7pt}{3pt}
-\setcounter{tocdepth}{2}
+\titleformat{\section}{\Large\bfseries}{\thesection.}{0.8em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection.}{0.8em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection.}{0.7em}{}
+\titlespacing*{\section}{0pt}{16pt}{8pt}
+\titlespacing*{\subsection}{0pt}{12pt}{6pt}
+\titlespacing*{\subsubsection}{0pt}{9pt}{4pt}
+\captionsetup{labelsep=colon,font=normalsize,justification=justified,singlelinecheck=true}
+\captionsetup[table]{position=top,skip=6pt}
+\captionsetup[sub]{font=normalsize}
 \renewcommand{\floatpagefraction}{0.8}
 \renewcommand{\topfraction}{0.85}
 \renewcommand{\textfraction}{0.1}
-\titleformat{\section}{\sffamily\Large\bfseries\color{ink}}{\thesection}{0.8em}{}
-\titleformat{\subsection}{\sffamily\large\bfseries\color{ink}}{\thesubsection}{0.7em}{}
-\titleformat{\subsubsection}{\sffamily\normalsize\bfseries\color{ink}}{\thesubsubsection}{0.6em}{}
-\pagestyle{fancy}
-\fancyhf{}
-\fancyhead[L]{\small\sffamily\color{inksec}Ford Innovation Challenge III · Data-Driven Powertrain Intelligence}
-\fancyhead[R]{\small\sffamily\color{inksec}Equipo SOG}
-\fancyfoot[C]{\small\sffamily\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
+\setcounter{tocdepth}{1}
 
-% marcas de dónde sale cada número
-\newcommand{\tagtest}{\textsf{\footnotesize\textbf{\color{fordblue}[test]}}}
-\newcommand{\tagdev}{\textsf{\footnotesize\textbf{\color{inksec}[dev]}}}
-\newcommand{\fuente}[1]{\par\vspace{2pt}{\footnotesize\color{inksec}\textit{Fuente:} #1}}
-\newcommand{\repo}[1]{{\footnotesize\ttfamily\begingroup\renewcommand{\_}{\textunderscore\allowbreak}#1\endgroup}}
+% notación
 \newcommand{\aprime}{(a$'$)}
-
-\newtcolorbox{caja}[1][]{enhanced,breakable,colback=softbg,colframe=fordblue!60,boxrule=0.5pt,
-  arc=2pt,left=8pt,right=8pt,top=6pt,bottom=6pt,fonttitle=\sffamily\bfseries,coltitle=ink,
-  colbacktitle=softbg,attach title to upper={\par\smallskip},#1}
-\newtcolorbox{limite}[1][]{enhanced,breakable,colback=warnbg,colframe=accent2!70,boxrule=0.5pt,
-  arc=2pt,left=8pt,right=8pt,top=6pt,bottom=6pt,fonttitle=\sffamily\bfseries,coltitle=ink,
-  attach title to upper={\par\smallskip},#1}
-
-\hypersetup{pdftitle={Informe final · Ford FIC III · Equipo SOG},pdfauthor={Equipo SOG}}
+\newcommand{\tagtest}{[\textit{test}]}
+\newcommand{\tagdev}{[\textit{dev}]}
+\newcommand{\ind}{\mathbb{1}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\R}{\mathbb{R}}
 
 \begin{document}
 
-% ================================================================ portada + resumen ejecutivo
+% ================================================================ portada
 \begin{titlepage}
-\thispagestyle{empty}
-\vspace*{0.2cm}
-{\sffamily\small\color{inksec} Ford Innovation Challenge III · AI Edition · Área: Data-Driven Powertrain Intelligence\par}
-\vspace{0.7cm}
-{\sffamily\fontsize{28}{34}\selectfont\bfseries\color{ink} Tu Ford te avisa antes\par}
-\vspace{0.25cm}
-{\sffamily\large\color{inksec} Predicción temprana de la degradación del filtro de partículas en los diésel conectados de
-Ford\par}
-\vspace{0.4cm}
-{\normalsize Informe final del equipo SOG · Gonzalo · Santino · Octavio · 2 de octubre de 2026\par}
-\vspace{0.7cm}
-\phantomsection\addcontentsline{toc}{section}{Resumen ejecutivo}
-\begin{caja}[title={Resumen ejecutivo}]
-\small
-\begin{itemize}
-  \item \textbf{El problema.} El filtro de partículas (DPF) de los diésel se tapa según cómo se usa el auto, y hoy Ford se
-    entera tarde: cuando se prende el testigo o el auto ya está en el taller. El desafío pide anticiparlo con la
-    telemetría del auto conectado, con el mayor margen posible.
-  \item \textbf{Lo que encontramos.} La telemetría deja huella: comparando contra sanos del mismo mercado, los autos que
-    van a fallar pasan cada vez más tiempo en ralentí y con el motor frío. Pero los datos traían trampas que hacían que
-    cualquier modelo pareciera mejor de lo que es (cohortes muestreadas en períodos distintos, una fecha del evento
-    posterior al taller, un contador que se apaga). Las corregimos en un pipeline declarativo y trazable.
-  \item \textbf{Lo que hicimos.} Cada 500 km, un modelo lee los últimos 1.000 km del auto y estima si falla en los
-    próximos 3.000, sin ver nunca los 500 km previos a la falla. El finalista es una red recurrente (GRU) que lee la
-    secuencia de viajes y de señales del filtro, más país, motor y modelo, en un ensamble de tres semillas. Un circuito
-    convierte cada alerta en un consejo al conductor o en un llamado del concesionario, redactado por agentes de IA y
-    controlado por un verificador en código.
-  \item \textbf{Cuánto detecta} \tagtest{}. En 111 autos que nunca vio (103 con datos, 32 fallados), avisa a
-    \textbf{\textasciitilde30\,\%} de las fallas con 5\,\% de autos sanos con falsa alarma (10 de 32, donde el azar da
-    7\,\%), a \textbf{\textasciitilde40–50\,\%} con 10\,\% y a \textbf{\textasciitilde50–60\,\%} con 20\,\%. Con el umbral
-    fijado antes, en desarrollo, las falsas alarmas reales quedan en 5,8 · 8,9 · 18,2\,\%.
-  \item \textbf{Con cuánto margen} \tagtest{}. La primera alerta llega con una mediana de \textbf{\textasciitilde4.600 km,
-    unos 3 meses}, antes de la falla registrada.
-  \item \textbf{Cuánto cuesta.} Sin sensores nuevos y en CPU: \textasciitilde USD 0,07–0,10 por auto y por año para un
-    millón de autos (estimación propia, a validar con Ford).
-\end{itemize}
-\end{caja}
+\centering
+\vspace*{3.2cm}
+\includegraphics[width=0.42\textwidth]{figuras/ford_logo.pdf}\par
+\vspace{1.4cm}
+{\LARGE\bfseries Ford Innovation Challenge III -- AI Edition\par}
+\vspace{0.5cm}
+{\Large Predicción temprana de la degradación del filtro de partículas\\[2pt]
+a partir de la telemetría de vehículos conectados\par}
+\vspace{0.6cm}
+{\large Área: \textit{Data-Driven Powertrain Intelligence}\par}
+\vspace{1.4cm}
+{\large Equipo SOG\par}
+\vspace{0.35cm}
+Santino Cardelli \quad·\quad Gonzalo Malaspina \quad·\quad Octavio Romagnoli\par
+\vspace{0.35cm}
+Octubre 2026\par
 \vfill
-{\footnotesize\color{inksec} Repositorio \repo{ford-fic}, rama \repo{docs/informe}. Cada número trae su fuente en
-\repo{docs/memoria/}, en el pitch o en un \repo{experiments/*/report.json}.\par}
 \end{titlepage}
 
-\tableofcontents
-
+\setcounter{page}{1}
 \input{secciones/00-resumen}
 \input{secciones/01-desafio}
 \input{secciones/02-proceso}
@@ -142,6 +86,7 @@ Ford\par}
 \input{secciones/04-datos}
 \input{secciones/05-solucion}
 \input{secciones/06-complementaria}
+\input{secciones/08-referencias}
 \appendix
 \input{secciones/07-anexos}
 

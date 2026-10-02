@@ -1,32 +1,45 @@
-% ============================================================================ 6 · Información complementaria
+% ============================================================================ 6 · Información complementaria + conclusión
 \section{Información complementaria}
 \label{sec:complementaria}
 
-\textbf{Documentación y referentes.} Recibimos el dataset y el diccionario en dos entregas, y contrastamos el diccionario
-contra los archivos columna por columna (§\ref{sec:datos}). Todo lo que encontramos quedó en el repositorio: un archivo por
-hallazgo con su comando en \repo{docs/\allowbreak{}memoria/\allowbreak{}}, cada decisión con su fecha y su motivo en \repo{decisiones.md}, y cada
-corrida como YAML en \repo{configs/\allowbreak{}}. La CNN-LSTM propuesta por la tutora del equipo fue el primer baseline secuencial y una
-de las familias medidas en test.
+\textbf{Documentación utilizada.} El conjunto de datos y su diccionario se recibieron en dos entregas, y el diccionario se
+contrastó con los archivos columna por columna (\S\ref{sec:datos}). Cada hallazgo, decisión y experimento quedó documentado
+con su fecha, su motivo y el procedimiento que lo reproduce, y cada experimento está definido por un archivo de configuración
+versionado.
 
-\textbf{Lo que solo Ford tiene.} Hoy el límite no es el modelo, es la información:
+\textbf{Información que solo Ford puede aportar.} El límite actual no es el modelo sino la información disponible:
 \begin{enumerate}
-  \item \textbf{La tasa real de falla} en la flota. Separa la física de cómo se armaron las listas, y es la
-    duda más grande del proyecto.
-  \item \textbf{Qué eran los 278 fallados con fecha por defecto} que salieron entre entregas, y con qué criterio se armó la
-    lista de fallados.
-  \item \textbf{Qué registra la fecha del evento}: hoy la corremos 21 días porque cae unas dos semanas después del taller.
-  \item \textbf{Más fallas registradas} (hoy son 177), \textbf{dónde se usa el auto} (no dónde se vendió) y \textbf{los costos
-    reales} de una falla y de una inspección.
-  \item \textbf{Un piloto en sombra de 3 meses en un país}, para medir la prevalencia, las falsas alarmas y la detección
-    reales.
+  \item \textbf{La tasa real de eventos} en la flota, que permite separar la física del criterio con que se extrajeron las
+    listas. Es la principal incertidumbre del trabajo.
+  \item \textbf{El origen de los 278 vehículos con evento y fecha por defecto} que salieron entre entregas, y el criterio
+    de armado de la lista de vehículos con evento.
+  \item \textbf{Qué registra la fecha del evento}: hoy se corre 21 días porque cae unas dos semanas después del taller.
+  \item \textbf{Más eventos registrados} (hoy son 177), \textbf{la zona de uso} del vehículo (no la de venta) y \textbf{los
+    costos reales} de una falla y de una inspección.
+  \item \textbf{Un piloto en sombra de tres meses en un país}, para medir prevalencia, falsas alarmas y detección reales.
 \end{enumerate}
 
-\textbf{Trabajo futuro.} Reentrenar con los 557 autos y empaquetar el modelo. Validar cualquier mejora con datos nuevos (una
-extracción posterior al 14-09-2026), no con este test. Medir en el piloto lo que estos datos no permiten: si los avisos cambian
-hábitos, cuántas fallas se evitan y cuánto consumo se ahorra. Extender el circuito a otras fallas del postratamiento.
+\textbf{Trabajo futuro.} Reentrenar con los 557 vehículos y empaquetar el modelo. Validar toda mejora con datos nuevos (una
+extracción posterior al 14-09-2026) y no con este conjunto de prueba, que ya fue utilizado. Medir en el piloto lo que estos
+datos no permiten: si los avisos cambian hábitos, cuántas fallas se evitan y cuánto combustible se ahorra. Extender el
+circuito a otras fallas del sistema de postratamiento.
 
-\textbf{Conclusión.} La telemetría que Ford ya recibe anticipa la falla del DPF, pero leerla bien fue la mitad del trabajo, y
-medir bien la otra mitad. La GRU finalista avisa a \textasciitilde30\,\% de las fallas con 5\,\% de falsas alarmas y a
-\textasciitilde50–60\,\% con 20\,\%, con unos tres meses de margen, en autos que nunca vio. Le duplica la detección a los
-modelos tabulares y de supervivencia. Y el producto convierte esa alerta en un consejo
-confiable, con la perilla en manos de Ford. \emph{Del testigo en el tablero al aviso a tiempo: tu Ford te avisa antes.}
+% ============================================================================ Conclusión
+\section{Conclusión}
+\label{sec:conclusion}
+
+Se mostró que la telemetría que Ford ya recibe contiene información que anticipa la saturación del filtro de partículas, y
+que esa información es consistente con la física de la regeneración: los vehículos que fallan pasan más tiempo detenidos con
+el motor en marcha y con el motor por debajo de su temperatura de régimen, y la diferencia crece hacia el evento. Se mostró
+también que los datos contenían sesgos de muestreo y de formato capaces de producir métricas favorables sin ninguna
+capacidad predictiva, y que el PR-AUC por fila tiene un piso de $0{,}177$ alcanzable sin información temporal. Por eso el
+modelo se seleccionó con la detección por vehículo a presupuesto de falsas alarmas, comparada con un nulo que conserva el
+historial.
+
+Con ese criterio, el modelo finalista, una GRU con atención de $\sim 3.900$ parámetros en un ensamble de tres semillas,
+detecta en vehículos no vistos $\sim 30\,\%$ de los eventos con $5\,\%$ de falsas alarmas y $\sim 50$--$60\,\%$ con $20\,\%$,
+con una mediana de $\sim 4.600$\,km (unos tres meses) de anticipación y un umbral que respeta su presupuesto fuera de
+muestra. Duplica la detección de los modelos tabulares y de supervivencia en el mismo conjunto. El circuito propuesto
+convierte cada alerta en un aviso verificable, con el punto de operación como decisión de Ford, a un costo estimado de
+USD~$0{,}07$--$0{,}10$ por vehículo y por año. La validación de su impacto sobre fallas evitadas requiere el piloto en sombra
+propuesto.
