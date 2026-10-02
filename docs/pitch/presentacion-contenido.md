@@ -425,7 +425,7 @@ Evidencia en `docs/memoria/f11-test-resultado.md` (test), `f9-remedicion-complet
 - **Con el umbral fijado en dev** (lo que haría Ford en operación): 19,6 · 34,2 · 57,3% al 5 · 10 · 20%, con falsas alarmas reales de 5,8 · 8,9 · 18,2%.
 - **Sin los 36 autos de test que estaban en el dev de la entrega 1** (22 fallados): 36,4 · 50,0 · 59,1% al 5 · 10 · 20%.
 - **Anticipación** al 10%: mediana de \~4.600 km (p25–p75: 2.400–9.300), \~100 días aproximados con los km por día de cada auto.
-- **AUC por auto** 0,794; dentro de mercado × motor 0,675. Entre autos del mismo país y motor, el orden es moderado.
+- **AUC por auto** 0,794.
 
 **Auditorías (dev, semilla 42):**
 
@@ -458,7 +458,7 @@ Evidencia en `docs/memoria/f11-test-resultado.md` (test), `f9-remedicion-complet
 
 - **Son 32 fallas.** El IC de cualquier diferencia es ancho: contra survival stacking, [0,8; 43,0]. Decir "el doble", nunca "el doble con certeza".
 - **El modelo sabe poco del cuándo.** (a′) es +0,001: positivo pero chico, como en todos los modelos de v2. Lo que se puede decir es que el score sube hacia el evento (rango 0,58 → 0,61 → 0,72 en test). Nunca "predecimos cuándo falla".
-- **El país pesa.** Si preguntan por "saber país y motor sin modelo": en test esa regla detecta 0% al 5% y 50% al 20%; la GRU le saca +27 puntos de media, IC95 [−0,8; 46,1], en el límite. No decir que "le gana con evidencia".
+- **El país pesa.** Si preguntan por "saber país y motor sin modelo": en test esa regla detecta 0% al 5% y 50% al 20%; la GRU, 31% y 62,5% (50,8 contra 23,4 de media al 5–20%).
 - **El test no se miró una sola vez.** La configuración de la GRU se leyó tres veces en test (una antes de preregistrar una variante con etiqueta suave lejos del evento, que en test no se sostuvo y se descartó). Por eso se cita un rango y no un número. La GRU no se ajustó mirando test.
 - **La anticipación en km del test (4.600) es menor que la de dev (7.500)**, pero en días es parecida (\~100): los autos detectados del test andan menos km por día. Decir "unos tres meses".
 
@@ -922,7 +922,7 @@ Abajo, **para que mejore más rápido · lo que solo Ford tiene:**
 
 **Slide 34 · Final.** *"Tu Ford te avisa antes."* Gracias · Equipo SOG.
 
-**Límites que decimos antes de que los pregunten:** no predecimos la fecha exacta, la prevalencia real de la flota se mide en el piloto, y dentro de un mismo mercado y motor el orden entre autos es moderado (AUC 0,68 en test).
+**Límites que decimos antes de que los pregunten:** no predecimos la fecha exacta y la prevalencia real de la flota se mide en el piloto.
 
 **Preguntas probables del jurado (backup):**
 
@@ -977,7 +977,6 @@ Y si quieren que esto mejore más rápido, hay cuatro cosas que solo Ford tiene.
 
 - No predecimos la fecha exacta de la falla: la marcamos con margen.
 - No conocemos la prevalencia real de la flota: se mide en la sombra.
-- Dentro de un mismo país y motor, el orden entre autos es moderado (AUC 0,68 en test).
 - La efectividad de los avisos no está medida.
 - Con 32 fallas en el test, cada auto mueve 3 puntos: por eso se citan rangos.
 

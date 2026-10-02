@@ -110,8 +110,7 @@ test. Se midieron después del tiro preregistrado: describen, no eligen.
 \fuente{\repo{experiments/\allowbreak{}test-modelos-v2/\allowbreak{}operating.csv} (tabla generada).}
 \end{table}
 
-\textbf{Comparaciones pareadas en test} (bootstrap por vehículo, diferencia de primario): GRU − celda, +27,3 [−0,8; 46,1];
-survival stacking − GRU, −24,2 [−43,0; −0,8]; GRU 42/1/2 − GRU 101–103, +6,2 [−7,8; +18,0]; GRU suave − GRU dura (tiro
+\textbf{Comparaciones pareadas en test} (bootstrap por vehículo, diferencia de primario): survival stacking − GRU, −24,2 [−43,0; −0,8]; GRU 42/1/2 − GRU 101–103, +6,2 [−7,8; +18,0]; GRU suave − GRU dura (tiro
 preregistrado de F11), −13,3 [−25,0; +3,9].
 
 \begin{table}[!htbp]
@@ -119,18 +118,17 @@ preregistrado de F11), −13,3 [−25,0; +3,9].
 \caption{Los modelos principales en el dev v2 \tagdev{}: detección (\%) con umbral exacto, promedio de 3 repeticiones.}
 \label{tab:dev}
 \small
-\begin{tabular}{@{}lrrrrr@{}}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-Modelo & AUC auto & AUC celda & 5\,\% & 10\,\% & 20\,\% \\
+Modelo & AUC auto & 5\,\% & 10\,\% & 20\,\% \\
 \midrule
-\textbf{GRU + viajes + estática ×3 (finalista)} & 0,82 & 0,65 & 27 & 42 & 61 \\
-CNN-LSTM + viajes + estática ×3 & 0,81 & 0,62 & 22 & 41 & 62 \\
-CNN-LSTM de la tutora + estática ×3 & 0,82 & 0,62 & 27 & 40 & 68 \\
-Survival stacking (F3) & 0,72 & 0,57 & 14 & 24 & 42 \\
-LightGBM (control, 53 features) & 0,72 & 0,57 & 18 & 28 & 42 \\
-Logística L2 & 0,71 & 0,58 & 15 & 23 & 37 \\
-Celda mercado × motor (sin modelo) & 0,81 & 0,46 & 18 & 33 & 62 \\
-Azar (historial conservado) & — & — & 5 & 11 & 21 \\
+\textbf{GRU + viajes + estática ×3 (finalista)} & 0,82 & 27 & 42 & 61 \\
+CNN-LSTM + viajes + estática ×3 & 0,81 & 22 & 41 & 62 \\
+CNN-LSTM de la tutora + estática ×3 & 0,82 & 27 & 40 & 68 \\
+Survival stacking (F3) & 0,72 & 14 & 24 & 42 \\
+LightGBM (control, 53 features) & 0,72 & 18 & 28 & 42 \\
+Logística L2 & 0,71 & 15 & 23 & 37 \\
+Azar (historial conservado) & — & 5 & 11 & 21 \\
 \bottomrule
 \end{tabular}
 \fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-remedicion-completa-v2.md} (42 modelos).}

@@ -144,7 +144,7 @@ def table_test(cfg: dict, curve: pd.DataFrame, out: Path) -> None:
         p = d.loc[d["budget"] == "primary", "detection"]
         prim = pct(p.item()) if len(p) else "—"
         auc = t["auc_from_memo"].get(m)
-        auc_s = (f"{auc[0]:.3f} & {auc[1]:.3f}".replace(".", ",")) if auc else "— & —"
+        auc_s = f"{auc:.3f}".replace(".", ",") if auc is not None else "—"
         rows.append(f"{tex_escape(spec['label'])} & " + " & ".join(dets) + f" & \\textbf{{{prim}}} & {auc_s} & "
                     f"{t['dev_from_memo'].get(m, '—')} \\\\")
     null = curve[curve["model"] == t["null_model"]]
@@ -152,13 +152,13 @@ def table_test(cfg: dict, curve: pd.DataFrame, out: Path) -> None:
     for b in t["budgets_table"]:
         row = null[np.isclose(null["b"], b)].iloc[0]
         null_cells.append(f"{pct(row['null_mean'])} / {pct(row['null_p95'])}")
-    rows.append(r"\midrule" + "\nAzar, media / p95 (nulo de la GRU) & " + " & ".join(null_cells) + r" & — & — & — & — \\")
+    rows.append(r"\midrule" + "\nAzar, media / p95 (nulo de la GRU) & " + " & ".join(null_cells) + r" & — & — & — \\")
     head = " & ".join(f"{int(round(100 * b))}\\,\\%" for b in t["budgets_table"])
     body = "\n".join(rows)
     tex = (
         "% Generado por scripts/make_report_figures.py desde " + t["curve"] + " (no editar a mano).\n"
-        "\\begin{tabular}{@{}l" + "r" * len(budgets) + "rrrl@{}}\n\\toprule\n"
-        f"Modelo & {head} & Prim. & AUC auto & AUC celda & dev (5 · 10 · 20\\,\\%) \\\\\n\\midrule\n"
+        "\\begin{tabular}{@{}l" + "r" * len(budgets) + "rrl@{}}\n\\toprule\n"
+        f"Modelo & {head} & Prim. & AUC auto & dev (5 · 10 · 20\\,\\%) \\\\\n\\midrule\n"
         f"{body}\n\\bottomrule\n\\end{{tabular}}\n"
     )
     (out / "test_modelos.tex").write_text(tex, encoding="utf-8")
@@ -226,38 +226,6 @@ def fig_profile(cfg: dict, c: dict, out: Path, width: float) -> None:
 
 
 
-def fig_cells(cfg: dict, c: dict, seq: list[str], out: Path, width: float) -> None:
-    k = cfg["from_memo"]["cells"]
-    mk, en = k["markets"], k["engines"]
-    rate = np.full((len(mk), len(en)), np.nan)
-    for i, m in enumerate(mk):
-        for j in range(len(en)):
-            a, e = k["autos"][m][j], k["eventos"][m][j]
-            if a:
-                rate[i, j] = e / a
-    fig, ax = plt.subplots(figsize=(width * 0.5, 2.6))
-    cmap = matplotlib.colors.LinearSegmentedColormap.from_list("seq", seq)
-    cmap.set_bad("#f5f4f1")
-    im = ax.imshow(rate, cmap=cmap, vmin=0, vmax=0.7, aspect="auto")
-    for i, m in enumerate(mk):
-        for j in range(len(en)):
-            a, e = k["autos"][m][j], k["eventos"][m][j]
-            if not a:
-                ax.text(j, i, "—", ha="center", va="center", fontsize=8, color=c["text_secondary"])
-                continue
-            dark = rate[i, j] > 0.4
-            ax.text(j, i, f"{e}/{a}\n{pct(e / a, 0)} %", ha="center", va="center", fontsize=7.5,
-                    color="white" if dark else c["text"])
-    ax.set_xticks(range(len(en)), en)
-    ax.set_yticks(range(len(mk)), mk)
-    ax.grid(False)
-    for s in ax.spines.values():
-        s.set_visible(False)
-    cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.03)
-    cb.outline.set_visible(False)
-    cb.set_label("tasa de eventos", color=c["text_secondary"])
-    ax.set_title("Eventos / autos por mercado × motor", fontsize=9)
-    save(fig, out, "celdas")
 
 
 def fig_score_toward_event(cfg: dict, c: dict, out: Path, width: float) -> None:
@@ -339,7 +307,6 @@ def main() -> None:
     table_test(cfg, curve, tabs)
     fig_permutation(cfg, c, figs, w)
     fig_profile(cfg, c, figs, w)
-    fig_cells(cfg, c, cfg["style"]["sequential"], figs, w)
     fig_score_toward_event(cfg, c, figs, w)
     table_features(cfg, tabs)
 

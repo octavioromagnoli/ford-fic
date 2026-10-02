@@ -65,9 +65,7 @@ Desde entonces la pregunta que decide es una sola: \emph{de los autos que van a 
 si solo permitimos una cantidad fija de falsas alarmas entre los sanos?} Para cada presupuesto (2 a 30\,\% de los sanos)
 el umbral es el menor que lo cumple, y una alerta son dos cortes seguidos sobre él. El criterio primario es la detección
 media al 5, 10, 15 y 20\,\%, y siempre se compara contra tres cosas: el \textbf{azar con el mismo historial} (con la
-primera entrega, bolsas asimétricas “detectaban” 10\,\% al 5\,\% sin ninguna señal), la \textbf{celda mercado × motor}
-(tres celdas concentran 117 de los 135 fallados de dev, y esa regla sola detecta 18 · 33 · 62\,\% al 5 · 10 · 20\,\%
-\tagdev{}) y el modelo de referencia, con \textbf{bootstrap pareado por vehículo}. El umbral también se fija \textbf{fuera
+primera entrega, bolsas asimétricas “detectaban” 10\,\% al 5\,\% sin ninguna señal) y el modelo de referencia, con \textbf{bootstrap pareado por vehículo}. El umbral también se fija \textbf{fuera
 de muestra} para medir las falsas alarmas reales. Con unos 12 eventos por fold, cada candidato nuevo gastaba un
 \emph{presupuesto de comparaciones}, y los importantes se preregistraron por escrito antes de medirlos.
 
