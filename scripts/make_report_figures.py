@@ -124,7 +124,8 @@ def fig_test_curve(cfg: dict, c: dict, curve: pd.DataFrame, out: Path, width: fl
     ax.set_xlabel("Autos sanos con falsa alarma (%)")
     ax.set_ylabel("Autos que fallan, avisados antes (%)")
     ax.set_title("Detección por auto en test [test] · 103 autos, 32 fallados")
-    ax.text(0.01, 0.97, "Gris fino: CNN-LSTM, LightGBM, logística, GPBoost", transform=ax.transAxes,
+    muted = [spec.get("short", spec["label"]) for spec in t["models"].values() if spec["role"] == "muted"]
+    ax.text(0.01, 0.97, "Gris fino: " + ", ".join(muted), transform=ax.transAxes,
             va="top", color=c["text_secondary"], fontsize=7.5)
     fig.subplots_adjust(right=0.78)
     save(fig, out, "curva_test")
