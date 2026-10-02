@@ -16,13 +16,13 @@ El relato va del problema al negocio. Un auto que se queda parado, los datos que
 | --- | --- | --- | --- | --- | --- |
 | 1 | Apertura: el problema | ¿Por qué le importa a Ford? | 01 Descripción del desafío | 3 min | Gonzalo |
 | 2 | EDA: los datos | ¿Qué hay en la telemetría y qué trampas tenía? | 02 Descripción de la solución | 4,5 min | Gonzalo |
-| 3 | Modelo | ¿Qué probamos, qué ganó y cuánto detecta? | 02 Descripción de la solución | 6 min | Santino |
+| 3 | Modelo | ¿Qué probamos, qué ganó y cuánto detecta? | 02 Descripción de la solución | 6,5 min | Santino |
 | 4 | Producto | ¿Qué pasa después de la alerta? (agentes + demo) | 04 Valor diferencial e innovación | 6 min (demo 2,5–3) | Octavio |
 | 5 | Escalabilidad | ¿Cómo llega a 1 millón de autos? | 05 Trabajo futuro | 3 min | Octavio |
 | 6 | Costos | ¿Qué pierde el cliente hoy y cuánto cuesta evitarlo? | 03 Factibilidad económica | 4 min | Gonzalo |
 | 7 | Cierre | ¿Por qué es distinto y qué necesita de Ford? | 04 Valor diferencial · 05 Trabajo futuro · 06 Conclusiones | 2 min | Octavio |
 
-Total: 28,5 min de exposición (Gonzalo 11,5 · Santino 6 · Octavio 11, con cuatro traspasos). Hablado, eso son \~3.800–4.100 palabras de guion (a \~130–140 palabras por minuto).
+Total: 29 min de exposición (Gonzalo 11,5 · Santino 6,5 · Octavio 11, con cuatro traspasos). Hablado, eso son \~3.800–4.100 palabras de guion (a \~130–140 palabras por minuto).
 
 **Por qué este orden.** El producto va antes que costos y escalabilidad. El jurado tiene que ver la alerta llegando al conductor antes de escuchar números de infraestructura. Costos cierra el cuerpo porque lo que pierde el cliente es el argumento de compra. El cierre dice por qué es distinto y qué necesita de Ford, y termina con la marca: *"Tu Ford te avisa antes"*.
 
@@ -317,7 +317,15 @@ El finalista es una red recurrente (GRU) que lee la secuencia de viajes y señal
 | Series de tiempo | TimesFM zero-shot, MiniRocket | — | no sumaron en dev; no llegaron al test |
 | **Finalista** | **GRU + viajes + estática ×3** | **31%** | lee la secuencia en orden; con 3× eventos pasa adelante |
 
-**Slide 13 · Cómo funciona la GRU.** Cada 500 km toma los últimos 1.000 km en 20 tramos de 50 km. En cada tramo ve cómo se viaja (duración, ralentí, motor frío, velocidad) y qué hace el filtro (acumulación, regeneraciones, avisos); además sabe país, motor y modelo. Lee los tramos en orden y pasa una memoria de uno al siguiente: nota si el hollín viene subiendo o si los viajes se acortan, no solo el promedio. Da un puntaje por auto; tres redes con semillas distintas (42, 1 y 2) votan por rango. Es chica (24 unidades de memoria) y corre en CPU. Visual: la red desenrollada sobre los tramos.
+**Slide 13 · Cómo funciona la GRU.** Lee el auto como una persona lee un libro: página por página, en orden, guardando lo importante.
+
+1. **Qué lee.** Cada 500 km, los últimos 1.000 km del auto en 20 tramos de 50 km. Cada tramo trae 15 señales: cómo se viaja (duración y km de los viajes, ralentí, motor frío, velocidad, cuántos viajes) y qué hace el filtro (hollín medio y máximo, cuánto sube, regeneraciones, avisos).
+2. **Cómo recuerda.** Lleva una memoria de 24 números que actualiza tramo a tramo. En cada tramo, dos compuertas deciden cuánto de lo nuevo anotar y cuánto de lo viejo dejar de lado (por eso se llama *Gated Recurrent Unit*). Así ve tendencias, como que el hollín sube o los viajes se acortan, que un promedio de los 1.000 km borra.
+3. **Qué mira al final.** Una capa de atención pesa los 20 tramos y arma un resumen con más peso en los que más le importan. Se le suman país, motor y modelo.
+4. **Qué entrega.** Un puntaje de riesgo de fallar en los próximos 3.000 km. Ordena autos; no es una probabilidad. Tres redes con semillas distintas (42, 1 y 2) votan por rango.
+5. **Cómo aprende.** De \~11.700 recortes de autos de desarrollo, sabiendo cuáles fallaron después. Nadie le explicó el filtro: la relación entre viajes cortos y hollín la encontró en los datos. Es chica a propósito (\~3.900 parámetros) y corre en CPU.
+
+Visual: la red desenrollada sobre los tramos, con la memoria pasando de uno al siguiente.
 
 **Slide 14 · El resultado, en test.** Detección de autos que fallaron, según el porcentaje de sanos con falsa alarma. 103 autos con datos (32 fallaron, 71 sanos), nunca usados para entrenar:
 
@@ -347,7 +355,7 @@ Es la lectura física: viajes cortos que no dejan terminar la regeneración y el
 
 **Backup:** auditorías de leakage, (a′) y calendario, sweep bayesiano (130 trials, la semilla mueve más que los hiperparámetros), AUC dentro de mercado × motor, por qué no accuracy.
 
-### Guion · Santino · 6 min
+### Guion · Santino · 6,5 min
 
 Los números marcados **[test]** son de los 111 autos del holdout (103 con datos, 32 fallados), con cada modelo entrenado con todo dev. Los marcados **[dev]** son de validación cruzada sobre los 446 autos de desarrollo. El panel ya lo planteó Gonzalo: acá se retoma en una línea.
 
@@ -363,9 +371,15 @@ Lo que ven son los números en el test. La logística y LightGBM quedan cerca de
 
 Cuando llegó la segunda entrega, con tres veces más fallas, las redes que leen la secuencia de viajes pasaron adelante. **Nuestro finalista es una GRU: en el test avisa a 31% de las fallas con 5% de falsas alarmas**, más de cuatro veces el azar y el doble de survival stacking.
 
-**[Cómo funciona, \~1 min]** La GRU es una red recurrente. Cada 500 km toma los últimos 1.000 km del auto, cortados en 20 tramos. En cada tramo ve cómo se viaja, la duración de los viajes, el ralentí, el motor frío, la velocidad, y qué hace el filtro: cuánto hollín acumula, cuándo regenera, qué avisos da. Además sabe el país, el motor y el modelo.
+**[Cómo funciona, \~1 min 30 s]** ¿Qué es una GRU? Es una red recurrente, y la idea es simple. Piensen en cómo leen un libro: no leen todas las páginas a la vez. Las leen en orden y van guardando en la cabeza lo importante. La GRU hace eso con el auto.
 
-Lo importante es que lee los tramos en orden y recuerda. No mira un promedio: pasa una memoria de un tramo al siguiente, así que nota si el hollín viene subiendo o si los viajes se vienen acortando. Al final da un puntaje por auto. Entrenamos tres redes con semillas distintas y las hacemos votar, porque con pocas fallas una sola red depende demasiado de la suerte.
+Cada 500 km toma los últimos 1.000 km del auto y los corta en 20 tramos. Cada tramo es una página: cuánto duraron los viajes, cuánto ralentí, cuánto tiempo con el motor frío, a qué velocidad, y qué hizo el filtro: cuánto hollín juntó, si regeneró, qué avisos dio.
+
+La red lee los tramos en orden, del más viejo al más nuevo, y lleva una memoria: un resumen de lo que vio hasta ahí. En cada tramo decide dos cosas: cuánto de lo nuevo vale la pena anotar y cuánto de lo viejo conviene dejar de lado. Esas dos decisiones son las *compuertas* que le dan el nombre. Gracias a eso ve tendencias: que el hollín viene subiendo tramo a tramo, o que los viajes se vienen acortando. Un promedio de los 1.000 km eso lo borra.
+
+Al final, la red repasa los tramos y les da más peso a los que le llamaron la atención. Le suma lo que sabe del país, el motor y el modelo, y da un puntaje de riesgo: cuanto más alto, más se parece a los autos que fallaron en los 3.000 km siguientes.
+
+¿Cómo aprendió? Le mostramos casi 12.000 recortes de autos de desarrollo, sabiendo cuáles fallaron después, y fue ajustando sus números para que esos quedaran arriba. Nadie le explicó qué es un filtro ni que los viajes cortos lo tapan: eso lo encontró en los datos. Es chica a propósito: unos 4.000 números para ajustar. Con 135 fallas para aprender, una red más grande memorizaría autos en vez de hábitos. Y como con pocas fallas una sola red depende de la suerte, entrenamos tres con semillas distintas y las hacemos votar.
 
 **[El resultado, \~1 min]** Este es el resultado en el test: 111 autos que estuvieron bajo llave todo el proyecto. Con 5% de falsas alarmas, el modelo avisa a **10 de los 32 autos que fallaron: casi 1 de cada 3 [test]**. El azar avisa a 7%. Si Ford acepta 20% de falsas alarmas, llegamos a **6 de cada 10 [test]**.
 
@@ -384,6 +398,16 @@ Evidencia en `docs/memoria/f11-test-resultado.md` (test), `f9-remedicion-complet
 **Cómo medimos, y por qué cambiamos.** El PR-AUC por fila no alcanza: en este panel, puntuar cada fila con "¿este auto falla?" (sin nada del cuándo) ya da PR-AUC 0,177 y lift 3×, el "techo de cohorte". Por eso medimos la **detección por auto**: la alerta es 2 cortes seguidos sobre un umbral, y el umbral se fija para que solo el X% de los autos sanos tenga una falsa alarma. Cada número va contra el nulo (el mismo puntaje mezclado entre filas, conservando el largo del historial de cada auto) y contra el modelo anterior, con bootstrap pareado por vehículo.
 
 **El finalista, completo.** `gru_seq`: GRU de 1 capa (24 unidades) con pooling por atención + rama estática + cabeza, dropout 0,3. Entrada: secuencia de señales + TripSummary en 20 bins de km de la ventana, más país, motor y modelo. Entrenado con la etiqueta dura (`label`), 40 épocas, semillas 42, 1 y 2, ensamble por rango. Modelo final: cada semilla con todo dev (`configs/exp_v2all_gru_trips_estaticas{,_s1,_s2}_r3.yaml`).
+
+**La GRU por dentro (para preguntas técnicas).** Lo que la explicación del guion simplifica, con los números exactos (`src/models/gru_seq.py`, `configs/exp_v2all_gru_trips_estaticas_r3.yaml`):
+
+- **Entrada:** una matriz de 20 tramos × 15 canales por corte. 9 canales salen de las señales del filtro (registros, si hay datos, acumulación media y máxima, cuánto sube, caídas por regeneración, y tres fracciones de avisos: filtro lleno, severo, limpieza automática) y 6 de los viajes (cantidad, fracción de ralentí, de viajes sin llegar a temperatura, velocidad, km y duración por viaje). Se imputan y estandarizan con el train de cada fold. El país, el motor y el modelo entran aparte, en one-hot.
+- **Memoria:** una GRU de 1 capa, unidireccional, con estado oculto de 24 números. En cada tramo la *compuerta de actualización* decide qué parte de la memoria se reemplaza con lo nuevo, y la *de reinicio* cuánto del pasado se usa para armar ese candidato nuevo. Tiene una compuerta menos que una LSTM: menos parámetros para la misma tarea, lo que importa con 135 autos que fallan. No lee al revés: el estado en el km 200 nunca depende del km 900.
+- **Atención:** un peso por tramo (softmax sobre una proyección de 16) y el resumen es el promedio pesado de las 20 memorias. Con la entrega 1, la atención aprendió a mirar sobre todo el final de la ventana, de forma difusa (`f3-gru-secuencial.md`); en v2 no se midió.
+- **Rama estática y cabeza:** país, motor y modelo pasan por una capa de 4 y se concatenan con el resumen. Una cabeza de 16 da un logit. El dropout es de 0,3 en las memorias y la cabeza.
+- **Tamaño:** \~3.900 parámetros (GRU 2.952, atención 416, estática 52, cabeza 481).
+- **Entrenamiento:** la etiqueta es 1 si el evento cae entre 500 y 3.500 km después del corte. La pérdida pesa más los positivos (negativos / positivos del train), con Adam (lr 0,001), 40 épocas fijas y sin early stopping: el modelo no conoce el vehículo, así que no puede apartar una validación agrupada.
+- **Ensamble:** tres redes (semillas 42, 1 y 2); se promedia el rango de cada una. La alerta salta con 2 cortes seguidos sobre el umbral.
 
 **Todos los modelos en test** (103 autos, 32 fallados; cada uno entrenado con todo dev; descriptivo, no elige):
 
@@ -424,6 +448,8 @@ Evidencia en `docs/memoria/f11-test-resultado.md` (test), `f9-remedicion-complet
 | --- | --- |
 | ¿No aprende solo qué país falla más? | En parte: el país pesa (−28 puntos si se lo escondemos). Pero la duración de los viajes y el hollín pesan casi lo mismo, y dentro de un mismo país y motor ordena autos con AUC 0,68 [test] |
 | ¿Por qué una GRU y no algo más simple? | Lo simple lo probamos primero: tabulares y supervivencia detectan la mitad en el test |
+| ¿Por qué GRU y no LSTM o un transformer? | La CNN-LSTM de la tutora rinde parecido en test (49 contra 51 de media al 5–20%). La GRU tiene menos parámetros, y con 135 fallas un transformer no tiene con qué aprender |
+| ¿Qué es una compuerta? | Una regla aprendida que, en cada tramo, decide cuánto de la memoria se reemplaza con lo nuevo. Es lo que deja ver tendencias sin olvidar todo lo anterior |
 | ¿Por qué no accuracy? | Con \~6% de filas positivas, decir "nadie falla" da 94% |
 | ¿40 modelos no es buscar hasta encontrar? | Se eligió en dev, y el test (111 autos que nunca se usaron para entrenar ni ajustar) repitió lo de dev |
 | ¿Por qué 31% y no un número más redondo? | Son 32 fallas: cada auto mueve 3 puntos. Por eso citamos \~30% |
