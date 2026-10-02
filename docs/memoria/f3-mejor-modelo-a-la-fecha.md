@@ -1,17 +1,29 @@
 # El mejor modelo a la fecha
 
-## Hoy (desde el 28-09-2026, entrega v2): la GRU con etiqueta suave lejos del evento (F11)
+## Hoy (desde el 01-10-2026, entrega v2, medido en test): la GRU de F10
 
-**El mejor modelo actual es la GRU + TripSummary + estática completa entrenada con `far_soft_label`
-(0,15)**, ensamble por rango de las semillas 101, 102 y 103:
-- configs `configs/exp_f11_gru_suave_conf_s{101,102,103}.yaml` + `configs/exp_f11_seeds3_gru_suave_conf.yaml`;
-- sobre dev v2 detecta **34,6 · 48,6 · 60,2 · 70,1%** de los autos que fallan al 5 · 10 · 15 · 20% de
-  sanos con falsa alarma, con ~8.300 km (~3 meses) de anticipación mediana;
-- le gana a la GRU anterior con confirmación preregistrada (+9,6 puntos de detección media al 5–20%,
-  IC95 [3,0; 14,4]) y es el primero que le gana con evidencia a la celda mercado × motor.
+**El finalista es la GRU + TripSummary + estática completa entrenada con `label`**, ensamble por rango de
+las **semillas 42, 1 y 2**:
+- configs `configs/exp_v2all_gru_trips_estaticas_r3.yaml` (42), `..._s1_r3.yaml` (1), `..._s2_r3.yaml` (2),
+  ensamble `configs/exp_v2all_seeds3_gru_trips_estaticas.yaml`; folds de dev `splits_r3.json`;
+- el modelo final es cada semilla entrenada con todo dev (446 autos), y el ensamble por rango de lo que
+  puntúan;
+- **en test** (103 autos, 32 fallados) detecta **31 · 47 · 63 · 63%** de los autos que fallan al 5 · 10 ·
+  15 · 20% de sanos con falsa alarma (primario 50,8). Se midió tres veces con la misma configuración, así
+  que se cita en rango: **~30% al 5%, ~40–50% al 10% y ~50–60% al 20%**;
+- **con el umbral fijado en dev** detecta ~20 · 34 · 57%, con 5,8 · 8,9 · 18,2% de falsas alarmas reales:
+  el umbral elegido sin ver test cumple su presupuesto;
+- en dev daba 27 · 42 · 53 · 61% (primario 46,0): el test lo confirma;
+- le duplica el primario a los tabulares (survival stacking 26,6, LightGBM 25,8, logística 21,1), pero
+  **no le gana con evidencia a la celda mercado × motor** (+27,3, IC95 [−0,8; 46,1]).
 
-Evidencia: [f11-gru-objetivo-suave.md](f11-gru-objetivo-suave.md). La medición en test tiene su
-propio preregistro: [f11-preregistro-test.md](f11-preregistro-test.md).
+**Por qué no la GRU con etiqueta suave (F11):** ganaba en dev (+9,6 con confirmación preregistrada), pero en
+el tiro preregistrado en test dio 31,2 contra 44,5 (−13,3 [−25,0; +3,9]): no se sostiene. Se comportó como
+la tasa de la celda y perdió el orden dentro de la celda (0,689 en dev, 0,571 en test).
+
+Evidencia: [f11-test-resultado.md](f11-test-resultado.md) (el test, completo),
+[f9-remedicion-completa-v2.md](f9-remedicion-completa-v2.md) y [f10-sweep-gru.md](f10-sweep-gru.md) (dev y
+semillas), [f11-gru-objetivo-suave.md](f11-gru-objetivo-suave.md) (la suave en dev).
 
 Lo que sigue es la historia de la entrega 1.
 

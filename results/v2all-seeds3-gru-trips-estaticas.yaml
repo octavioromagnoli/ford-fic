@@ -1,12 +1,16 @@
 run: v2all-seeds3-gru-trips-estaticas
 logged_on: '2026-09-26'
-note: 'Re-medición completa v2 (26-09, exploratoria, no elige): GRU + TripSummary
-  + estática completa ×3 semillas. Detección por auto con umbral exacto al 5 · 10
-  · 20% de falsas alarmas: 27 · 42 · 61% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda
-  mercado × motor 18 · 33 · 62). AUC por auto dentro de mercado × motor 0.66. El mejor
-  con motor y modelo. Le gana a SS con evidencia en 5–30%; contra la tasa de la celda
-  +9,4 [−5,2; 27,7] al 5%: no se separa. Auditoría (semilla 42): (a0) pasa, (a′) +0,001,
-  (b) +0,004. docs/memoria/f9-remedicion-completa-v2.md'
+note: 'Re-medición completa v2 (26-09, exploratoria, no elige): GRU + TripSummary + estática completa
+  ×3 semillas. Detección por auto con umbral exacto al 5 · 10 · 20% de falsas alarmas: 27
+  · 42 · 61% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor 18 · 33 · 62). AUC
+  por auto dentro de mercado × motor 0.66. El mejor con motor y modelo. Le gana a SS con evidencia
+  en 5–30%; contra la tasa de la celda +9,4 [−5,2; 27,7] al 5%: no se separa. Auditoría (semilla
+  42): (a0) pasa, (a′) +0,001, (b) +0,004. docs/memoria/f9-remedicion-completa-v2.md FINALISTA
+  desde el 01-10 (docs/memoria/f11-test-resultado.md): en test (103 autos, 32 fallados), modelo
+  final con todo dev y semillas 42/1/2, detecta 31,2 · 46,9 · 62,5 · 62,5% al 5 · 10 · 15
+  · 20% (primario 50,8; 27-09: 34 · 41 · 63% al 5 · 10 · 20%); con el umbral fijado en dev
+  20 · 34 · 57% con 5,8 · 8,9 · 18,2% de falsas alarmas reales; contra la celda +27,3 [−0,8;
+  46,1].'
 source:
   config_path: configs\exp_v2all_seeds3_gru_trips_estaticas.yaml
   config_versioned: false

@@ -5,7 +5,51 @@ importa: sin él, el que venga la revierte sin enterarse de qué estaba resolvie
 
 ---
 
+## 2026-10-01 · En test la GRU con etiqueta suave no se sostiene: el finalista es la GRU de F10 (semillas 42, 1 y 2)
+
+**Decidió:** el preregistro de la medición en test ([f11-preregistro-test.md](f11-preregistro-test.md),
+commit f15f432), un solo tiro. **Configs:** `configs/eval_test_f11.yaml` (el tiro), `configs/eval_test_f10_s42.yaml`
+y `configs/eval_test_modelos_v2.yaml` (diagnóstico posterior). Detalle: [f11-test-resultado.md](f11-test-resultado.md).
+
+**Qué se midió:** la GRU suave y la GRU con `label` (semillas 101–103 las dos), cada una entrenada con todo
+dev, sobre los 103 autos de test con cortes (32 fallados). **Primario (detección media al 5–20%): 31,2
+contra 44,5, −13,3 puntos, IC95 [−25,0; +3,9].** La regla dice que con una diferencia ≤ 0 no se sostiene.
+
+**Por qué el finalista es la GRU de F10:**
+- Era la referencia preregistrada, y el candidato no se sostuvo. No se eligió entre varios modelos mirando
+  test.
+- En test repitió lo que daba en dev en tres lecturas independientes:
+  - semillas 42/1/2 el 01-10: primario 50,8;
+  - semillas 42/1/2 el 27-09: 34 · 41 · 63% al 5 · 10 · 20%;
+  - semillas 101–103: primario 44,5.
+
+  En dev da 46,0 (27 · 42 · 53 · 61%).
+- **Con el umbral fijado en dev cumple su presupuesto en test:** 20 · 34 · 57% de detección con 5,8 ·
+  8,9 · 18,2% de falsas alarmas reales.
+- La suave, en test, se comportó como la tasa de la celda mercado × motor (detecta lo mismo que la celda
+  al 10% y al 20%), y su orden dentro de la celda cayó de 0,689 a 0,571. La de F10 quedó en 0,675.
+
+**Consecuencias:**
+- **Finalista:** GRU + TripSummary + estática completa con `label`, ensamble por rango de las semillas 42,
+  1 y 2: `configs/exp_v2all_gru_trips_estaticas{,_s1,_s2}_r3.yaml` y
+  `configs/exp_v2all_seeds3_gru_trips_estaticas.yaml`. Las semillas no se cambian: son las del reporte v2,
+  y elegir otras mirando test sería seleccionar sobre ruido.
+- **Las cifras del pitch pasan a ser las de test, en rango:** ~30% al 5%, ~40–50% al 10% y ~50–60% al 20% de
+  falsas alarmas; en operación (umbral de dev) ~20 · 34 · 57%. Las de la GRU suave (34,6 · 48,6 · 60,2 ·
+  70,1%) no se citan más.
+- **No le gana con evidencia a la celda** en test (+27,3 [−0,8; 46,1]). Se dice tal cual.
+- **El test ya está usado.** Ninguna variante nueva se mide contra él. Una mejora sobre la GRU de F10
+  necesita datos nuevos (p. ej. una extracción posterior al 14-09-2026 de los mismos autos), no otra pasada
+  por estos 111.
+- La GRU no es bit a bit entre corridas, aun con la misma semilla (correlación 0,88–0,91 entre el 27-09 y el
+  01-10). Todo número de un ensamble de 3 semillas tiene ±5–10 puntos de juego en test.
+- La etiqueta suave no se descarta como idea, pero cualquier vuelta necesita datos nuevos para validarse.
+  Lo que no hay que hacer: tocar el 0,15, mezclar la suave con la de F10, o promediar modelos de fold
+  porque en test empataban.
+
 ## 2026-09-28 · La GRU con etiqueta suave lejos del evento pasa a ser el mejor modelo sobre dev v2
+
+> **01-10: no se sostuvo en test.** Ver la entrada de arriba y [f11-test-resultado.md](f11-test-resultado.md).
 
 **Decidió:** el preregistro de F11 (commit 426066a, antes de toda corrida de confirmación). **Configs:**
 `configs/exp_f11_*.yaml`, `configs/report_f11*.yaml`. Detalle: [f11-gru-objetivo-suave.md](f11-gru-objetivo-suave.md).

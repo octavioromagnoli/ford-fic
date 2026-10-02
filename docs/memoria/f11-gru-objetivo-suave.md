@@ -4,6 +4,10 @@
 [f11-preregistro-objetivo-suave.md](f11-preregistro-objetivo-suave.md) (commit 426066a, anterior a
 toda corrida de confirmación). Solo dev; test sin tocar; sin wandb (`WANDB_MODE=disabled`).
 
+> **01-10-2026: en test no se sostuvo.** En el tiro preregistrado dio 31,2 de primario contra 44,5 de la GRU
+> con `label` (−13,3, IC95 [−25,0; +3,9]), y el finalista volvió a ser la GRU de F10 (semillas 42, 1 y 2).
+> Todo lo de abajo es dev. Ver [f11-test-resultado.md](f11-test-resultado.md).
+
 ## Qué es
 
 La misma GRU + TripSummary + estática completa de hoy (arquitectura, panel, hiperparámetros), con

@@ -30,7 +30,7 @@ cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del
     uso ordena autos con AUC ~0,58**, como en v1;
   - K2 perdió su corrección (la ventana): sin ella falla (a′) y detecta menos que survival
     stacking, que da **~11–14% al 5% de falsas alarmas sobre dev v2** (el 15–17% del pitch es de
-    la entrega 1). Desde el 28-09 el mejor modelo sobre v2 es el de F11 (abajo).
+    la entrega 1). Desde el 01-10 el finalista sobre v2, medido en test, es la GRU de F10 (abajo).
 
   Ver `docs/memoria/f9-remedicion-v2.md`.
 - **Se probó sacar la ventana de producción (990 autos) y se volvió a ella** (26-09): con los
@@ -56,20 +56,26 @@ cambia río abajo, con evidencia en `docs/memoria/f9-*.md` y en las entradas del
   - La semilla mueve más que los hiperparámetros, y "×3 semillas" es el ensamble por rango.
 
   Ver `docs/memoria/f10-sweep-gru.md`.
-- **F11 (28-09): el MEJOR MODELO ACTUAL es la GRU con etiqueta suave lejos del evento.** Le gana con
-  evidencia a la GRU de F9/F10.
-  Misma arquitectura, panel e hiperparámetros; los cortes de un auto que falla a más de `G + H` del
-  evento entrenan con 0,15 en vez de 0 (`target: far_soft_label`, `gru_seq` con `soft_labels: true`).
-  - Confirmación preregistrada (folds nuevos, semilla 2026; semillas 101–103): **+9,6 puntos de
-    detección media al 5–20%, IC95 [3,0; 14,4], p = 0,0015**. Detecta 34,6 · 48,6 · 60,2 · 70,1% al
-    5 · 10 · 15 · 20%, contra 24,0 · 42,0 · 51,6 · 57,5%.
-  - **Es el primer modelo que le gana con evidencia a la celda mercado × motor** (+14,6 [3,7; 22,5]).
-    AUC dentro de mercado × motor 0,689 contra 0,645. Aprueba (a0) y (a′); (b) +0,004.
-  - Configs `configs/exp_f11_gru_suave_conf_s{101,102,103}.yaml` (ensamble por rango:
-    `configs/exp_f11_seeds3_gru_suave_conf.yaml`). La medición en test tiene su propio preregistro
-    (`docs/memoria/f11-preregistro-test.md`, un solo tiro, `scripts/eval_test.py`).
+- **F11 (28-09): la GRU con etiqueta suave lejos del evento ganaba en dev y NO se sostuvo en test.**
+  Era la misma GRU, pero los cortes de un auto que falla a más de `G + H` del evento entrenaban con 0,15
+  en vez de 0 (`target: far_soft_label`). En dev, la confirmación preregistrada daba +9,6 [3,0; 14,4]
+  (34,6 · 48,6 · 60,2 · 70,1% al 5 · 10 · 15 · 20%; `docs/memoria/f11-gru-objetivo-suave.md`). En el tiro
+  preregistrado en test (`f11-preregistro-test.md`) dio **31,2 contra 44,5 de primario, −13,3
+  [−25,0; +3,9]**: se comportó como la tasa de la celda y perdió el orden dentro de ella (0,689 → 0,571).
+- **Test (01-10): el FINALISTA es la GRU de F10**, GRU + TripSummary + estática completa con `label`,
+  ensamble por rango de las **semillas 42, 1 y 2** (`configs/exp_v2all_gru_trips_estaticas{,_s1,_s2}_r3.yaml`,
+  `configs/exp_v2all_seeds3_gru_trips_estaticas.yaml`; modelo final = cada semilla con todo dev).
+  - **En test** (103 autos, 32 fallados) detecta 31 · 47 · 63 · 63% al 5 · 10 · 15 · 20% (primario 50,8;
+    en dev 46,0). Hubo tres lecturas con la misma configuración, así que se cita **~30 · 40–50 · 50–60%
+    al 5 · 10 · 20%**. Con el umbral fijado en dev: 20 · 34 · 57%, con 5,8 · 8,9 · 18,2% de falsas
+    alarmas reales.
+  - **No le gana con evidencia a la celda mercado × motor** (+27,3 [−0,8; 46,1]). Les duplica el
+    primario a survival stacking (26,6), LightGBM (25,8) y la logística (21,1), que en test quedan al
+    nivel de la celda (23,4).
+  - **El test ya está usado:** ninguna variante nueva se mide contra él. La GRU no es bit a bit entre
+    corridas, aun con la misma semilla.
 
-  Ver `docs/memoria/f11-gru-objetivo-suave.md`.
+  Ver `docs/memoria/f11-test-resultado.md`.
 
 Fase 0 cerrada (infraestructura + panel dummy + harness verde). F1 cerrada del
 lado de los datos crudos: `configs/data/raw_sources.yaml` está auditado contra los
@@ -463,7 +469,8 @@ scripts/sweep_gru.py     sweep bayesiano (Optuna TPE + poda por repetición, wor
                          el sweep no usó, para confirmarlas con train.py y report_v2_models.py (configs/sweep_gru.yaml)
 scripts/eval_test.py     la medición en test de un modelo ya elegido contra su referencia (un solo tiro): entrena con
                          todo dev, puntúa test, curva con umbral exacto, bootstrap pareado, nulo, piso de celda,
-                         punto de operación fijado en dev y sin los autos vistos (configs/eval_test_f11.yaml)
+                         punto de operación fijado en dev y sin los autos vistos (configs/eval_test_f11.yaml, el tiro de F11;
+                         eval_test_f10_s42.yaml y eval_test_modelos_v2.yaml, diagnóstico posterior)
 scripts/explain_perm_seq.py  en qué se apoya un secuencial para detectar autos: permuta cada canal (sus T bins juntos) y
                          cada estática en la validación de una repetición y mide la caída de la detección por auto
                          y el |Δlogit| por familia (configs/explain_f11.yaml)

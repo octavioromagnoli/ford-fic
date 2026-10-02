@@ -1,5 +1,10 @@
 # Guion de la presentación — Ford Innovation Challenge III
 
+> **Reemplazado el 29-09-2026 por [`presentacion-contenido.md`](presentacion-contenido.md)**, que es la foto
+> del doc vivo con el guion de 30 minutos por orador y el respaldo de cada bloque. Este archivo queda como
+> registro: sus números son anteriores a F11 (la GRU de F9 con 27% al 5%, K2 y sus costos) y **no se citan
+> más**.
+
 **Estado:** borrador de contenido (28-09). No es el deck: es lo que el deck tiene que decir, en qué
 orden y con qué número. La versión marketinera (§8) se arma después, sobre este guion.
 
@@ -18,7 +23,7 @@ fecha) y nada más.** Ningún número del deck se copia a mano de otro lado: sal
 2. **Lo que hacemos:** con la telemetría que Ford **ya recibe** del auto conectado, marcamos los
    autos que van camino a la falla con **⟦M-06⟧ de margen**, y decimos **por qué** en términos de
    hábitos que el cliente puede cambiar.
-3. **Lo que vale:** convertir una falla en garantía o una grúa en una visita programada o un
+3. **Lo que vale:** convertir una falla en garantía o una visita de urgencia en una visita programada o un
    consejo de manejo, con un nivel de falsas alarmas que Ford elige según cuánto le cuesta cada una.
 
 ---
@@ -61,7 +66,7 @@ y esa pasa a ser la que se cita.
 | # | slide | qué dice | visual | número |
 |---|---|---|---|---|
 | 1 | Portada | "Del aviso en el tablero al aviso a tiempo" | foto de un DPF / tablero con testigo | — |
-| 2 | El problema | La falla del DPF es de uso, no de fábrica; Ford se entera tarde | historia de un auto: viajes cortos → DPF saturado → grúa | costo de una falla (rango de §6.2) |
+| 2 | El problema | La falla del DPF es de uso, no de fábrica; Ford se entera tarde | historia de un auto: viajes cortos → DPF saturado → taller sin aviso | costo de una falla (rango de §6.2) |
 | 3 | Por qué es difícil | Pocos eventos, dos listas muestreadas distinto, la fecha del evento es la del taller | línea de tiempo de un auto con el gap de 500 km | — |
 | 4 | La idea | Mirar la telemetría hasta 500 km antes y preguntar "¿este auto va camino a fallar?" | diagrama ventana → gap → horizonte | — |
 | 5 | Qué mira el modelo | Térmica, ralentí, regeneraciones del DPF, severidad | 4 familias con íconos | — |
@@ -85,10 +90,10 @@ techo de cohorte es el piso, la celda mercado × motor, la altura y el gasoil
 
 | quién | qué gana | cómo lo usa |
 |---|---|---|
-| **Posventa / garantía** | menos fallas en garantía y menos grúas; costo por evento más bajo | lista semanal de autos en riesgo por concesionario |
+| **Posventa / garantía** | menos fallas en garantía y menos visitas de urgencia; costo por evento más bajo | lista semanal de autos en riesgo por concesionario |
 | **Red de concesionarios** | visitas programadas en vez de urgencias; ingreso de servicio | turno ofrecido al cliente con el motivo |
 | **Cliente (FordPass / app)** | no quedarse parado; un consejo concreto de manejo | notificación: "hacé un tramo de ruta de 20 min" |
-| **Ford Pro (flotas)** | un vehículo de trabajo parado cuesta mucho más que la reparación | tablero de flota con el riesgo por unidad |
+| **Ford Pro (flotas)** | un vehículo de trabajo en el taller es trabajo que no se hace | tablero de flota con el riesgo por unidad |
 | **Ingeniería de producto** | dónde se concentra el riesgo (mercado × motor) y con qué uso | la celda y los hábitos agregados, sin modelo por auto |
 
 **El cliente principal es posventa**: es quien paga la falla y quien tiene el canal (concesionario +
@@ -289,13 +294,13 @@ Se arma **después** de que haya finalista v2 y test. Ideas para no perder:
 
 - **Nombre del producto** (a elegir): algo del estilo *DPF Guard*, *Ford Early Care*, *Respira*. Que
   hable del cliente, no del modelo.
-- **Arranque con una historia**, no con un gráfico: "María hace 4 km por día para llevar a los chicos
-  al colegio. En tres meses su camioneta va a quedar en la banquina. Hoy lo sabemos." (auto ficticio,
-  construido con el perfil real de un fallado del dashboard).
+- **Arranque con una historia**, no con un gráfico: "María hace viajes cortos para llevar a los chicos
+  al colegio. En unos meses su camioneta va a terminar en el taller. Hoy lo podemos anticipar." (auto ficticio,
+  construido con los hábitos que distinguen a los fallados).
 - **Un solo número grande por slide.** El resto va al backup.
 - **Demo en vivo del dashboard** (pestaña Vehículo): un auto, su score subiendo, la alerta, el porqué y
   el mensaje. Es lo que más convence (plan §7).
-- **Antes / después:** línea de tiempo de hoy (testigo → grúa → garantía) contra la de mañana (alerta
+- **Antes / después:** línea de tiempo de hoy (testigo → modo de protección → taller) contra la de mañana (alerta
   → consejo → turno programado).
 - **El dial** como metáfora visual: Ford gira la perilla de falsas alarmas y ve fallas evitadas y USD.
 - **Cierre con el pedido**: piloto en sombra de 3 meses en un mercado.
