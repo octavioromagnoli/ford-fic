@@ -44,7 +44,7 @@ Dos listas muestreadas en períodos de producción distintos & En la v2, antes d
 La fecha registrada es posterior al taller & Cambio de aceite y ralentí largo en las dos semanas previas; la fecha de
   la primera entrega caía 14 días antes (mediana) & Referencia del evento = fecha − 21 días \\
 La tasa por país depende de la lista & Va de 0\,\% (PER) a 48\,\% (COL), en el orden inverso de cuántos fallados sin
-  fecha sacó Ford de cada mercado & Toda comparación, dentro del mercado; todo AUC, también dentro de mercado × motor \\
+  fecha sacó Ford de cada mercado & Toda comparación fallado/sano, dentro del mercado \\
 13 autos con dos códigos & Mismos viajes bajo dos identificadores (Jaccard 1,0 sobre fecha y odómetro) & Se colapsan antes
   de cualquier split: si no, un auto cae en train y en validación \\
 Formato de la v2 & Columna del evento renombrada; producción de fallados contada desde otro origen (+538 días); una fila
@@ -98,7 +98,7 @@ sabemos si eran fallas sin fecha o un error de la consulta, y eso explica en par
 \draw[arr] (all) -- (uni); \draw[arr] (uni.east) -- (dev.west); \draw[arr] (uni.east) -- (test.west);
 \draw[arr,muted] (all) -- (out.north -| all);
 \end{tikzpicture}
-\caption{Del dataset al holdout. El test se sorteó una vez (semilla 42, estratificado por evento × mercado × motor) antes de
+\caption{Del dataset al holdout. El test se sorteó una vez (semilla 42, estratificado) antes de
 mirar ninguna feature contra la etiqueta.}
 \label{fig:embudo}
 \fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-universo-v2.md}; \repo{configs/\allowbreak{}data/\allowbreak{}test\_split.yaml}.}
@@ -106,8 +106,7 @@ mirar ninguna feature contra la etiqueta.}
 
 Se conserva el período de producción donde se muestrearon las dos cohortes: un sano de octubre de 2025 no es un negativo
 verificable si de esa época no se registró ninguna falla. El equipo propuso sacar el recorte para no tirar 433 autos, y lo
-probamos de punta a punta: con ellos, los modelos ordenaban \emph{peor} a los autos comparables (survival stacking, de
-0,571 a 0,471 dentro de mercado × motor), porque aprendían la fecha. Volvimos a la ventana. Con la v2 el holdout se volvió a
+probamos de punta a punta: con ellos, los modelos ordenaban \emph{peor} a los autos comparables, porque aprendían la fecha. Volvimos a la ventana. Con la v2 el holdout se volvió a
 sortear: 36 de sus 111 autos estaban en el desarrollo de la primera entrega, y el test se reporta también sin ellos.
 
 La segunda entrega cambió varias conclusiones, y lo contamos: la velocidad dejó de ser señal dentro del mercado; apareció
@@ -123,8 +122,7 @@ La ventana de 1.000 km llega al modelo de dos formas (diccionario completo en el
 cortos, regeneración, uso y severidad), y \textbf{la secuencia} para los recurrentes: 20 tramos de 50 km × 15 canales, 9 de
 las señales del filtro y 6 de los viajes, más país, motor y serie. \textbf{Quedan solo para auditar} lo que mide el
 calendario o la cohorte y no el auto: fechas de producción y de venta, temperatura ambiente (los fallados viven en lugares
-más fríos que los sanos de su mercado) y el contador cortado. Motor y serie entran en la v2, pero aportan la tasa de su celda
-y no orden entre autos: por eso todo se reporta también dentro de mercado × motor.
+más fríos que los sanos de su mercado) y el contador cortado. Motor y serie entran en la v2 como estáticas.
 
 \subsection{Qué dicen los datos}
 \label{sec:eda}
@@ -134,13 +132,11 @@ una comparación agrupada infla lo que es país.
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.54\textwidth]{figuras/perfil_evento.pdf}\hfill
-\includegraphics[width=0.44\textwidth]{figuras/celdas.pdf}
-\caption{Izquierda: probabilidad de que un auto que va a fallar supere a un sano del mismo mercado y tramo de odómetro,
-según la distancia al evento. Derecha: eventos sobre autos por mercado × motor en el universo.}
+\includegraphics[width=0.6\textwidth]{figuras/perfil_evento.pdf}
+\caption{Probabilidad de que un auto que va a fallar supere a un sano del mismo mercado y tramo de odómetro, según la
+distancia al evento.}
 \label{fig:perfil}
-\label{fig:celdas}
-\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-eda-v2.md} §E; \repo{f9-universo-v2.md} §3.}
+\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-eda-v2.md} §E.}
 \end{figure}
 
 \begin{itemize}
@@ -151,8 +147,6 @@ según la distancia al evento. Derecha: eventos sobre autos por mercado × motor
     dentro del mercado. Es señal de \emph{qué auto}.
   \item \textbf{El riesgo es de edad, no de km}: sube hasta los \textasciitilde4 meses desde la venta y después queda en
     \textasciitilde3–4 eventos por 100 autos-mes; el mes calendario no agrega nada (p = 0,16).
-  \item \textbf{Tres celdas concentran casi todas las fallas} (Colombia y Chile con ENG\_2, Brasil con ENG\_3). Qué parte es
-    física y qué parte es cómo se armó la lista no se puede separar con estos datos: es la pregunta más importante para Ford.
 \end{itemize}
 
 \subsection{Consistencia y trazabilidad}

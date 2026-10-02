@@ -1,16 +1,15 @@
 % Generado por scripts/make_report_figures.py desde experiments/test-modelos-v2/curve.csv (no editar a mano).
-\begin{tabular}{@{}lrrrrrrrrrrl@{}}
+\begin{tabular}{@{}lrrrrrrrrrl@{}}
 \toprule
-Modelo & 2\,\% & 5\,\% & 10\,\% & 15\,\% & 20\,\% & 25\,\% & 30\,\% & Prim. & AUC auto & AUC celda & dev (5 · 10 · 20\,\%) \\
+Modelo & 2\,\% & 5\,\% & 10\,\% & 15\,\% & 20\,\% & 25\,\% & 30\,\% & Prim. & AUC auto & dev (5 · 10 · 20\,\%) \\
 \midrule
-GRU ×3 (finalista) & 15,6 & 31,2 & 46,9 & 62,5 & 62,5 & 65,6 & 68,8 & \textbf{50,8} & 0,794 & 0,675 & 27 · 42 · 61 \\
-CNN-LSTM ×3 & 3,1 & 15,6 & 56,2 & 56,2 & 68,8 & 68,8 & 68,8 & \textbf{49,2} & 0,790 & 0,638 & 22 · 41 · 62 \\
-Survival stacking & 3,1 & 18,8 & 21,9 & 21,9 & 43,8 & 53,1 & 53,1 & \textbf{26,6} & 0,710 & 0,515 & 14 · 24 · 42 \\
-LightGBM (53 features) & 0,0 & 15,6 & 25,0 & 28,1 & 34,4 & 53,1 & 56,2 & \textbf{25,8} & 0,725 & 0,619 & 18 · 28 · 42 \\
-Logística L2 (53 features) & 0,0 & 6,2 & 12,5 & 31,2 & 34,4 & 46,9 & 53,1 & \textbf{21,1} & 0,679 & 0,556 & 15 · 23 · 37 \\
-SS + efecto aleatorio (GPBoost) & 3,1 & 9,4 & 9,4 & 9,4 & 12,5 & 12,5 & 12,5 & \textbf{10,2} & 0,363 & 0,377 & 6 · 9 · 17 \\
-Celda mercado × motor (sin modelo) & 0,0 & 0,0 & 21,9 & 21,9 & 50,0 & 50,0 & 50,0 & \textbf{23,4} & — & — & 18 · 33 · 62 \\
+GRU ×3 (finalista) & 15,6 & 31,2 & 46,9 & 62,5 & 62,5 & 65,6 & 68,8 & \textbf{50,8} & 0,794 & 27 · 42 · 61 \\
+CNN-LSTM ×3 & 3,1 & 15,6 & 56,2 & 56,2 & 68,8 & 68,8 & 68,8 & \textbf{49,2} & 0,790 & 22 · 41 · 62 \\
+Survival stacking & 3,1 & 18,8 & 21,9 & 21,9 & 43,8 & 53,1 & 53,1 & \textbf{26,6} & 0,710 & 14 · 24 · 42 \\
+LightGBM (53 features) & 0,0 & 15,6 & 25,0 & 28,1 & 34,4 & 53,1 & 56,2 & \textbf{25,8} & 0,725 & 18 · 28 · 42 \\
+Logística L2 (53 features) & 0,0 & 6,2 & 12,5 & 31,2 & 34,4 & 46,9 & 53,1 & \textbf{21,1} & 0,679 & 15 · 23 · 37 \\
+SS + efecto aleatorio (GPBoost) & 3,1 & 9,4 & 9,4 & 9,4 & 12,5 & 12,5 & 12,5 & \textbf{10,2} & 0,363 & 6 · 9 · 17 \\
 \midrule
-Azar, media / p95 (nulo de la GRU) & 3,4 / 9,4 & 7,0 / 15,6 & 13,7 / 25,0 & 18,6 / 31,2 & 24,4 / 40,6 & 28,6 / 43,8 & 33,9 / 50,0 & — & — & — & — \\
+Azar, media / p95 (nulo de la GRU) & 3,4 / 9,4 & 7,0 / 15,6 & 13,7 / 25,0 & 18,6 / 31,2 & 24,4 / 40,6 & 28,6 / 43,8 & 33,9 / 50,0 & — & — & — \\
 \bottomrule
 \end{tabular}
