@@ -1,0 +1,30 @@
+# Test de la GRU de F10, el finalista desde el 01-10 (docs/memoria/f11-test-resultado.md): GRU + TripSummary +
+# estática completa con `label`, semillas 42/1/2 (las del reporte v2), cada una entrenada con todo dev, contra la
+# misma configuración con las semillas 101-103 (la referencia de test-f11). Diagnóstico posterior al tiro de F11.
+#
+#   FORD_DATA_DIR=$PWD/data/v2 WANDB_MODE=disabled OMP_NUM_THREADS=1 python scripts/eval_test.py --config configs/eval_test_f10_s42.yaml --fit configs/exp_v2all_gru_trips_estaticas{,_s1,_s2}_r3.yaml
+#   (la referencia: --fit configs/exp_f11_gru_ref_conf_s{101,102,103}.yaml, o copiar sus test_/devoof_ de experiments/test-f11/)
+#   FORD_DATA_DIR=$PWD/data/v2 python scripts/eval_test.py --config configs/eval_test_f10_s42.yaml --report
+seed: 28
+output_name: test-f10-s42
+experiments_dir: experiments
+
+k_consecutive: 2
+budgets: [0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+primary_budgets: [0.05, 0.10, 0.15, 0.20]
+operating_budgets: [0.05, 0.10, 0.20]
+null_permutations: 200
+n_boot: 2000
+cell_columns: [static_SalesCountry_cd, static_Engine]
+
+candidate: f10_s42
+reference: f10_s101
+groups:
+  f10_s42:
+    - configs/exp_v2all_gru_trips_estaticas_r3.yaml
+    - configs/exp_v2all_gru_trips_estaticas_s1_r3.yaml
+    - configs/exp_v2all_gru_trips_estaticas_s2_r3.yaml
+  f10_s101:
+    - configs/exp_f11_gru_ref_conf_s101.yaml
+    - configs/exp_f11_gru_ref_conf_s102.yaml
+    - configs/exp_f11_gru_ref_conf_s103.yaml
