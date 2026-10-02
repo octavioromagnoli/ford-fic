@@ -3,6 +3,10 @@
 29-09-2026 · Export del doc vivo: https://claude.ai/code/artifact/1e8d7eae-8435-4819-be16-ab64715822e4
 (el doc es la versión que se edita; este archivo es una foto para el repo).
 
+**01-10-2026:** el bloque 3, la demo, los costos y el cierre se actualizaron acá con el finalista medido en test,
+la GRU con `label` de F10 (`docs/memoria/f11-test-resultado.md`). La GRU con etiqueta suave salió del pitch. El doc
+vivo no se tocó.
+
 ## Estructura y storytelling
 
 El relato va del problema al negocio. Un auto que se queda parado, los datos que lo anticipan, el modelo que lo detecta, lo que Ford hace con la alerta, cómo escala y cuánto vale. Los cinco bloques pedidos están todos. Los de la plantilla de Ford (valor diferencial, trabajo futuro, conclusiones) van en el cierre.
@@ -25,10 +29,10 @@ Total: 29,5 min de exposición (Gonzalo 11,5 · Santino 9 · Octavio 9, con cuat
 
 **Reglas para citar números, en todo el deck:**
 
-- Toda detección va al lado del azar y de la celda mercado × motor. "35%" solo no dice nada. "35% donde el azar da 10% y saber mercado y motor da 15%" sí.
-- La anticipación se dice "lo marcamos con \~8.300 km de margen", nunca "predecimos que falla en 8.300 km".
+- Toda detección va al lado del azar. "31%" solo no dice nada. "31% donde el azar da 7%" sí.
+- La anticipación se dice "lo marcamos con unos tres meses de margen", nunca "predecimos que falla en tres meses".
 - Nada de accuracy ni de PR-AUC en el cuerpo: van al backup.
-- Los números de hoy son de dev (validación cruzada). El test se mide una sola vez antes del pitch y reemplaza la columna.
+- El resultado del modelo se cita en test (111 autos del holdout, 32 fallados con datos): es lo que va en el deck, marcado [test]. Lo que no se pudo medir en test (la demo, la explicabilidad) va marcado [dev]. Con 32 fallas, se citan rangos: \~30% al 5%, \~60% al 20%.
 
 **Cómo se escribe el guion:**
 
@@ -69,7 +73,7 @@ Recomendación: **Ford Early Care** para el cliente particular. Habla de cuidado
 | --- | --- |
 | Apertura | "El auto avisa cuando el filtro ya no da más. Y el cliente se entera solo." |
 | EDA | "La forma de manejar deja huella meses antes." |
-| Modelo | "1 de cada 3, tres meses antes, con 5% de falsas alarmas." |
+| Modelo | "Casi 1 de cada 3, tres meses antes, con 5% de falsas alarmas." |
 | Producto | "El modelo decide. El agente habla como una persona. El código cuida lo que dice." |
 | Escalabilidad | "Un millón de autos, sin un sensor nuevo." |
 | Costos | "Cada aviso a tiempo es un cliente que confía más en Ford." |
@@ -295,172 +299,141 @@ Todo sale de dev (446 autos); el test no se miró. Evidencia en `docs/memoria/f9
 
 ## 3 · Modelo: qué probamos y qué ganó
 
-El finalista es una red recurrente (GRU) sobre la secuencia de viajes con etiqueta suave lejos del evento: detecta el 35% de los autos que van a fallar con 5% de falsas alarmas, 3,6× el azar.
+El finalista es una red recurrente (GRU) que lee la secuencia de viajes y señales del filtro, más país, motor y modelo, con un ensamble de 3 semillas. En el test (111 autos bajo llave) avisa a 10 de los 32 autos que fallaron con 5% de falsas alarmas: 31%, 4,5× el azar.
 
 **Slide 10 · La pregunta, bien planteada.** Cada 500 km, el modelo mira los últimos 1.000 km del auto y responde: "¿este auto falla en los próximos 3.000 km?". Nunca ve los 500 km previos al evento (gap de blanking). Sin ese gap sería detección reactiva, lo que Ford ya tiene. Visual: línea de tiempo ventana → gap → horizonte.
 
-**Slide 11 · Reglas que no negociamos.** Split por vehículo (un auto nunca está en train y validación a la vez), features solo hacia atrás, test congelado desde el día uno, y cada modelo auditado contra leakage: si se permutan las features, el score cae al azar.
+**Slide 11 · Reglas que no negociamos.** Split por vehículo (un auto nunca está en train y validación a la vez), features solo hacia atrás, test congelado desde el día uno (nunca se usa para entrenar ni para ajustar), y cada modelo auditado contra leakage: si se permutan las features, el score cae al azar.
 
-**Slide 12 · El recorrido.** Más de 40 modelos medidos con la misma cuenta. Cada candidato nuevo se preregistró antes de correrlo, para no elegir ruido.
+**Slide 12 · El recorrido.** Más de 40 modelos medidos con la misma cuenta. Las barras son la detección **en test** al 5% de falsas alarmas, cada modelo entrenado con todo dev; la línea es el azar (7%).
 
-| familia | modelos | qué aprendimos |
-| --- | --- | --- |
-| Tabulares | logística, LightGBM sobre 53 features | aprenden qué auto falla, casi nada del cuándo |
-| Supervivencia | survival stacking, cure model, K2 con ventana | fue el finalista con la entrega 1 (\~15–17%); pierde contra los secuenciales en v2 |
-| Series de tiempo | TimesFM zero-shot, MiniRocket | no suman o pierden con evidencia contra la GRU |
-| Secuenciales | CNN-LSTM, GRU sobre TripSummary + estática | le ganan a supervivencia |
-| Finalista | GRU con etiqueta suave | le gana a todo lo anterior con evidencia |
+| familia | modelo | test al 5% | qué aprendimos |
+| --- | --- | --- | --- |
+| Tabulares | logística sobre 53 features | 6% | aprenden qué auto falla, casi nada del cuándo |
+| Tabulares | LightGBM | 16% | ídem |
+| Supervivencia | survival stacking | 19% | fue el finalista con la entrega 1; con la v2 lo pasan los secuenciales |
+| Supervivencia | con efecto aleatorio por auto | 9% | el efecto por auto absorbe justo lo que distingue autos |
+| Series de tiempo | TimesFM zero-shot, MiniRocket | — | no sumaron en dev; no llegaron al test |
+| **Finalista** | **GRU + viajes + estática ×3** | **31%** | lee la secuencia en orden; con 3× eventos pasa adelante |
 
-**Slide 13 · La idea que hizo la diferencia.** Los cortes de un auto que falla, pero lejos del evento, entrenan con 0,15 en vez de 0. El modelo deja de castigar la señal temprana y suma autos detectados sin perder el cuándo. Es el objetivo "lineal por tramos" de vida útil remanente (Heimes, PHM 2008), llevado a clasificación.
+**Slide 13 · Cómo funciona la GRU.** Cada 500 km toma los últimos 1.000 km en 20 tramos de 50 km. En cada tramo ve cómo se viaja (duración, ralentí, motor frío, velocidad) y qué hace el filtro (acumulación, regeneraciones, avisos); además sabe país, motor y modelo. Lee los tramos en orden y pasa una memoria de uno al siguiente: nota si el hollín viene subiendo o si los viajes se acortan, no solo el promedio. Da un puntaje por auto; tres redes con semillas distintas (42, 1 y 2) votan por rango. Es chica (24 unidades de memoria) y corre en CPU. Visual: la red desenrollada sobre los tramos.
 
-**Slide 14 · El resultado.** Detección de autos que fallan, según el porcentaje de sanos con falsa alarma. Confirmación preregistrada, folds y semillas nuevas, ensamble de 3 semillas:
+**Slide 14 · El resultado, en test.** Detección de autos que fallaron, según el porcentaje de sanos con falsa alarma. 103 autos con datos (32 fallaron, 71 sanos), nunca usados para entrenar:
 
 |  | 5% | 10% | 15% | 20% |
 | --- | --- | --- | --- | --- |
-| **GRU con etiqueta suave (finalista)** | **34,6%** | **48,6%** | **60,2%** | **70,1%** |
-| GRU anterior | 24,0% | 42,0% | 51,6% | 57,5% |
-| Solo saber mercado × motor, sin modelo | 14,6% | 30,4% | 48,1% | 62,0% |
-| Azar (p95, mismo historial) | 9,6% | 15,8% | 21,8% | 26,9% |
+| **GRU (finalista)** | **31,2%** | **46,9%** | **62,5%** | **62,5%** |
+| Survival stacking (finalista entrega 1) | 18,8% | 21,9% | 21,9% | 43,8% |
+| Azar (media, mismo historial) | 7,0% | 13,7% | 18,6% | 24,4% |
+| Azar (p95) | 15,6% | 25,0% | 31,2% | 40,6% |
 
-Visual: la curva detección vs. falsas alarmas con azar y celda dibujados.
+Visual: la curva detección vs. falsas alarmas con azar, survival stacking y la GRU.
 
-- **+9,6 puntos contra la GRU anterior**, IC95 [3,0; 14,4], p = 0,0015.
-- **Primer modelo que le gana con evidencia a "saber mercado y motor"**: +14,6 puntos [3,7; 22,5].
-- **Fuera de muestra se sostiene:** con el umbral fijado en otros autos, 34,3% al 5,0% de falsas alarmas reales.
-- Como referencia, survival stacking da \~14% al 5%.
+- **10 de 32 al 5%: casi 1 de cada 3**, 4,5× el azar y por encima de su p95.
+- **El doble que survival stacking** en promedio entre 5% y 20% (50,8 contra 26,6).
+- **Con el umbral fijado antes, en dev:** 20 · 34 · 57% al 5 · 10 · 20%, con falsas alarmas reales de 5,8 · 8,9 · 18,2% en test.
+- **Repitió dev:** en validación cruzada daba 27 · 42 · 61% al 5 · 10 · 20%.
 
-**Slide 15 · Cuánto antes.** La primera alerta llega con una mediana de **\~8.300 km, unos 3,5 meses (\~106 días)** antes de la falla registrada. El score sube a medida que se acerca el evento.
+**Slide 15 · Cuánto antes.** La primera alerta llega con una mediana de **\~4.600 km, unos 3 meses (\~100 días)** antes de la falla registrada (test, al 10%). El score sube a medida que se acerca el evento: rango percentil medio 0,44 en sanos, 0,58 a más de 10.000 km, 0,61 a 3.500–10.000 km y 0,72 a menos de 3.500 (test).
 
-**Slide 16 · En qué se apoya.** Permutando cada familia de señales:
+**Slide 16 · En qué se apoya** (dev, semilla 42, permutando cada señal en la validación; detección base 52%):
 
-- **estado del DPF** (acumulación, regeneraciones, avisos): −38 puntos de detección;
-- **hábitos** (ralentí, motor frío, duración de viajes): −23 puntos. La duración de los viajes es el hábito que más pesa;
-- **contexto** (mercado, motor, modelo): −48 puntos.
+- **duración de los viajes:** −24 puntos. Es el hábito que más pesa, por delante de km por viaje (−10), velocidad (−6), motor frío (−5) y ralentí (−2);
+- **cuánto sube el hollín en el filtro:** −22 puntos (nivel medio −10, máximo −9, regeneraciones −9);
+- **país:** −28 puntos; motor −15.
 
-Es la lectura física: viajes cortos que no dejan terminar la regeneración.
+Es la lectura física: viajes cortos que no dejan terminar la regeneración y el hollín que se acumula.
 
-**Pendiente antes del pitch:** medir el test (111 autos, un solo tiro, preregistrado en `f11-preregistro-test.md`). Si da distinto, se cita el test.
-
-**Backup:** auditorías de leakage, (a′) y calendario, sweep bayesiano (130 trials, la semilla mueve más que los hiperparámetros), AUC dentro de mercado × motor 0,689, por qué no accuracy.
+**Backup:** auditorías de leakage, (a′) y calendario, sweep bayesiano (130 trials, la semilla mueve más que los hiperparámetros), AUC dentro de mercado × motor, por qué no accuracy.
 
 ### Guion · Santino · 6 min
 
-Los números marcados **[dev]** son de validación cruzada sobre los 446 autos de desarrollo. Se reemplazan por los del test (111 autos, un solo tiro) cuando se mida. El panel ya lo planteó Gonzalo: acá se retoma en una línea.
+Los números marcados **[test]** son de los 111 autos del holdout (103 con datos, 32 fallados), con cada modelo entrenado con todo dev. Los marcados **[dev]** son de validación cruzada sobre los 446 autos de desarrollo. El panel ya lo planteó Gonzalo: acá se retoma en una línea.
 
 **[Retomar, \~15 s]** Gonzalo les dejó una pregunta: cada 500 km, mirando los últimos 1.000, ¿este auto falla en los próximos 3.000? La huella existe, pero es tenue. Mi trabajo fue encontrar un modelo que la lea a tiempo. Y antes de contarles cuál, les cuento cómo nos cuidamos de engañarnos.
 
-**[Las reglas, \~45 s]** Cuatro reglas que no negociamos. Primero, el modelo nunca ve los 500 km antes de la falla: si los viera, estaría detectando lo que el tablero ya detecta. Segundo, un mismo auto nunca está a la vez en entrenamiento y en validación. Tercero, los 111 autos del test están bajo llave desde el primer día y se miden una sola vez. Y cuarto, cada modelo se audita: si le mezclamos los datos al azar y el resultado no cae al azar, hay una fuga, y el modelo se descarta.
+**[Las reglas, \~45 s]** Cuatro reglas que no negociamos. Primero, el modelo nunca ve los 500 km antes de la falla: si los viera, estaría detectando lo que el tablero ya detecta. Segundo, un mismo auto nunca está a la vez en entrenamiento y en validación. Tercero, los 111 autos del test están bajo llave desde el primer día: nunca se usan para entrenar ni para ajustar, solo para medir. Y cuarto, cada modelo se audita: si le mezclamos los datos al azar y el resultado no cae al azar, hay una fuga, y el modelo se descarta.
 
 **[El recorrido, \~2 min]** Probamos más de 40 modelos, todos medidos con la misma cuenta.
 
-Empezamos por lo clásico: una regresión logística y árboles de decisión sobre 53 indicadores del uso. Daban números que parecían buenos. Hasta que nos preguntamos: ¿y si en vez de predecir, el modelo solo reconoce qué auto falla? Probamos darle a cada auto un puntaje fijo, sin nada del cuándo, y la métrica clásica daba casi lo mismo. Ese día cambiamos cómo medimos. Desde entonces la pregunta es una sola: **de los autos que van a fallar, ¿a cuántos avisamos a tiempo, si solo le permitimos una cantidad fija de falsas alarmas?** Y cada respuesta se compara con el azar.
+Empezamos por lo clásico: una regresión logística y árboles de decisión sobre 53 indicadores del uso. Daban números que parecían buenos. Hasta que nos preguntamos: ¿y si en vez de predecir, el modelo solo reconoce qué auto falla? Probamos darle a cada auto un puntaje fijo, sin nada del cuándo, y la métrica clásica daba casi lo mismo. Ese día cambiamos cómo medimos. Desde entonces la pregunta es una sola: **de los autos que van a fallar, ¿a cuántos avisamos a tiempo, si solo le permitimos una cantidad fija de falsas alarmas?** Y cada respuesta se compara con el azar: con 5% de falsas alarmas, un puntaje al azar avisa a un 7%.
 
-Después vinieron los modelos de supervivencia, los que usa la medicina para estimar cuánto falta para un evento. Con la primera entrega de Ford fueron nuestros finalistas. Probamos también un modelo fundacional de series de tiempo de Google, TimesFM, sin entrenarlo: lo que parecía señal era calendario. Y un clasificador de series muy rápido, MiniRocket: detectó la mitad que nuestro mejor modelo.
+Lo que ven son los números en el test. La logística y LightGBM quedan cerca del azar. Después vinieron los modelos de supervivencia, los que usa la medicina para estimar cuánto falta para un evento: con la primera entrega de Ford fueron nuestros finalistas, y en el test llegan a 19%. Probamos también TimesFM, un modelo fundacional de Google, y MiniRocket, un clasificador de series muy rápido: en desarrollo no sumaron.
 
-Cuando llegó la segunda entrega, con tres veces más fallas, las redes que leen la secuencia de viajes, una CNN-LSTM y una GRU, pasaron adelante. Ya tenían datos para aprender.
+Cuando llegó la segunda entrega, con tres veces más fallas, las redes que leen la secuencia de viajes pasaron adelante. **Nuestro finalista es una GRU: en el test avisa a 31% de las fallas con 5% de falsas alarmas**, más de cuatro veces el azar y el doble de survival stacking.
 
-Pero nos llevamos un golpe de humildad. Hicimos la prueba más simple: sin mirar un solo viaje, solo sabiendo el país y el motor del auto. Y eso detectaba casi lo mismo que nuestras redes. Ninguno de los 40 modelos le ganaba con evidencia. Buscamos mejores hiperparámetros con 130 pruebas automáticas, y aprendimos que la semilla del azar movía más el resultado que cualquier ajuste. El problema no era cómo afinábamos el modelo: era qué le estábamos enseñando.
+**[Cómo funciona, \~1 min]** La GRU es una red recurrente. Cada 500 km toma los últimos 1.000 km del auto, cortados en 20 tramos. En cada tramo ve cómo se viaja, la duración de los viajes, el ralentí, el motor frío, la velocidad, y qué hace el filtro: cuánto hollín acumula, cuándo regenera, qué avisos da. Además sabe el país, el motor y el modelo.
 
-**[La idea que hizo la diferencia, \~1 min]** Miren a Laura. Tres meses antes de la falla, su auto ya tiene la huella: más tiempo parado con el motor en marcha, motor frío. Pero como la falla todavía queda lejos, al modelo le enseñábamos que en ese momento el auto de Laura estaba perfectamente sano. Y lo castigábamos cada vez que sospechaba.
+Lo importante es que lee los tramos en orden y recuerda. No mira un promedio: pasa una memoria de un tramo al siguiente, así que nota si el hollín viene subiendo o si los viajes se vienen acortando. Al final da un puntaje por auto. Entrenamos tres redes con semillas distintas y las hacemos votar, porque con pocas fallas una sola red depende demasiado de la suerte.
 
-Entonces cambiamos una sola cosa. Esos momentos lejanos de un auto que termina fallando ya no valen 0, "sano", sino 0,15: "un poco sospechoso". Misma red, mismos datos, mismos ajustes. Es una idea inspirada en el mantenimiento predictivo de motores de avión, adaptada a nuestro problema.
+**[El resultado, \~1 min]** Este es el resultado en el test: 111 autos que estuvieron bajo llave todo el proyecto. Con 5% de falsas alarmas, el modelo avisa a **10 de los 32 autos que fallaron: casi 1 de cada 3 [test]**. El azar avisa a 7%. Si Ford acepta 20% de falsas alarmas, llegamos a **6 de cada 10 [test]**.
 
-Y como ya habíamos visto demasiados números bonitos, escribimos la regla antes de medir: folds nuevos, semillas nuevas, una sola confirmación.
+Le duplica la detección a survival stacking, nuestro finalista de la primera entrega. Y el test repitió lo que veíamos en desarrollo. Una cosa más, la que importa para operar: si fijamos el umbral antes, con los autos de desarrollo, en el test las falsas alarmas quedan en 5,8%.
 
-**[El resultado, \~1 min]** Con 5% de falsas alarmas, el modelo avisa a **1 de cada 3 autos que van a fallar: 35% [dev]**. El azar da 10%. Saber solo el país y el motor da 15%. Si Ford acepta 20% de falsas alarmas, llegamos al **70% [dev]**.
+**[Cuánto antes, \~20 s]** La primera alerta llega con una mediana de **unos tres meses de margen [test]**: unos 4.600 km antes de la falla. Y el puntaje sube a medida que se acerca la falla: el modelo no solo sabe qué auto, también nota que el momento se acerca.
 
-Le gana a nuestro modelo anterior por casi 10 puntos [dev], con evidencia estadística. Y es **el primer modelo que le gana con evidencia a "saber país y motor"**. Es decir: lee algo más que la lista, lee cómo se usa el auto. Y cuando fijamos el umbral con otros autos, las falsas alarmas en esos autos quedan en el 5% prometido.
+**[En qué se apoya, \~30 s]** Si le escondemos al modelo la duración de los viajes, detecta 24 puntos menos [dev]: es el hábito que más pesa. Si le escondemos cuánto sube el hollín en el filtro, 22. Es la misma física que les contó Gonzalo: viajes cortos que no dejan terminar la limpieza del filtro. El país también pesa: el riesgo no es el mismo en todos los mercados. No le dimos ninguna regla del filtro: esa relación la aprendió de los datos.
 
-**[Cuánto antes, \~20 s]** La primera alerta llega con una mediana de **más de tres meses de margen [dev]**. Y el puntaje sube a medida que se acerca la falla: el modelo no solo sabe qué auto, también nota que el momento se acerca.
-
-**[En qué se apoya, \~30 s]** Si le escondemos al modelo el estado del filtro, pierde 38 puntos de detección. Si le escondemos los hábitos de manejo, 23; el que más pesa es la duración de los viajes. Es la misma física que les contó Gonzalo: viajes cortos que no dejan terminar la limpieza del filtro. No le dimos ninguna regla del filtro: esa relación la aprendió de los datos.
-
-**[Puente a Octavio, \~10 s]** Ahora sabemos que el auto de Laura va camino a la falla, con tres meses de margen. Pero una alerta en un servidor no le sirve a Laura. ¿Qué le decimos, y cómo, sin asustarla? Eso se los cuenta Octavio.
+**[Puente a Octavio, \~10 s]** Ahora el modelo marcó el auto de nuestro conductor, con meses de margen. Pero una alerta en un servidor no le sirve al conductor. ¿Qué le decimos, y cómo, sin asustarlo? Eso se los cuenta Octavio.
 
 ### Respaldo del bloque 3 (no se dice, se responde)
 
-Todo es dev (446 autos, validación cruzada de 5 folds × 3 repeticiones). Evidencia en `docs/memoria/f9-remedicion-completa-v2.md`, `f11-gru-objetivo-suave.md`, `f10-sweep-gru.md`, la primera entrada de `decisiones.md` y `experiments/report-f13/`.
+Evidencia en `docs/memoria/f11-test-resultado.md` (test), `f9-remedicion-completa-v2.md` (dev), `f10-sweep-gru.md`, la primera entrada de `decisiones.md`; la explicabilidad, en `configs/explain_gru_final.yaml`.
 
-**Cómo medimos, y por qué cambiamos.** El PR-AUC por fila no alcanza: en este panel, puntuar cada fila con "¿este auto falla?" (sin nada del cuándo) ya da PR-AUC 0,177 y lift 3×, el "techo de cohorte". Por eso medimos la **detección por auto**: la alerta es 2 cortes seguidos sobre un umbral, y el umbral se fija para que solo el X% de los autos sanos tenga una falsa alarma. Cada número va contra tres referencias: el nulo (el mismo puntaje mezclado entre filas, conservando el largo del historial de cada auto), la tasa de la celda mercado × motor (sin modelo) y el modelo anterior, con bootstrap pareado por vehículo.
+**Cómo medimos, y por qué cambiamos.** El PR-AUC por fila no alcanza: en este panel, puntuar cada fila con "¿este auto falla?" (sin nada del cuándo) ya da PR-AUC 0,177 y lift 3×, el "techo de cohorte". Por eso medimos la **detección por auto**: la alerta es 2 cortes seguidos sobre un umbral, y el umbral se fija para que solo el X% de los autos sanos tenga una falsa alarma. Cada número va contra el nulo (el mismo puntaje mezclado entre filas, conservando el largo del historial de cada auto) y contra el modelo anterior, con bootstrap pareado por vehículo.
 
-**Todos los modelos, qué dieron y por qué.** Detección de fallados al 5 · 10 · 20% de falsas alarmas, dev v2, re-medición común del 26-09 salvo que se indique:
+**El finalista, completo.** `gru_seq`: GRU de 1 capa (24 unidades) con pooling por atención + rama estática + cabeza, dropout 0,3. Entrada: secuencia de señales + TripSummary en 20 bins de km de la ventana, más país, motor y modelo. Entrenado con la etiqueta dura (`label`), 40 épocas, semillas 42, 1 y 2, ensamble por rango. Modelo final: cada semilla con todo dev (`configs/exp_v2all_gru_trips_estaticas{,_s1,_s2}_r3.yaml`).
 
-| familia | modelo | 5 · 10 · 20% | por qué funcionó o falló |
-| --- | --- | --- | --- |
-| Tabulares | Logística L2 / L1 | 15 · 23 · 37 / 14 · 21 · 36 | 53 agregados de la ventana; aprenden qué auto falla, casi nada del cuándo ((a′) ≈ 0) |
-| Tabulares | LightGBM (control) | 18 · 28 · 42 | ídem; más grande, ordinal o embolsado no mejora |
-| Tabulares | LightGBM + motor/modelo | 16 · 30 · 53 | la estática suma la tasa de la celda, no orden entre autos |
-| Supervivencia | Survival stacking (finalista F3) | 14 · 24 · 42 | hazard por tramo de km; aprueba las auditorías y sabe algo del cuándo, pero con la v2 lo pasan los secuenciales |
-| Supervivencia | K2 (finalista F6, ventana del registro) | 12 · 22 · 44 (sin ventana) | con la entrega 1 detectaba \~15–17% al 5%; su corrección era la ventana del registro, que en la v2 no existe |
-| Supervivencia | Con efecto aleatorio por auto (GPBoost) | 6 · 9 · 17 | el efecto por auto absorbe justo lo que distingue autos |
-| Supervivencia | Cure model por hito post-venta (entrega 1) | — | el rasgo temprano existe, pero no le gana a la fecha de producción y empata con un solo número (km por día) |
-| Series de tiempo | TimesFM zero-shot (Google, entrega 1) | — | sobre el panel no le gana a la tasa base; la "señal" de su versión vieja eran las estáticas de calendario. Licencia no comercial |
-| Series de tiempo | MiniRocket + Ridge ×3 | 16 · 27 · 39 | features aleatorias de convolución; (a′) negativo; al 5% detecta menos de la mitad que el finalista (16 contra 35) |
-| Secuenciales | CNN-LSTM de la tutora (señales + país) ×3 | 20 · 31 · 51 | lee la secuencia; con la entrega 1 (53 fallados) quedaba abajo de supervivencia, con 3× eventos pasa adelante |
-| Secuenciales | CNN-LSTM + TripSummary ×3 | 25 · 36 · 56 | sumar los viajes a las señales ayuda |
-| Secuenciales | GRU + TripSummary + estática ×3 (F9/F10) | 27 · 42 · 61 | el mejor hasta el 27-09; no le ganaba a la celda con evidencia |
-| Ensambles | SS + LightGBM, SS + CNN-LSTM, celda + GRU | 17–30 al 5% | mezclar por rango no le gana al mejor miembro con evidencia |
-| **Finalista** | **GRU con etiqueta suave ×3 (F11)** | **34,6 · 48,6 · 70,1** (confirmación) | le gana a todo con evidencia, también a la celda |
-| Pisos | Tasa de la celda mercado × motor | 18 · 33 · 62 (14,6 · 30,4 · 62,0 en los folds de confirmación) | sin mirar un viaje |
-| Pisos | Nulo (p95 en confirmación) | 9,6 · 15,8 · 26,9 | azar con el mismo historial |
+**Todos los modelos en test** (103 autos, 32 fallados; cada uno entrenado con todo dev; descriptivo, no elige):
+
+| modelo | 5% | 10% | 15% | 20% | AUC auto | dev (5 · 10 · 20%) |
+| --- | --- | --- | --- | --- | --- | --- |
+| **GRU ×3 (42/1/2)** | **31,2** | **46,9** | **62,5** | **62,5** | 0,794 | 27 · 42 · 61 |
+| Survival stacking (F3) | 18,8 | 21,9 | 21,9 | 43,8 | 0,710 | 14 · 24 · 42 |
+| LightGBM (control, 53 features) | 15,6 | 25,0 | 28,1 | 34,4 | 0,725 | 18 · 28 · 42 |
+| Logística L2 (53 features) | 6,2 | 12,5 | 31,2 | 34,4 | 0,679 | 15 · 23 · 37 |
+| SS + efecto aleatorio por auto | 9,4 | 9,4 | 9,4 | 12,5 | 0,363 | 6 · 9 · 17 |
+| Azar (media / p95, GRU) | 7,0 / 15,6 | 13,7 / 25,0 | 18,6 / 31,2 | 24,4 / 40,6 | — | — |
+
+- **GRU contra survival stacking:** +24,2 puntos de detección media al 5–20%, IC95 [0,8; 43,0]. No estaba preregistrado.
+- **Con 32 fallas, cada auto mueve 3 puntos.** La GRU se leyó tres veces en test con la misma configuración (31 · 34 · 28% al 5%): se cita **\~30% al 5%, \~40–50% al 10%, \~50–60% al 20%**.
+- **Con el umbral fijado en dev** (lo que haría Ford en operación): 19,6 · 34,2 · 57,3% al 5 · 10 · 20%, con falsas alarmas reales de 5,8 · 8,9 · 18,2%.
+- **Sin los 36 autos de test que estaban en el dev de la entrega 1** (22 fallados): 36,4 · 50,0 · 59,1% al 5 · 10 · 20%.
+- **Anticipación** al 10%: mediana de \~4.600 km (p25–p75: 2.400–9.300), \~100 días aproximados con los km por día de cada auto.
+- **AUC por auto** 0,794; dentro de mercado × motor 0,675. Entre autos del mismo país y motor, el orden es moderado.
+
+**Auditorías (dev, semilla 42):**
+
+| auditoría | qué mide | resultado |
+| --- | --- | --- |
+| (a0) | features permutadas entre todas las filas: ¿cae a la tasa base? | 0,061 contra 0,058: sin fuga |
+| (a′) | colapsar el score al promedio del auto: ¿cuánto sabía del cuándo? | +0,001: chico pero positivo |
+| (b) | ¿sumar el calendario mueve el ROC? | +0,004: no marca |
 
 **Lo que probamos sobre la GRU y no sirvió:**
 
 - Sweep bayesiano de 130 trials (Optuna): el mejor dio 0,492 contra 0,475, pero con semillas nuevas empata (0,469 contra 0,471). La semilla mueve más que los hiperparámetros, y por eso todo se reporta como ensamble de 3 semillas.
 - Suavizar el puntaje en el tiempo (media acumulada, EWMA, CUSUM): resta 2–7 puntos, porque la detección vive en los picos cerca del evento.
 - La historia completa del auto como estáticas, y 11 canales más en la secuencia: no suman o restan.
-- Pérdida por vehículo (MIL) y recalibración por celda: +4 cada una, pero nada encima de la etiqueta suave.
-- Etiqueta suave con τ = 1 (entrenar con "este auto falla"): la ganancia cae a +3. El 0,15 importa.
-
-**La etiqueta suave, en detalle.** Los cortes de un auto que falla con el evento a más de G + H (3.500 km) entrenan con 0,15 en vez de 0. Los positivos siguen en 1 y los sanos en 0. Lo que se evalúa no cambia. Es el objetivo "lineal por tramos" de vida útil remanente de Heimes (PHM 2008, motores turbofan de la NASA), llevado a clasificación. Preregistrado antes de correr la confirmación: folds nuevos (semilla 2026) y semillas 101–103.
-
-**El resultado completo [dev]:**
-
-|  | 2% | 5% | 10% | 15% | 20% | 30% |
-| --- | --- | --- | --- | --- | --- | --- |
-| GRU con etiqueta suave ×3 | 16,3 | 34,6 | 48,6 | 60,2 | 70,1 | 78,8 |
-| GRU anterior ×3 | 17,0 | 24,0 | 42,0 | 51,6 | 57,5 | 72,3 |
-| Celda mercado × motor | 3,7 | 14,6 | 30,4 | 48,1 | 62,0 | 62,0 |
-| Nulo p95 | 5,2 | 9,6 | 15,8 | 21,8 | 26,9 | 37,0 |
-
-- **Contra la GRU anterior:** +9,6 puntos de detección media al 5–20%, IC95 [3,0; 14,4], p = 0,0015. Réplica con los folds de la exploración: +10,7 [3,6; 16,0]. Tres tandas de semillas dan entre +9,5 y +10,7.
-- **Contra la celda:** +14,6 [3,7; 22,5], p = 0,003. La GRU anterior daba +5,0 [−6,4; 14,9].
-- **Al 2% no gana** (−0,7): con muy pocas falsas alarmas, la etiqueta suave no ayuda.
-- **Por semilla suelta** (lo que el ensamble achica): 31,4 / 30,6 / 31,1% al 5%.
-- **AUC por auto** 0,850; **dentro de mercado × motor 0,689** (la anterior, 0,645). Entre autos del mismo país y motor, el orden es moderado.
-- **Fuera de muestra:** 34,3% al 5,0% de falsas alarmas reales, 49,4% al 10,0%, 69,4% al 19,9%.
-- **Anticipación** al 10%: mediana de 8.300 km (\~106 días) antes de la falla registrada; el 22% de los detectados ya alerta en su primer corte. La etiqueta suave suma autos, no adelanta la alerta.
-- **El score sube hacia el evento:** rango percentil medio 0,406 en sanos, 0,663 a más de 10.000 km, 0,703 a 3.500–10.000 km y 0,743 a menos de 3.500.
-
-**Auditorías (semilla 101):**
-
-| auditoría | qué mide | resultado |
-| --- | --- | --- |
-| (a0) | features permutadas entre todas las filas: ¿cae a la tasa base? | 0,0577 contra 0,0583: sin fuga |
-| (a′) | colapsar el score al promedio del auto: ¿cuánto sabía del cuándo? | +0,0006: chico pero positivo (la anterior, −0,009) |
-| (b) | ¿sumar el calendario mueve el ROC? | +0,004: no marca |
-| Calendario dentro de la celda | correlación del score con el mes entre sanos | 0,000 |
-
-**En qué se apoya** (permutación por familia, caída de detección en puntos): estática (país, motor, modelo) 48; estado del DPF 38; hábitos 23 (la duración del viaje, sola, −23); cobertura 18. Parte de la ganancia es composición: el peso del país sube de 11% a 20% del |Δlogit|, y contra la GRU anterior recalibrada por celda la ventaja baja a +5,1 [−0,1; 10,0]. Pero el AUC dentro de mercado × motor sube de 0,645 a 0,689.
+- Ensambles por rango (SS + LightGBM, SS + CNN-LSTM, celda + GRU): no le ganan al mejor miembro con evidencia.
 
 **Preguntas probables del bloque 3:**
 
 | pregunta | respuesta corta |
 | --- | --- |
-| ¿No aprende solo qué país falla más? | En parte sí, por eso lo comparamos contra saber país y motor: le gana por 14,6 puntos, y dentro de un mismo país y motor ordena con AUC 0,69 |
-| ¿Por qué 0,15? | Se eligió en exploración y se confirmó con folds y semillas nuevas; con 1 la ganancia se cae |
-| ¿Por qué una GRU y no algo más simple? | Lo simple lo probamos primero: tabulares, supervivencia y series de tiempo pierden con evidencia |
+| ¿No aprende solo qué país falla más? | En parte: el país pesa (−28 puntos si se lo escondemos). Pero la duración de los viajes y el hollín pesan casi lo mismo, y dentro de un mismo país y motor ordena autos con AUC 0,68 [test] |
+| ¿Por qué una GRU y no algo más simple? | Lo simple lo probamos primero: tabulares y supervivencia detectan la mitad en el test |
 | ¿Por qué no accuracy? | Con \~6% de filas positivas, decir "nadie falla" da 94% |
-| ¿40 modelos no es buscar hasta encontrar? | Por eso la confirmación fue preregistrada, con folds y semillas nuevas, y el test se mide una sola vez |
-| ¿Y el test? | 111 autos (36 fallados), un solo tiro, preregistrado en `f11-preregistro-test.md`. Si da distinto, se cita el test |
+| ¿40 modelos no es buscar hasta encontrar? | Se eligió en dev, y el test (111 autos que nunca se usaron para entrenar ni ajustar) repitió lo de dev |
+| ¿Por qué 31% y no un número más redondo? | Son 32 fallas: cada auto mueve 3 puntos. Por eso citamos \~30% |
 
 **Para estudiar (Santino): lo que no hay que exagerar**
 
-- **Parte de la ganancia es composición.** La GRU con etiqueta suave se apoya más en el país: pasa del 11% al 20% del |Δlogit|. Contra la GRU anterior recalibrada por celda, la ventaja baja de +9,6 a +5,1 [−0,1; 10,0]. Por eso el guion dice que el modelo *"lee algo más que la lista"*, nunca que dejó de leerla. Lo que sí se puede afirmar: le gana a la celda por +14,6 [3,7; 22,5], y dentro de un mismo país y motor ordena mejor (AUC 0,645 → 0,689).
-- **El modelo sabe poco del cuándo.** (a′) es +0,0006: positivo pero chico, como en todos los modelos de v2. Lo que se puede decir es que el score sube hacia el evento (rango 0,663 → 0,703 → 0,743). Nunca "predecimos cuándo falla".
-- **Por qué 0,15.** Se eligió en la exploración y después se confirmó con una regla escrita antes, con folds nuevos (semilla 2026) y semillas nuevas (101–103), en un solo tiro. Con τ = 1 ("este auto falla" en todos sus cortes) la ganancia se cae a +3. O sea, el valor intermedio importa: le dice al modelo "un poco sospechoso", no "falla". Si preguntan por 0,1 o 0,2: no se barrió en la confirmación, y hacerlo sería otra comparación.
-- **Al 2% de falsas alarmas no gana** (16,3 contra 17,0). La mejora está entre el 5% y el 30%.
-- **Los números son de dev.** El test (111 autos, 36 fallados) se mide una sola vez antes del pitch y reemplaza todo lo marcado [dev].
+- **Son 32 fallas.** El IC de cualquier diferencia es ancho: contra survival stacking, [0,8; 43,0]. Decir "el doble", nunca "el doble con certeza".
+- **El modelo sabe poco del cuándo.** (a′) es +0,001: positivo pero chico, como en todos los modelos de v2. Lo que se puede decir es que el score sube hacia el evento (rango 0,58 → 0,61 → 0,72 en test). Nunca "predecimos cuándo falla".
+- **El país pesa.** Si preguntan por "saber país y motor sin modelo": en test esa regla detecta 0% al 5% y 50% al 20%; la GRU le saca +27 puntos de media, IC95 [−0,8; 46,1], en el límite. No decir que "le gana con evidencia".
+- **El test no se miró una sola vez.** La configuración de la GRU se leyó tres veces en test (una antes de preregistrar una variante con etiqueta suave lejos del evento, que en test no se sostuvo y se descartó). Por eso se cita un rango y no un número. La GRU no se ajustó mirando test.
+- **La anticipación en km del test (4.600) es menor que la de dev (7.500)**, pero en días es parecida (\~100): los autos detectados del test andan menos km por día. Decir "unos tres meses".
 
 ## 4 · Producto: qué pasa después de la alerta
 
@@ -495,11 +468,11 @@ Una alerta sola no evita ninguna falla. El producto convierte cada alerta en una
 - **Concesionario:** ficha del auto con las señales del filtro contra los sanos del mercado y los chequeos sugeridos.
 - **Conductor (app FordPass):** "Comparado con autos sanos de tu mercado, tu auto hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda al filtro a limpiarse".
 
-**Slide 21 · Demo en vivo.** Replay de la flota semana a semana: un auto, su score subiendo, la alerta, el porqué y el mensaje. Con la GRU de etiqueta suave, al 5%: 58 alertas y 9 escalamientos; 44 de los 135 autos que fallan reciben aviso antes, con una mediana de 16 semanas (\~7.200 km); 14 de 291 sanos reciben un aviso de más. La perilla va de 5% a 20%.
+**Slide 21 · Demo en vivo.** Replay de la flota semana a semana: un auto, su score subiendo, la alerta, el porqué y el mensaje. Con la GRU finalista, al 5%: 53 alertas y 7 escalamientos; 39 de los 135 autos que fallan reciben aviso antes, con una mediana de 15 semanas (\~7.000 km); 14 de 291 sanos reciben un aviso de más. La perilla va de 5% a 20%.
 
 **Slide 22 · Por qué es confiable.** Mientras se ajustaban los prompts, el verificador atájó 14 textos: lenguaje causal ("porque"), atribución ("lo marcó por…") y promesas. Ningún texto llega al cliente sin pasar esas reglas.
 
-**Pendiente:** regenerar el bundle de la demo con la GRU de etiqueta suave y actualizar los números del replay (29-09: el bundle con la GRU suave y la perilla ya está publicado en feat/demo-gru, demo-bundle-gru-suave:v0; falta que Octavio termine la demo y el deploy en Railway).
+**Bundle:** `demo-bundle-gru-final` (01-10), la GRU finalista con la perilla 5 · 10 · 15 · 20%.
 
 **Límite que hay que decir:** el porqué es una comparación con la flota sana, no lo que el modelo usó. La efectividad de los avisos (¿el conductor cambia de hábitos?) se mide en el piloto.
 
@@ -507,7 +480,7 @@ Una alerta sola no evita ninguna falla. El producto convierte cada alerta en una
 
 Los números de la demo son de su replay (una repetición de dev, 426 autos). Los oficiales, promedio de 3 repeticiones, van marcados **[dev]**.
 
-**Ojo con la anticipación (para no errarle):** Santino ya dijo "más de tres meses" (el oficial es 8.300 km, \~106 días, al 10%). En la demo se ve otro número: 16 semanas (\~7.200 km). No es un error, se miden distinto (ver el respaldo). Octavio dice siempre **"en esta temporada, unas 16 semanas: casi cuatro meses"**, nunca "8.300 km" ni "tres meses y medio". Si preguntan por qué no coincide: *"el oficial es el promedio de tres repeticiones al 10% de falsas alarmas; la demo es una sola temporada al 5%"*.
+**Ojo con la anticipación (para no errarle):** Santino ya dijo "unos tres meses" (el oficial es \~4.600 km, \~100 días, en test al 10%). En la demo se ve otro número: 15 semanas (\~7.000 km). No es un error, se miden distinto (ver el respaldo). Octavio dice siempre **"en esta temporada, unas 15 semanas: más de tres meses"**, nunca "4.600 km". Si preguntan por qué no coincide: *"el oficial es el test al 10% de falsas alarmas; la demo es una temporada de desarrollo al 5%"*.
 
 **[Retomar, \~15 s]** Santino nos dejó con una alerta: el auto de Laura va camino a la falla. Pero una alerta en un servidor no evita nada. Lo que evita la falla es que alguien haga algo. Y eso es lo que construimos.
 
@@ -527,49 +500,49 @@ El taller recibe las señales técnicas del filtro y qué revisar. Y la persona 
 
 **[Demo en vivo, \~2 min 30 s]** Les muestro. *(Abrir la demo en la bandeja.)*
 
-Esta es la bandeja del lunes 25 de agosto de 2025. Estamos reproduciendo, semana a semana, los autos reales del estudio, y el sistema solo sabe lo que se sabía ese día. Esta semana hay cuatro avisos. *(Abrir una tarjeta.)* Acá está el mensaje al conductor, el resumen para el taller y los hechos en los que se apoya el texto. Este tilde verde es el verificador: el texto pasó todas las reglas.
+Esta es la bandeja del lunes 29 de septiembre de 2025. Estamos reproduciendo, semana a semana, los autos reales del estudio, y el sistema solo sabe lo que se sabía ese día. Esta semana hay cuatro avisos: dos son un consejo al conductor y en dos lo llama el concesionario. *(Abrir una tarjeta.)* Acá está el mensaje al conductor, el resumen para el taller y los hechos en los que se apoya el texto. Este tilde verde es el verificador: el texto pasó todas las reglas.
 
 *(Ver ficha.)* Esta es la ficha del auto. El puntaje fue subiendo, cruzó el umbral y se confirmó la alerta. Y acá está el porqué: en estos hábitos, el auto se aparta de los sanos de su país.
 
-*(Mover la perilla de 5% a 20%.)* Esta perilla es la decisión de Ford. Con 5% de falsas alarmas avisamos a un tercio de las fallas. Con 20%, a siete de cada diez [dev], pero con cuatro veces más avisos de más. Como el primer aviso es un consejo y no una visita al taller, Ford puede permitirse girarla.
+*(Mover la perilla de 5% a 20%.)* Esta perilla es la decisión de Ford. Con 5% de falsas alarmas avisamos a más de un cuarto de las fallas [dev]. Con 20%, a seis de cada diez [dev], pero con cuatro veces más avisos de más. Como el primer aviso es un consejo y no una visita al taller, Ford puede permitirse girarla.
 
-*(Abrir "Qué pasó después".)* Y como esto ya pasó, podemos ver cómo terminó. De esos cuatro avisos, tres eran de autos que después fallaron. Uno era de un auto sano, y lo mostramos igual. En esta temporada, al 5%, avisamos a 44 de los 135 autos que fallaron, unas 16 semanas antes: casi cuatro meses. Y 14 de 291 autos sanos recibieron un aviso de más.
+*(Abrir "Qué pasó después".)* Y como esto ya pasó, podemos ver cómo terminó. Los cuatro avisos de esa semana eran de autos que después fallaron. No siempre es así, y lo mostramos igual: en esta temporada, al 5%, avisamos a 39 de los 135 autos que fallaron, unas 15 semanas antes: más de tres meses. Y 14 de 291 autos sanos recibieron un aviso de más.
 
-**[Por qué es confiable, \~30 s]** En toda la temporada, los agentes escribieron 517 textos. El verificador rechazó 106 intentos en el camino: frases causales, promesas, atribuciones. Los agentes corrigieron y volvieron a intentar. En dos casos no lo lograron, y el sistema no forzó nada: usó una plantilla aprobada. Ningún texto le llega a un cliente sin pasar esas reglas.
+**[Por qué es confiable, \~30 s]** En toda la temporada, los agentes escribieron 465 textos. El verificador rechazó 103 intentos en el camino: frases causales, promesas, atribuciones. Los agentes corrigieron y volvieron a intentar, y siempre lo lograron. Si un día no lo logran, el sistema no fuerza nada: usa una plantilla aprobada. Ningún texto le llega a un cliente sin pasar esas reglas.
 
 **[Puente a escalabilidad, \~10 s]** Todo esto lo vieron con 426 autos. La pregunta de Ford es otra: ¿funciona con un millón? Y la respuesta es sí, sin un solo sensor nuevo.
 
 ### Respaldo del bloque 4 (no se dice, se responde)
 
-Fuentes: `docs/memoria/f9-demo-gru-suave.md`, `f9-demo-gru.md`, `f9-demo-producto.md` y `PRODUCT.md`, en la rama `feat/demo-gru`. Todo es dev v2: 426 autos, 135 que fallan y 291 sanos. El test no se muestra nunca, y el bundle falla si aparece un auto de test.
+Fuentes: el bundle `demo-bundle-gru-final` (01-10), `docs/memoria/f9-demo-gru.md`, `f9-demo-producto.md` y `PRODUCT.md`. Todo es dev v2: 426 autos, 135 que fallan y 291 sanos. El test no se muestra nunca, y el bundle falla si aparece un auto de test.
 
 **Por qué hay dos números de anticipación:**
 
 |  | oficial (Santino) | demo (Octavio) |
 | --- | --- | --- |
-| número | 8.300 km, \~106 días (\~3,5 meses) | 16 semanas, \~7.200 km (casi 4 meses) |
+| número | \~4.600 km, \~100 días (\~3 meses) | 15 semanas, \~7.000 km (más de 3 meses) |
 | falsas alarmas | 10% | 5% |
-| repeticiones | promedio de 3 | una sola (R1) |
+| autos | test (111, 32 fallados con datos) | dev, una repetición (426, 135 fallados) |
 | qué mide | primera alerta → falla registrada | alerta confirmada → falla, en el calendario del replay |
 
-Los dos son correctos. En semanas da un poco más porque el replay cuenta en calendario, y los km por día cambian de auto a auto. Con más tolerancia, la alerta llega antes: 17 semanas al 10%, 19 al 15% y 21 al 20%.
+Los dos son correctos. Los autos son otros, y el replay cuenta en calendario: los km por día cambian de auto a auto. Con más tolerancia, la alerta llega antes: 16 semanas al 10% y al 15%, 21 al 20%.
 
 **El replay por punto de la perilla:**
 
 |  | 5% | 10% | 15% | 20% |
 | --- | --- | --- | --- | --- |
-| detección oficial [dev] | 34,8% | 48,6% | 60,5% | 70,4% |
-| fuera de muestra: detección / falsas alarmas reales | 34,6 / 5,2% | 49,4 / 10,1% | 59,3 / 15,1% | 69,6 / 20,4% |
-| celda mercado × motor | 14,6% | 30,4% | 48,1% | 62,0% |
-| fallas anticipadas en el replay (de 135) | 44 | 61 | 78 | 95 |
+| detección oficial [dev] | 28,1% | 42,5% | 53,1% | 61,0% |
+| fuera de muestra: detección / falsas alarmas reales | 27,9 / 4,9% | 42,5 / 10,2% | 52,3 / 15,1% | 60,7 / 19,9% |
+| azar (mismo historial) | 5,4% | 10,7% | 15,7% | 20,7% |
+| fallas anticipadas en el replay (de 135) | 39 | 56 | 69 | 82 |
 | sanos con aviso de más (de 291) | 14 | 29 | 43 | 58 |
-| alertas / escalamientos | 58 / 9 | 90 / 13 | 121 / 30 | 153 / 43 |
-| alertas con hábito para nombrar | 56 de 58 | 82 de 90 | 107 de 121 | 134 de 153 |
-| anticipación mediana | 16 sem · 7.200 km | 17 sem · 7.800 km | 19 sem · 8.500 km | 21 sem · 8.700 km |
+| alertas / escalamientos | 53 / 7 | 85 / 10 | 112 / 22 | 140 / 36 |
+| alertas con hábito para nombrar | 48 de 53 | 73 de 85 | 101 de 112 | 125 de 140 |
+| anticipación mediana | 15 sem · 7.000 km | 16 sem · 7.200 km | 16 sem · 7.500 km | 21 sem · 8.100 km |
 
-La demo dice 34,8% al 5% y la tabla del equipo 34,6%: la GRU no da bit a bit igual entre Mac y Windows (a lo sumo un auto por repetición). El pitch cita la tabla del equipo.
+La demo usa dev porque el test nunca se muestra. Por eso su 28% al 5% no coincide con el 31% del test: son otros autos.
 
-**La semana de apertura (25-08-2025, al 5%):** 4 avisos al conductor. Tres son de autos que fallaron después (VEH\_0072, VEH\_0451 y VEH\_0452) y uno de un auto sano (VEH\_0427). Para la ficha de la demo conviene abrir uno de los tres que fallaron; si el perfil encaja, puede ser "el auto de Laura".
+**La semana de apertura (29-09-2025, al 5%):** 4 alertas nuevas, las cuatro de autos que fallaron después. Dos van con consejo al conductor (VEH\_0563 y VEH\_0566, con tres hábitos cada uno) y dos van al concesionario porque no hay hábito para nombrar (VEH\_0451 y VEH\_0583). Para la ficha conviene abrir VEH\_0563 o VEH\_0566.
 
 **Las piezas:**
 
@@ -664,7 +637,7 @@ El modelo es chico: una red que corre en una computadora común, sin placas de v
 
 Y algo que parece un detalle, pero no lo es: el código que calcula los datos del auto en producción va a ser exactamente el mismo con el que medimos todo lo que les mostramos. Así, los números del piloto se pueden comparar con los de hoy.
 
-**[El paso clave: la sombra, \~1 min]** ¿Cómo llega a la calle? En cuatro pasos. Primero, congelamos el modelo y lo medimos una sola vez en el test. Después, el paso que más nos importa: un **piloto en sombra**. Durante tres a seis meses, el sistema puntúa todos los autos reales de un país, Colombia o Chile, pero no le avisa a nadie. Solo mira.
+**[El paso clave: la sombra, \~1 min]** ¿Cómo llega a la calle? En cuatro pasos. Primero, congelamos el modelo, que ya medimos en el test, y lo reentrenamos con los 557 autos. Después, el paso que más nos importa: un **piloto en sombra**. Durante tres a seis meses, el sistema puntúa todos los autos reales de un país, Colombia o Chile, pero no le avisa a nadie. Solo mira.
 
 ¿Por qué tanto cuidado? Porque todo lo que medimos salió de las listas que Ford armó para este desafío. En la sombra vamos a ver por primera vez cuántos autos fallan de verdad en la flota, y cuántas falsas alarmas daríamos. Recién con eso, un piloto activo en una región, con un grupo que recibe avisos y otro que no, para medir cuántas fallas se evitan. Y después, el resto de los países.
 
@@ -823,7 +796,7 @@ En un plato de la balanza está el aviso de menos: la falla sin aviso, el "nadie
 
 Diseñamos todo para que el aviso de más pese lo menos posible. Casi siempre, el primer contacto no es "lleve su auto al taller". Es un consejo: *"un tramo de ruta de 20 minutos por semana"*. Si el auto no iba a fallar, Laura recibió un consejo que igual le hace bien a su motor. Si no hay un hábito para nombrar, o el riesgo sigue, la llama el concesionario. En la temporada que vieron en la demo, casi todas las alertas fueron consejos, no turnos.
 
-Y el que decide cuánto pesa cada plato es Ford, con la perilla. Al 5%, uno de cada veinte autos sanos recibe un consejo de más, y avisamos a un tercio de las fallas. Al 20%, avisamos a siete de cada diez [dev], con cuatro veces más consejos de más. No hay un número correcto: hay un punto que Ford elige según cuánto confía en sus clientes y cuánto le duele una falla.
+Y el que decide cuánto pesa cada plato es Ford, con la perilla. Al 5%, uno de cada veinte autos sanos recibe un consejo de más, y avisamos a casi un tercio de las fallas. Al 20%, avisamos a seis de cada diez [test], con cuatro veces más consejos de más. No hay un número correcto: hay un punto que Ford elige según cuánto confía en sus clientes y cuánto le duele una falla.
 
 **[Y encima, una chance de esquivar la avería, \~40 s]** Todo esto sin contar lo que ya les conté: un filtro que se tapa termina en el modo de protección y en una visita que nadie planificó. Cada aviso a tiempo es una oportunidad de evitarlo: un hábito que cambia, o un turno programado en vez de una urgencia. Cuántas esquiva, lo va a decir el piloto. Para una flota de trabajo de Ford Pro, cada día que el vehículo no para vale todavía más.
 
@@ -856,21 +829,21 @@ Implementación, una sola vez: \~USD 70.000–110.000 (tres personas durante 6 m
 | punto de la perilla | 5% | 10% | 15% | 20% |
 | --- | --- | --- | --- | --- |
 | sanos con un aviso de más (de 291) | 14 | 29 | 43 | 58 |
-| fallas avisadas antes (de 135) | 44 | 61 | 78 | 95 |
-| alertas nuevas | 58 | 90 | 121 | 153 |
-| de esas, consejos al conductor (con hábito) | 56 (97%) | 82 (91%) | 107 (88%) | 134 (88%) |
-| escalamientos al concesionario | 9 | 13 | 30 | 43 |
+| fallas avisadas antes (de 135) | 39 | 56 | 69 | 82 |
+| alertas nuevas | 53 | 85 | 112 | 140 |
+| de esas, consejos al conductor (con hábito) | 48 (91%) | 73 (86%) | 101 (90%) | 125 (89%) |
+| escalamientos al concesionario | 7 | 10 | 22 | 36 |
 
-La fricción es mínima donde más importa: al 5%, 97 de cada 100 primeros contactos son un consejo, no un turno.
+La fricción es mínima donde más importa: al 5%, 91 de cada 100 primeros contactos son un consejo, no un turno.
 
-**Ojo: en una flota real, la mayoría de los avisos van a autos que no iban a fallar.** La muestra de Ford está enriquecida (135 de 426 fallan). En la flota, la prevalencia es mucho más baja y no la conocemos. Cuenta ilustrativa por cada 1.000 autos, con la detección de dev:
+**Ojo: en una flota real, la mayoría de los avisos van a autos que no iban a fallar.** La muestra de Ford está enriquecida (135 de 426 fallan). En la flota, la prevalencia es mucho más baja y no la conocemos. Cuenta ilustrativa por cada 1.000 autos, con la detección del test (31% al 5%, 62% al 20%):
 
 | prevalencia supuesta | perilla | fallas avisadas | consejos de más | de cada 10 avisos, cuántos son de un auto que iba a fallar |
 | --- | --- | --- | --- | --- |
-| 2% | 5% | 7 de 20 | 49 | \~1 |
-| 5% | 5% | 17 de 50 | 48 | \~3 |
-| 10% | 5% | 35 de 100 | 45 | \~4 |
-| 5% | 20% | 35 de 50 | 190 | \~2 |
+| 2% | 5% | 6 de 20 | 49 | \~1 |
+| 5% | 5% | 16 de 50 | 48 | \~2 |
+| 10% | 5% | 31 de 100 | 45 | \~4 |
+| 5% | 20% | 31 de 50 | 190 | \~1 |
 
 Por eso el primer contacto tiene que ser un consejo que le sirva a cualquiera, y por eso el umbral se recalibra en la sombra con la prevalencia real. Es el argumento a favor del diseño, no en contra: si el aviso de más fuera un turno en el taller, la fricción sería inaceptable.
 
@@ -896,7 +869,7 @@ Por eso el primer contacto tiene que ser un consejo que le sirva a cualquiera, y
 | pregunta | respuesta corta |
 | --- | --- |
 | ¿Cuánto ahorra Ford? | Depende del costo de una falla y de la prevalencia real, que no tenemos. El piloto lo mide con sus costos. Lo que sí sabemos es que operarlo cuesta \~10 centavos por auto y por año |
-| ¿No molesta recibir avisos? | Por eso el primero es un consejo, no un turno, y Ford elige cuántos tolera. Al 5%, 97 de cada 100 primeros contactos son un consejo |
+| ¿No molesta recibir avisos? | Por eso el primero es un consejo, no un turno, y Ford elige cuántos tolera. Al 5%, 91 de cada 100 primeros contactos son un consejo |
 | ¿Por qué no mandarle el consejo a todos? | Un aviso genérico se ignora; el nuestro dice algo cierto de ese auto. Y el llamado del concesionario sí cuesta |
 | ¿Cuánto combustible se ahorra? | No lo podemos medir con estos datos; es la primera métrica del piloto |
 | ¿Por qué tan barato? | Usa datos que Ford ya tiene, corre en CPU, y los agentes solo trabajan sobre las alertas. El 80% del costo es la persona que lo opera |
@@ -927,21 +900,21 @@ El pedido a Ford es concreto: un piloto en sombra de 3 meses en un mercado, con 
 **Slide 35 · Conclusiones.** Las tres frases:
 
 1. El DPF se tapa con el uso, eso deja huella, y hoy Ford se entera tarde.
-2. Con la telemetría que ya recibe, detectamos 1 de cada 3 autos que van a fallar, más de tres meses antes, con 5% de falsas alarmas.
+2. Con la telemetría que ya recibe, detectamos casi 1 de cada 3 autos que van a fallar, unos tres meses antes, con 5% de falsas alarmas.
 3. Cada alerta se convierte en un consejo al conductor antes de que pierda eficiencia, o en un turno si el riesgo sigue, por \~USD 0,10 por auto y por año.
 
 **Última slide, el arco cerrado.** Laura otra vez, tres meses antes. En la app le llega: "Comparado con autos sanos de tu zona, tu camioneta hace muchos viajes cortos. Un tramo de ruta de 20 minutos por semana ayuda a que el filtro se limpie solo". Hace el tramo. El filtro respira. Y si algún día se prende el testigo, ya no la toma por sorpresa. Pantalla final: *"Tu Ford te avisa antes."* Ford Early Care.
 
-**Límites que decimos antes de que los pregunten:** no predecimos la fecha exacta, la prevalencia real de la flota se mide en el piloto, y dentro de un mismo mercado y motor el orden entre autos es moderado (AUC 0,69).
+**Límites que decimos antes de que los pregunten:** no predecimos la fecha exacta, la prevalencia real de la flota se mide en el piloto, y dentro de un mismo mercado y motor el orden entre autos es moderado (AUC 0,68 en test).
 
 **Preguntas probables del jurado (backup):**
 
 | pregunta | respuesta corta |
 | --- | --- |
-| ¿No aprende solo qué mercado falla más? | Por eso lo comparamos contra saber mercado × motor, y le gana por +14,6 puntos |
+| ¿No aprende solo qué mercado falla más? | En parte: el país pesa. Pero la duración de los viajes y el hollín pesan casi lo mismo, y dentro de un mismo país y motor ordena autos con AUC 0,68 [test] |
 | ¿Cómo sé que no es leakage? | Gap de 500 km, features hacia atrás, split por auto; con features permutadas cae al azar |
 | ¿Por qué no accuracy? | Con \~6% de positivos, decir "nadie falla" da 94% |
-| ¿Por qué una GRU y no algo más simple? | Probamos tabulares, supervivencia y series de tiempo; la GRU les gana con evidencia |
+| ¿Por qué una GRU y no algo más simple? | Probamos tabulares, supervivencia y series de tiempo; en el test detectan la mitad que la GRU |
 | ¿El LLM puede inventar algo? | No produce números ni diagnósticos; el verificador rechaza cualquier número que no esté en los hechos |
 | ¿Qué pasa si el conductor ignora el aviso? | Se escala al concesionario si el riesgo sigue alto 2 revisiones después |
 
@@ -951,7 +924,7 @@ El pedido a Ford es concreto: un piloto en sombra de 3 meses en un mercado, con 
 
 Primero, **anticipa de verdad.** El modelo nunca ve los últimos 500 km antes de la falla, y aun así avisa con meses de margen. No es el testigo del tablero con otro nombre.
 
-Segundo, **no exageramos.** Cada número que les mostramos está al lado del azar y de lo que se sabe sin modelo, con solo el país y el motor. Les contamos qué datos descartamos, qué modelos fallaron y dónde no conviene usarlo. Es lo que hace creer un número cuando llega el piloto.
+Segundo, **no exageramos.** Cada número que les mostramos está al lado del azar, y lo medimos en autos que el modelo nunca vio. Les contamos qué datos descartamos, qué modelos fallaron y dónde no conviene usarlo. Es lo que hace creer un número cuando llega el piloto.
 
 Tercero, **habla como una persona, sin inventar.** La inteligencia artificial escribe cada mensaje para ese auto y ese conductor, y el código controla que no diga nada que no sea cierto.
 
@@ -965,7 +938,7 @@ Y si quieren que esto mejore más rápido, hay cuatro cosas que solo Ford tiene:
 
 El filtro de partículas se tapa con el uso, eso deja huella en los datos, y hoy Ford se entera tarde.
 
-Con la telemetría que ya recibe, avisamos a uno de cada tres autos que van a fallar, más de tres meses antes, con 5% de falsas alarmas [dev].
+Con la telemetría que ya recibe, avisamos a casi uno de cada tres autos que van a fallar, unos tres meses antes, con 5% de falsas alarmas [test].
 
 Y cada aviso se convierte en un consejo que le llega al cliente antes del taller, por unos centavos por auto y por año.
 
@@ -979,8 +952,8 @@ El sábado, Laura va a visitar a su mamá por la ruta. El filtro respira. Y si a
 
 **Cómo se dicen los números del cierre, para que coincidan con el resto:**
 
-- **"Uno de cada tres, con 5% de falsas alarmas"** = 34,6% [dev].
-- **"Más de tres meses antes"** vale en los dos puntos: al 10% la mediana es de 8.300 km (\~106 días) y en la demo, al 5%, de 16 semanas. No decir "tres meses y medio" al lado del 5%.
+- **"Casi uno de cada tres, con 5% de falsas alarmas"** = 31,2% [test], 10 de 32.
+- **"Unos tres meses antes"** vale en los dos puntos: en test, al 10%, la mediana es de \~4.600 km (\~100 días) y en la demo, al 5%, de 15 semanas.
 - **"Unos centavos por auto y por año"** = USD 0,07–0,10 (bloque 6).
 - **La sombra:** en el pedido se dice "tres meses", que es el mínimo; en el plan (bloque 5) dura 3–6 meses. Si preguntan: tres meses alcanzan para medir la tasa de alertas y las falsas alarmas en COL o CHL, y seis para contar fallas con precisión.
 
@@ -995,20 +968,20 @@ El sábado, Laura va a visitar a su mamá por la ruta. El filtro respira. Y si a
 | La tasa real de falla por país × motor | separa la física de cómo se armaron las listas: es la duda más grande de todo el proyecto |
 | Los costos reales (reparación, inspección, retención) | convierte la perilla en una decisión con números de Ford |
 
-**Trabajo futuro, si preguntan:** extender el mismo circuito a otras fallas del postratamiento (el costo de la segunda falla cubierta es marginal), medir el test y reentrenar con los 557 autos, escribir el empaquetado del modelo (`export_model.py`) y medir en el piloto si los avisos cambian hábitos.
+**Trabajo futuro, si preguntan:** extender el mismo circuito a otras fallas del postratamiento (el costo de la segunda falla cubierta es marginal), reentrenar con los 557 autos, escribir el empaquetado del modelo (`export_model.py`) y medir en el piloto si los avisos cambian hábitos.
 
 **Lo que no prometemos** (decirlo antes de que lo pregunten, si hay tiempo):
 
 - No predecimos la fecha exacta de la falla: la marcamos con margen.
 - No conocemos la prevalencia real de la flota: se mide en la sombra.
-- Dentro de un mismo país y motor, el orden entre autos es moderado (AUC 0,69).
+- Dentro de un mismo país y motor, el orden entre autos es moderado (AUC 0,68 en test).
 - La efectividad de los avisos no está medida.
-- Los números son de dev hasta medir el test.
+- Con 32 fallas en el test, cada auto mueve 3 puntos: por eso se citan rangos.
 
 **Pendientes antes del 02-10:**
 
-- [ ] Medir el test (un solo tiro) y reemplazar los números de dev.
-- [ ] Regenerar la demo con la GRU de etiqueta suave.
+- [x] Medir el test y reemplazar los números de dev (01-10: el finalista es la GRU de F10).
+- [x] Regenerar la demo con la GRU finalista (`demo-bundle-gru-final`).
 - [ ] Correr los escenarios de costo con el finalista.
 - [ ] Elegir el nombre del producto.
 - [ ] Diseño visual del HTML.
