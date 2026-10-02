@@ -1,6 +1,6 @@
 # F3 · E1: ensamble por rango de los dos finalistas, sin reentrenar
 #
-# Preregistro: docs/memoria/f3-preregistro-landmark-ensamble.md, E1 (commit 9b7bfb4).
+# Preregistro: docs/reproducibilidad.md, E1 (commit 9b7bfb4).
 # Pareja: la del punto de control 1, survival stacking + CNN-LSTM (el CNN-LSTM "sigue como
 # finalista del par para el ensamble", f3-piso-posicional.md, 21-09). Pesos 50/50 fijos.
 #

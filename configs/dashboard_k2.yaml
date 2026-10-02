@@ -43,8 +43,8 @@ explain_waterfall_top: 6
 
 # Documentación que el dashboard enlaza.
 docs:
-  finalist: docs/memoria/f6-deteccion-vehiculo.md
-  decision: docs/memoria/f8-capa-decision-k2.md
-  variance: docs/memoria/f7-varianza-k2.md
-  costs: docs/memoria/f8-costos-k2.md
-  explain: docs/memoria/f4-explicabilidad-k2.md
+  finalist: docs/reproducibilidad.md
+  decision: docs/reproducibilidad.md
+  variance: docs/reproducibilidad.md
+  costs: docs/reproducibilidad.md
+  explain: docs/reproducibilidad.md

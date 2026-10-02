@@ -12,7 +12,7 @@ note: 'CNN-LSTM de la tutora, panel secuencial RECONSTRUIDO (umbral 15, build 20
   Empata con el control LGBM en deteccion (11,9% +/- 3,2) y pierde en lift (1,494x);
   survival stacking le gana en las dos (15,7% +/- 0,9, 1,616x). (a'') +0,0080 +/-
   0,0051; Brier 0,228 (class_weight balanced, no calibrado). Auditorias R=3: (a0)
-  PASS, (a'') PASS, (b) +0,0216 de ROC, MARCA. Detalle: docs/memoria/f3-piso-posicional.md.
+  PASS, (a'') PASS, (b) +0,0216 de ROC, MARCA. Detalle: docs/reproducibilidad.md
   Nota del registro anterior (20-09), que sigue valiendo: 5 semillas de red dan 0,1580
   +/- 0,0023 / ROC 0,5699; el numero viejo (0,153 / 0,574, results/f3-cnn-lstm-tutora.yaml)
   es del umbral de 5 y R=1 y no se compara.'

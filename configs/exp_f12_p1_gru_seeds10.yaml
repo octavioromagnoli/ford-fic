@@ -1,4 +1,4 @@
-# F12 (P1: GRU ×10 semillas), preregistrado en docs/memoria/f12-preregistro-deteccion.md.
+# F12 (P1: GRU ×10 semillas), preregistrado en docs/reproducibilidad.md
 #   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_f12_p1_gru_seeds10.yaml
 name: f12-p1-gru-seeds10
 seed: 42

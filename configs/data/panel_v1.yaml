@@ -4,8 +4,8 @@
 #
 # Los valores de W, G, H y Δ salen de la factibilidad medida sobre dev
 # (`python scripts/eda_gaps.py`, bloque 1) y del perfil alineado al evento; el
-# porqué de cada uno está en docs/memoria/decisiones.md (2026-09-18) y en
-# docs/memoria/f2-eda-revision-y-features.md. Para probar otra terna se escribe
+# porqué de cada uno está en docs/reproducibilidad.md (2026-09-18) y en
+# docs/reproducibilidad.md Para probar otra terna se escribe
 # otro YAML (regla 7), no se edita este.
 seed: 42
 

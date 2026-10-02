@@ -5,7 +5,7 @@ note: 'RE-CORRIDA del CNN-LSTM contra el panel secuencial RECONSTRUIDO despues d
   commit cambio de 5 a 15 puntos). Misma config que f3-cnn-lstm-tutora, solo --run-name:
   PR-AUC 0,1553 contra 0,1534 del panel viejo. El registro viejo se conserva y NO
   se compara con este. Re-auditada con los criterios nuevos: (a0) 0,1182 vs tasa base
-  0,1252 PASS, (a'') +0,0036 PASS -> APROBADA. Ojo: docs/memoria/f3-cnn-lstm-tutora.md
+  0,1252 PASS, (a'') +0,0036 PASS -> APROBADA. Ojo: docs/reproducibilidad.md
   leia su 0,143-contra-0,153 como que (a) aprobaba; (a) no es un null y no aprueba
   nada. Aca (a) da 0,1663 contra 0,1553, o sea que SUBE, que es lo que esa permutacion
   hace siempre en este panel. No llega al techo de cohorte de 0,2627.'

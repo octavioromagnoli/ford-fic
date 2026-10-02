@@ -4,7 +4,7 @@ note: 'E1 del preregistro 9b7bfb4: rango percentil 50/50 de survival stacking (r
   + CNN-LSTM (r3-regen15), sin reentrenar. Detección 12,6% ± 3,2 (5/9/6 de 53), lift
   veh. mean 1,515 ± 0,040: PIERDE contra la referencia en lift (−0,101 vs desvío combinado
   0,073). El Brier de oof es del rango (no se declara); Platt OOF 0,108. (a0) PASS,
-  (b) +0,039 marca. docs/memoria/f3-ensamble-e1-e2.md'
+  (b) +0,039 marca. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_ens_e1.yaml
   config_versioned: true

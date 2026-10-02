@@ -4,10 +4,10 @@
 #
 #   python scripts/audit_event_dating.py --config configs/data/event_dating.yaml
 #
-# Motivación: docs/memoria/f2-eda-revision-y-features.md §3.3 (después de la fecha el uso
+# Motivación: docs/reproducibilidad.md (después de la fecha el uso
 # cambia en ~80% de los fallados: la fecha marca una intervención real). Si una marca
 # ubica los eventos conocidos, la Fase 1 la aplica a los 33 fallados sin fecha de
-# CNTRY_3/4. Lectura: docs/memoria/f8-datar-eventos-fase0.md.
+# CNTRY_3/4. Lectura: docs/reproducibilidad.md
 #
 # REGLA DE ORO: las marcas NO son features del panel ni se derivan de ellas. Fechar con
 # una variable que el modelo usa pone la regla de fechado en la etiqueta (p. ej. fechar

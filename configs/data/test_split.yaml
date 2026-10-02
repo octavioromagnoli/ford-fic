@@ -6,12 +6,12 @@
 # El 26-09 se probó sacar la ventana (990 vehículos, configs/data/test_split_sinventana.yaml,
 # que extiende este archivo sin mover a nadie): los modelos ordenan peor a estos mismos autos y
 # la fecha de producción sola pasa a separar las cohortes. Se volvió a la ventana; la evidencia
-# está en docs/memoria/f9-universo-v2.md §6.
+# está en docs/reproducibilidad.md
 #
 # El de la entrega 1 (290 dev / 74 test, sorteado el 16-09 y recortado el 17-09) está
 # congelado en data/processed-v1/test_split.json y se reproduce bit a bit con
 # configs/data/test_split_v1.yaml. El porqué de cada clave de abajo:
-# docs/memoria/f9-universo-v2.md.
+# docs/reproducibilidad.md
 #
 # Congelado el archivo, no se regenera: cambiar la semilla, el test_size o los estratos
 # después de haber medido contra el test es elegir el test que mejor queda.

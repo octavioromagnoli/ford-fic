@@ -5,7 +5,7 @@ note: 'Re-medición completa v2 (26-09, exploratoria, no elige): CNN-LSTM + Trip
   25 · 36 · 56% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor 18 · 33
   · 62). AUC por auto dentro de mercado × motor 0.63. Se prefiere entre los sin estática:
   (b) +0,001 y (a′) +0,026 en la auditoría de la semilla 42. Le gana a SS con evidencia
-  al 10% (+12,3 [1,7; 21,2]) y 20%. docs/memoria/f9-remedicion-completa-v2.md'
+  al 10% (+12,3 [1,7; 21,2]) y 20%. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_v2all_seeds3_cnn_lstm_trips.yaml
   config_versioned: false

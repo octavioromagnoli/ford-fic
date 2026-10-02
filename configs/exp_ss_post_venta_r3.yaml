@@ -1,6 +1,6 @@
 # F5 §3.3 · survival stacking en el reloj del evento, con el conjunto en riesgo de la ventana
 #
-# Preregistro: docs/memoria/f5-preregistro-ss-post-venta.md. Mismas filas, mismas 53 features y
+# Preregistro: docs/reproducibilidad.md Mismas filas, mismas 53 features y
 # mismos folds (R = 3) que el finalista (`configs/exp_survival_stacking_r3.yaml`, corrida
 # `f3-survival-stacking-r3-rebuild`), y el mismo booster. Cambia cómo se arma el objetivo:
 # - reloj en días desde que el odómetro llega a c + G, con `feat_cut_dss` en vez de `feat_cut_odo`;

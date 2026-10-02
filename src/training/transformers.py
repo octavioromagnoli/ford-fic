@@ -4,7 +4,7 @@ Por ahora uno solo: `FleetReferenceNormalizer`, la normalización contra la flot
 punto 2.2 del cure model. Traduce el valor de un vehículo en un mes a **cuánto se
 desvía de la flota sana comparable** (mismo mercado, mismo mes), que es lo que el
 diagnóstico del 22-09 encontró como rasgo temprano
-(`docs/memoria/f3-reloj-y-ventana-del-evento.md` §6).
+(`docs/reproducibilidad.md`).
 
 **Por qué no se precalcula en el panel.** La referencia son los sanos del train de cada
 fold: es un parámetro ajustado. Calcularla con todo dev usaría las features y las

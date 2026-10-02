@@ -5,7 +5,7 @@ etiqueta**: 284 fallados cuyo evento tiene la fecha por defecto (`Identification
 daysUntilSale`) y 433 de mercados donde ningún evento tiene fecha. Para la pregunta
 "¿este auto falla?" la fecha no hace falta, así que esos vehículos pueden enseñar
 *qué auto* con muchos más eventos que los 60 de dev
-(`docs/f5-modelos-candidatos-bibliografia.md` §3.2).
+(`CLAUDE.md`).
 
 Este módulo decide **quién entra** a ese conjunto, y nada más:
 
@@ -23,7 +23,7 @@ Este módulo decide **quién entra** a ese conjunto, y nada más:
 
 Qué es positivo y qué negativo, y con qué exposición, no se decide acá: es del panel
 (`src/data/landmark.py`) y del preregistro
-(`docs/memoria/f5-preregistro-incidencia-externa.md`).
+(`docs/reproducibilidad.md`).
 """
 
 from __future__ import annotations

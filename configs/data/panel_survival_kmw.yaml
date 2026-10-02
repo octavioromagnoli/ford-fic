@@ -7,7 +7,7 @@
 # (`panel_survival.parquet`). Solo agrega `aux_`: el odómetro al inicio y al fin de la ventana, el
 # tramo en riesgo de cada fila en km desde `c + G` (lo lee el target `window_km_survival`), la
 # fila evaluable con la etiqueta corregida y los días desde la venta en el corte (para el piso).
-# Preregistro: docs/memoria/f6-preregistro-deteccion-vehiculo.md.
+# Preregistro: docs/reproducibilidad.md
 seed: 42
 
 # El panel del finalista, del build de la referencia (`FORD_DATA_DIR=data/rebuild-0921`).

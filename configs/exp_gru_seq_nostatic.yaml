@@ -1,7 +1,7 @@
 # F3 · ABLACIÓN OBLIGATORIA: el mismo GRU sin la rama estática (`static_hidden: 0`).
 #
 # `SalesCountry_cd` sola da ROC 0,566 sobre este panel (invertida; ver
-# docs/memoria/f3-cnn-lstm-tutora.md): el mercado es sesgo de muestreo de F1, no
+# docs/reproducibilidad.md): el mercado es sesgo de muestreo de F1, no
 # física del vehículo. Si al apagar la rama estática el número se cae al piso, lo que
 # el modelo aprendió es de dónde viene el auto, y eso no predice nada para Ford.
 # Todo lo demás es idéntico a `exp_gru_seq.yaml`, incluida la semilla.

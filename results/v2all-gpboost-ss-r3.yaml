@@ -5,7 +5,7 @@ note: 'Re-medición completa v2 (26-09, exploratoria, no elige): SS + efecto ale
   alarmas: 6 · 9 · 17% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor 18
   · 33 · 62). AUC por auto dentro de mercado × motor 0.29. Repite v1: el efecto aleatorio
   por auto se come el qué auto; (a′) +0,042 (el más alto) y detecta menos que el nulo.
-  docs/memoria/f9-remedicion-completa-v2.md'
+  docs/reproducibilidad.md'
 source:
   config_path: configs\exp_v2all_gpboost_ss_r3.yaml
   config_versioned: false

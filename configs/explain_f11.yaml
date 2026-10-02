@@ -1,4 +1,4 @@
-# F11: en qué se apoya la GRU con etiqueta suave, contra la GRU de hoy (docs/memoria/f11-gru-objetivo-suave.md).
+# F11: en qué se apoya la GRU con etiqueta suave, contra la GRU de hoy (docs/reproducibilidad.md).
 # Reentrena la repetición 0 de los folds de confirmación con la semilla 101 y permuta cada canal / estática.
 #
 #   WANDB_MODE=disabled python scripts/explain_perm_seq.py --config configs/explain_f11.yaml

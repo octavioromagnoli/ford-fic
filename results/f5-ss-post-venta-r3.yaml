@@ -1,6 +1,6 @@
 run: f5-ss-post-venta-r3
 logged_on: '2026-09-22'
-note: 'F5 §3.3 (preregistro docs/memoria/f5-preregistro-ss-post-venta.md): survival
+note: 'F5 §3.3 (preregistro docs/reproducibilidad.md): survival
   stacking en dias desde c + G, con el conjunto en riesgo de la ventana del registro
   y PEM (Poisson con offset de exposicion). Mismas filas, features (feat_cut_dss en
   vez de feat_cut_odo) y folds que f3-survival-stacking-r3-rebuild. PIERDE: con la

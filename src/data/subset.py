@@ -9,7 +9,7 @@ orden del filtro no es negociable y por eso vive en un solo lugar:
 2. recién ahí **filtrar** por la lista de `vehicle_id`;
 3. **deduplicar filas exactas**: las copias de los clones viven en archivos
    distintos, y `signals` trae además un 1,1% de filas repetidas dentro del mismo
-   archivo (`docs/memoria/f2-union-y-holdout-dev-test.md`).
+   archivo (`docs/reproducibilidad.md`).
 
 Al revés (filtrar antes de canonizar), las filas del código descartado no matchean
 ninguna id de la lista y desaparecen sin ruido.

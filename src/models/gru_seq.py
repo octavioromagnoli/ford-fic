@@ -36,7 +36,7 @@ comparación no mide la arquitectura:
 - **Rama estática con fusión tardía.** Una densa que recibe solo las `static_*` (hoy
   el one-hot de `SalesCountry_cd`) y se concatena con el resumen de la secuencia
   antes de la cabeza. `static_hidden: 0` la apaga, que es la ablación obligatoria:
-  el mercado solo ya da ROC 0,566 (docs/memoria/f3-cnn-lstm-tutora.md), así que un
+  el mercado solo ya da ROC 0,566 (docs/reproducibilidad.md), así que un
   salto que venga de ahí es el sesgo de muestreo de F1, no el vehículo.
 - **Sin early stopping.** El modelo no recibe `vehicle_id`, así que no puede apartar
   una validación interna agrupada; una partición por filas mezclaría cortes del
@@ -147,7 +147,7 @@ class GRUSeqClassifier(ClassifierMixin, BaseEstimator):
 
     | param | default | por qué |
     |---|---|---|
-    | `pooling` | `attention` | la hipótesis del modelo: la señal puede no estar en el último bin. `last` reproduce a la CNN-LSTM, `mean` es el control que ignora el orden de llegada. **Medido (20-09, 5 semillas, R=3): `last` 0,165 > `mean` 0,159 > `attention` 0,152 de PR-AUC; la atención aprende a mirar el final, difusa.** El default queda como hipótesis documentada; la config recomendada es `configs/exp_gru_seq_last.yaml` (docs/memoria/f3-gru-secuencial.md) |
+    | `pooling` | `attention` | la hipótesis del modelo: la señal puede no estar en el último bin. `last` reproduce a la CNN-LSTM, `mean` es el control que ignora el orden de llegada. **Medido (20-09, 5 semillas, R=3): `last` 0,165 > `mean` 0,159 > `attention` 0,152 de PR-AUC; la atención aprende a mirar el final, difusa.** El default queda como hipótesis documentada; la config recomendada es `configs/exp_gru_seq_last.yaml` (docs/reproducibilidad.md) |
     | `hidden` | 24 | con C=9 son ~2.500 parámetros en la GRU; el total queda en ~3.400, el orden de la CNN-LSTM (~3.000). Con 53 vehículos con evento, más capacidad memoriza |
     | `num_layers` | 1 | 20 bins no justifican una segunda capa; la dejo configurable para el barrido de ventana (T=40 y T=60 en W=2.000/3.000) |
     | `attention_hidden` | 16 | la proyección del score de atención. Más chica que `hidden`: es un escalar por bin, no una representación |

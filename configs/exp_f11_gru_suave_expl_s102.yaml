@@ -1,4 +1,4 @@
-# F11 (docs/memoria/f11-preregistro-objetivo-suave.md): GRU + TripSummary + estática completa, etiqueta suave lejos del evento (far_target 0,15); semilla del modelo 102, folds de la exploración (splits_r3).
+# F11 (docs/reproducibilidad.md): GRU + TripSummary + estática completa, etiqueta suave lejos del evento (far_target 0,15); semilla del modelo 102, folds de la exploración (splits_r3).
 #   WANDB_MODE=disabled python scripts/train.py --config configs/exp_f11_gru_suave_expl_s102.yaml
 name: f11-gru-suave-expl-s102
 seed: 102

@@ -5,12 +5,12 @@
 # viejo si se ignoran:
 #
 # 1. El umbral de regeneración pasó de 5 a 15 puntos (commit 1eab4a1,
-#    docs/memoria/f2-umbral-regeneraciones.md). El panel y el panel secuencial se
+#    docs/reproducibilidad.md). El panel y el panel secuencial se
 #    reconstruyeron: las features cambiaron de valor, las filas y los folds no.
 # 2. R = 3 (`splits_r3.json`) en vez de R = 1. La repetición 0 son exactamente los
 #    folds de `splits.json`, así que esto complementa lo viejo, no lo contradice.
 #
-# Existe para que la tabla de `docs/memoria/f3-gru-secuencial.md` compare modelos
+# Existe para que la tabla de `docs/reproducibilidad.md` compare modelos
 # medidos con la misma regla, no contra números de otra versión del panel.
 #
 #   python scripts/train.py --config configs/exp_cnn_lstm_r3.yaml

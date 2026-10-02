@@ -2,7 +2,7 @@ run: f11-seeds3-gru-suave-expl
 logged_on: '2026-09-28'
 note: 'F11 secundario: la GRU con etiqueta suave, semillas 101-103, folds de la exploración
   (splits_r3). 30,4 / 50,9 / 62,2 / 70,6% al 5/10/15/20%; contra la GRU de hoy en
-  los mismos folds y semillas +10,7 [3,6; 16,0], p = 0,0005. docs/memoria/f11-gru-objetivo-suave.md'
+  los mismos folds y semillas +10,7 [3,6; 16,0], p = 0,0005. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_f11_seeds3_gru_suave_expl.yaml
   config_versioned: false

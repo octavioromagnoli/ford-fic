@@ -1,4 +1,4 @@
-# Test de la GRU de F10, el finalista desde el 01-10 (docs/memoria/f11-test-resultado.md): GRU + TripSummary +
+# Test de la GRU de F10, el finalista desde el 01-10 (docs/reproducibilidad.md): GRU + TripSummary +
 # estática completa con `label`, semillas 42/1/2 (las del reporte v2), cada una entrenada con todo dev, contra la
 # misma configuración con las semillas 101-103 (la referencia de test-f11). Diagnóstico posterior al tiro de F11.
 #

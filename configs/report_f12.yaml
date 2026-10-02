@@ -1,5 +1,5 @@
 # F12: ¿se puede subir la detección de la GRU al 5-10%? Lista cerrada en
-# docs/memoria/f12-preregistro-deteccion.md (escrita antes de medir). Solo dev, test sin tocar.
+# docs/reproducibilidad.md (escrita antes de medir). Solo dev, test sin tocar.
 #   python scripts/report_v2_models.py --config configs/report_f12.yaml   # -> experiments/report-f12/
 seed: 0
 output_name: report-f12

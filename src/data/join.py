@@ -10,7 +10,7 @@ el producto de los dos históricos. Para el vehículo mediano son 1971 viajes ×
 7195 señales ≈ 14,2M de filas **de un solo vehículo**; sumando los 1081 da
 3,2×10¹⁰ filas. No es que sea lento: no entra. Alinear señales contra viajes es
 trabajo de F2 y se hace por odómetro/timestamp, no por clave (`trips` manda y
-`signals` se alinea contra él, ver `docs/memoria/f1-calidad-odometro.md`).
+`signals` se alinea contra él, ver `docs/reproducibilidad.md`).
 
 Lo que este módulo ofrece son las dos uniones que sí tienen sentido:
 
@@ -251,7 +251,7 @@ def load_vehicle_static(
     declaradas del YAML del panel (`features.static_columns` + `static_excluded`),
     no de una lista escrita acá. `Engine` viene incluida a propósito aunque esté
     excluida del set base: hace falta para **reportar** el balance del split, no
-    para modelar (ver `docs/memoria/f1-sesgo-eng3.md`).
+    para modelar (ver `docs/reproducibilidad.md`).
 
     `IdentificationDate` se conserva como `event_day_since_production` porque es la
     etiqueta —nunca una feature—: con ella se deriva `event_observed`.
@@ -489,7 +489,7 @@ def anchor_offset_days(
     la flota, esta diferencia es casi constante entre vehículos (F1 midió IQR de 0
     días). Devuelve la serie para que el llamador reporte su dispersión; el origen
     concreto lo congela F2, acá solo se verifica que el puente sigue en pie.
-    Ver `docs/memoria/f1-anclaje-temporal.md`.
+    Ver `docs/reproducibilidad.md`.
     """
     first_trip = pd.to_datetime(vehicle_table[first_trip_col], utc=True, errors="coerce")
     day = first_trip.dt.tz_convert("UTC").dt.floor("D")

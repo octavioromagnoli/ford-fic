@@ -3,7 +3,7 @@ logged_on: '2026-09-24'
 note: 'F7 P3 (preregistro 0b29b2b): apilado de K2 con hazard logístico L2 sobre 5
   covariables + mercado + spline natural del bin. V (decide): 6,7% ± 5,4 contra 17,0%
   ± 3,8, lift 1,334 contra 1,658: PIERDE en todo, no le gana al piso cut_odo, exceso
-  -1,6 (debajo del azar), (a'') -0,044. NO SE ADOPTA. docs/memoria/f7-varianza-k2.md'
+  -1,6 (debajo del azar), (a'') -0,044. NO SE ADOPTA. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_f7_p3_pem.yaml
   config_versioned: true

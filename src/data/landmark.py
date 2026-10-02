@@ -2,8 +2,8 @@
 
 Una fila por **(vehículo, hito L)**, con L en días desde la venta. Reemplaza la grilla de
 km del panel v1 porque el evento sigue un reloj de días post-venta y se registra solo
-dentro de una ventana de calendario (`docs/memoria/f3-reloj-y-ventana-del-evento.md`).
-Lo que se fija acá está preregistrado en `docs/memoria/f3-preregistro-cure.md` §1–§3.
+dentro de una ventana de calendario (`docs/reproducibilidad.md`).
+Lo que se fija acá está preregistrado en `docs/reproducibilidad.md`–§3.
 
 **Reloj.** venta = origen + `ProductionDay` + `daysUntilSale`; evento = origen +
 `ProductionDay` + `IdentificationDate` (`src/data/anchor.py`). Todo en días desde la venta

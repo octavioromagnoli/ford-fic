@@ -3,7 +3,7 @@ logged_on: '2026-09-26'
 note: 'Re-medición completa v2 (26-09, exploratoria, no elige): Logística L1. Detección
   por auto con umbral exacto al 5 · 10 · 20% de falsas alarmas: 14 · 21 · 36% (nulo
   5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor 18 · 33 · 62). AUC por auto
-  dentro de mercado × motor 0.58.  docs/memoria/f9-remedicion-completa-v2.md'
+  dentro de mercado × motor 0.58.  docs/reproducibilidad.md'
 source:
   config_path: configs\exp_v2all_logistic_l1_r3.yaml
   config_versioned: false

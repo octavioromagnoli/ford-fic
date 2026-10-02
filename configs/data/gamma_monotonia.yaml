@@ -11,7 +11,7 @@
 #   (b) SEPARACIÓN: la tasa a la que sube distingue a los que fallan de los sanos.
 #
 # Si (a) o (b) no se sostienen, el modelo no tiene premisa y el hallazgo negativo vale
-# más que la implementación. El resultado está en docs/memoria/f3-proceso-gamma.md.
+# más que la implementación. El resultado está en docs/reproducibilidad.md
 #
 # Nada de acá se hardcodea en el script (CLAUDE.md, regla 7): los bins, los mínimos y
 # las ventanas de exposición son decisiones de medición y se discuten leyendo este archivo.
@@ -30,7 +30,7 @@ scan:
 
 audit:
   # Columna de carga del postratamiento. `AirRegeneration*` == `signals.Acumulation`
-  # al 99,7% (docs/memoria/f2-columnas-airfilter-airregeneration.md): se usa la de
+  # al 99,7% (docs/reproducibilidad.md): se usa la de
   # `trips` porque trae el odómetro casi completo.
   level_column: AirRegenerationEnd
 
@@ -46,7 +46,7 @@ audit:
   # Bloque B · el piso medido donde la física lo pone: el nivel con el que TERMINA una
   # regeneración. La regeneración quema hollín y no ceniza, así que ese residuo es la
   # ceniza. El umbral de caída sale de features_v1.yaml (15 puntos, ver
-  # docs/memoria/f2-umbral-regeneraciones.md).
+  # docs/reproducibilidad.md).
   regen_min_events: 10         # vehículos con menos regeneraciones no dan tendencia
   regen_min_span_km: 2000
 

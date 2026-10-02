@@ -5,7 +5,7 @@ note: 'Re-medición completa v2 (26-09, exploratoria, no elige): CNN-LSTM tutora
   alarmas: 20 · 31 · 51% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor
   18 · 33 · 62). AUC por auto dentro de mercado × motor 0.61. La CNN-LSTM de la tutora
   (signals + país). Auditoría (semilla 42): (b) +0,028 marca atajo de calendario.
-  docs/memoria/f9-remedicion-completa-v2.md'
+  docs/reproducibilidad.md'
 source:
   config_path: configs\exp_v2all_seeds3_cnn_lstm_signals.yaml
   config_versioned: false

@@ -1,5 +1,5 @@
 # F3 · cure model, P0: pesos unitarios (piso y respaldo). Preregistro:
-# docs/memoria/f3-preregistro-cure.md §4. Nada de acá se elige mirando D1/D2.
+# docs/reproducibilidad.md Nada de acá se elige mirando D1/D2.
 #
 #   python scripts/train.py --config configs/exp_cure_p0_unitweight.yaml
 #   python scripts/audit_cure.py --config configs/exp_cure_p0_unitweight.yaml
@@ -36,7 +36,7 @@ model:
   name: cure_mixture
   params:
     incidence: unit_weight
-    # Signo físico del índice (docs/f3-modelos-candidatos.md §1.1): más idle y más viajes
+    # Signo físico del índice (CLAUDE.md): más idle y más viajes
     # bajo régimen, más riesgo; más velocidad y más refrigerante al final, menos.
     unit_weight_signs:
       fleet_idle_per_1000km: 1

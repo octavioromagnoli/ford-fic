@@ -297,7 +297,7 @@ def seccion_etiqueta(cache: dict[str, Any], veh: pd.DataFrame) -> None:
             "Este cuadro cubre los 1081 a propósito: es el **registro** de una decisión ya congelada "
             "sobre la calidad del dato (bloque `universe` de `test_split.json`), no una medición que "
             "se esté haciendo ahora. Define qué mercado entra, no qué modelo gana. "
-            "Detalle: `docs/memoria/f2-universo-fecha-usable.md`."
+            "Detalle: `docs/reproducibilidad.md`."
         )
 
     izquierda, derecha = st.columns(2)
@@ -937,7 +937,7 @@ def seccion_correlaciones(cache: dict[str, Any], veh: pd.DataFrame) -> None:
         "posteriores a mayo de 2026, que es justo donde el marcador `Regenerations` deja de "
         "registrarse: por eso las tasas de marcadores \"sobreviven\". No es evidencia de anticipación. "
         "La prueba que sí la mide es el perfil alineado al evento de `scripts/eda_gaps.py` "
-        "(`docs/memoria/f2-eda-revision-y-features.md` §3.2). El texto de abajo se conserva tal cual.",
+        "(`docs/reproducibilidad.md`). El texto de abajo se conserva tal cual.",
         icon=":material/report:",
     )
     st.info(
@@ -1164,7 +1164,7 @@ def main() -> None:
         "caídas de nivel por mes en `trips`). Su correlación con la etiqueta (ρ = 0,317) es exposición "
         "al calendario —ρ con `ProductionDay` = −0,515—, no física: contada desde las caídas de "
         "`AirRegeneration` da ρ = 0,072. La conclusión \"las frecuencias sobreviven al truncamiento\" "
-        "queda retirada. La versión vigente del análisis es `docs/memoria/f2-eda-revision-y-features.md` "
+        "queda retirada. La versión vigente del análisis es `docs/reproducibilidad.md` "
         "y `scripts/eda_gaps.py`; este dashboard no se regeneró.",
         icon=":material/report:",
     )

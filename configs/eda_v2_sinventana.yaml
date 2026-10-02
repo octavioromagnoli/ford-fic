@@ -1,6 +1,6 @@
 # VARIANTE SIN LA VENTANA DE PRODUCCIÓN (universo de 990, holdout test_split_sinventana.json).
 # No es el universo vigente (ese es el de la ventana, 557): se conserva como evidencia de por
-# qué no se usa para elegir ni medir modelos. Ver docs/memoria/f9-universo-v2.md §6.
+# qué no se usa para elegir ni medir modelos. Ver docs/reproducibilidad.md
 #
 # EDA de la entrega v2 sobre el DEV nuevo (446 vehículos, 141 eventos), con las
 # comparaciones fallado/sano ESTRATIFICADAS POR MERCADO.
@@ -14,7 +14,7 @@
 # razonable. En v2 son cinco, con climas, usos y tasas de falla de hasta 8× de
 # diferencia, y la tasa por mercado está cruzada con cuántos fallados sin fecha sacó
 # Ford de cada uno. Una comparación agrupada mezcla mercado con señal. Lectura:
-# docs/memoria/f9-eda-v2.md.
+# docs/reproducibilidad.md
 seed: 42
 
 test_split: ${DATA_DIR}/processed/test_split_sinventana.json

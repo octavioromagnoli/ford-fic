@@ -1,5 +1,5 @@
 # F5 §3.2 · A-solo: la incidencia aprendida con los fallados sin fecha, aplicada congelada a dev.
-# Preregistro: docs/memoria/f5-preregistro-incidencia-externa.md. Nada de acá se elige mirando D1/D2.
+# Preregistro: docs/reproducibilidad.md Nada de acá se elige mirando D1/D2.
 #
 #   python scripts/build_external_panel.py --config configs/data/panel_external_incidence.yaml
 #   python scripts/build_landmark_panel.py --config configs/data/panel_landmark_ps_w30.yaml

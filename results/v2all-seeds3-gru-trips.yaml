@@ -4,7 +4,7 @@ note: 'Re-medición completa v2 (26-09, exploratoria, no elige): GRU + TripSumma
   ×3 semillas. Detección por auto con umbral exacto al 5 · 10 · 20% de falsas alarmas:
   23 · 36 · 53% (nulo 5 · 11 · 21; SS 14 · 24 · 42; celda mercado × motor 18 · 33
   · 62). AUC por auto dentro de mercado × motor 0.65. Empata con la CNN-LSTM + trips;
-  auditoría (semilla 42): (b) +0,025 marca atajo de calendario, (a′) +0,003. docs/memoria/f9-remedicion-completa-v2.md'
+  auditoría (semilla 42): (b) +0,025 marca atajo de calendario, (a′) +0,003. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_v2all_seeds3_gru_trips.yaml
   config_versioned: false

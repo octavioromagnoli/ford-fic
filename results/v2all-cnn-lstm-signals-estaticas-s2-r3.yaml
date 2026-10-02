@@ -2,7 +2,7 @@ run: v2all-cnn-lstm-signals-estaticas-s2-r3
 logged_on: '2026-09-26'
 note: 'Semilla suelta de la re-medición completa v2 (dispersión por semilla; se cita
   el promedio ×3). Detección por auto al 5 · 10 · 20% de falsas alarmas (umbral exacto):
-  25 · 36 · 62%. docs/memoria/f9-remedicion-completa-v2.md'
+  25 · 36 · 62%. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_v2all_cnn_lstm_signals_estaticas_s2_r3.yaml
   config_versioned: false

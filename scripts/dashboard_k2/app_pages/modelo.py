@@ -78,6 +78,6 @@ with st.container(border=True):
 - **Vale para CNTRY_3 y CNTRY_4.** Son los mercados donde el evento tiene fecha. En los otros, el rasgo
   temprano no se replicó.
 - **Para detectar más hacen falta más eventos, no otro modelo.** Eso depende de que Ford explique la fecha por
-  defecto de `IdentificationDate` (`docs/memoria/f8-datar-eventos-fase0.md`).
+  defecto de `IdentificationDate` (`docs/reproducibilidad.md`).
 """
     )

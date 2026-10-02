@@ -1,7 +1,7 @@
 """Mixture cure model por hito post-venta: *qué auto* (incidencia) × *cuándo* (latencia).
 
 Fase 5 del cure model (Track B). La especificación es la del preregistro
-(`docs/memoria/f3-preregistro-cure.md` §4, P0 y P1). Este archivo la implementa y no
+(`docs/reproducibilidad.md`, P0 y P1). Este archivo la implementa y no
 decide nada que no esté escrito ahí.
 
 ## Qué modela

@@ -17,7 +17,7 @@ de otra población ayuda **a los autos comparables**, o solo agrega separación 
 Al lado va un piso sin modelo: `−ProductionDay` sola como score.
 
 Solo lee dev (las predicciones fuera de fold de `train.py` ya son solo dev). Deja una tabla en
-`output`. Lectura: `docs/memoria/f9-remedicion-v2.md`.
+`output`. Lectura: `docs/reproducibilidad.md`.
 """
 
 from __future__ import annotations

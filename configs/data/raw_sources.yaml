@@ -1,6 +1,6 @@
 # Fuentes crudas: ENTREGA v2 de Ford (archivos del 24-09-2026, recibidos el 26-09; los viajes
 # de fallados, en su versión corregida del 26-09).
-# Auditada contra los archivos reales el 26-09-2026: docs/memoria/f9-entrega-v2.md.
+# Auditada contra los archivos reales el 26-09-2026: docs/reproducibilidad.md
 # La entrega 1 (15-09) está congelada en data/old_raw/ y se lee con raw_sources_v1.yaml.
 #
 # Qué cambió respecto de la entrega 1, archivo por archivo (md5 en la ficha):
@@ -67,7 +67,7 @@ tables:
     description: Un registro por viaje, con agregados del viaje (2,5M filas).
     # Los timestamps mezclan dos formatos (con y sin milisegundos). Sin `ISO8601`,
     # pandas infiere el formato de la primera fila y las otras salen NaT en silencio
-    # (ver docs/memoria/f2-fechas-formato-mixto.md).
+    # (ver docs/reproducibilidad.md).
     date_format: ISO8601
     parts:
       failed: "${DATA_DIR}/raw/TripSummary_Failed_SelectionVins_vehiclecode_v2 (2).csv"

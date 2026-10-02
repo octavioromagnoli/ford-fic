@@ -3,7 +3,7 @@
 **Explica al modelo, no al auto.** Todo lo de acá es asociación: dice qué columnas empujaron el
 score de K2 hacia arriba, no qué causa la falla. (a′) de K2 es +0,019 —el modelo sabe sobre todo
 *qué auto* y poco del *cuándo*— y el "mucho idle ⇒ falla antes en km" resultó ser km/día disfrazado
-(`docs/memoria/f3-reloj-y-ventana-del-evento.md` §2). Por eso el texto al cliente dice "tu uso se
+(`docs/reproducibilidad.md`). Por eso el texto al cliente dice "tu uso se
 parece al de los autos que fallaron" y solo muestra una feature cuyo efecto global coincide con la
 física del DPF. El preregistro con todas las reglas es `configs/explain_k2.yaml`.
 

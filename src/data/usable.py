@@ -44,7 +44,7 @@ vehículo sano de CNTRY_4 es un negativo legítimo porque, si hubiera fallado, l
 habríamos visto. Uno de CNTRY_1 no.
 
 Los números de arriba se reproducen con `market_usability()`, y el detalle está en
-`docs/memoria/f2-universo-fecha-usable.md`.
+`docs/reproducibilidad.md`.
 
 ## Entrega v2 (26-09-2026): la selección pasó del mercado a la fecha de producción
 
@@ -69,7 +69,7 @@ esperados no es falta de exposición: es que sus fallas no están en la muestra.
 sano de octubre de 2025 no es un negativo verificable, igual que no lo era uno de
 CNTRY_1 en la entrega 1. Es la misma regla simétrica, en otro eje: se conserva el
 período de producción donde las dos cohortes se muestrearon (criterio 3,
-`production_day_window`). El detalle está en `docs/memoria/f9-universo-v2.md`.
+`production_day_window`). El detalle está en `docs/reproducibilidad.md`.
 """
 
 from __future__ import annotations

@@ -5,11 +5,11 @@
 
 No entrena, no puntúa y no abre el test: lee los CSV/JSON que dejó `scripts/eval_test.py` en
 `experiments/test-*`, el de `scripts/explain_perm_seq.py` en `experiments/explain-gru-final/`, los YAML
-de features, y las tablas de `docs/memoria/` copiadas en `configs/report_figures.yaml` con su fuente.
+de features, y las tablas auxiliares conservadas en `configs/report_figures.yaml`.
 Escribe PDF en `output.figures_dir` y fragmentos `.tex` en `output.tables_dir`, que el informe incluye.
 
 Lo que sale de `experiments/` se lee del archivo, nunca se tipea: si una reproducción de la GRU da otro
-número (no es bit a bit, `docs/memoria/f11-test-resultado.md` §2), la tabla del informe cambia sola.
+número (no es bit a bit, `docs/reproducibilidad.md`), la tabla del informe cambia sola.
 """
 
 from __future__ import annotations

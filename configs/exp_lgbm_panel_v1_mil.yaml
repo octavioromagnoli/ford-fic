@@ -4,7 +4,7 @@
 # la diferencia contra `f3-lgbm-panel-v1` es solo el eje de evaluación y nada más.
 #
 # OJO: el PR-AUC por vehículo NO se compara contra el de filas (tasa base 0,31 vs 0,125).
-# Lo comparable es el lift. Ver docs/memoria/f3-mil-agregacion-vehiculo.md.
+# Lo comparable es el lift. Ver docs/reproducibilidad.md
 #
 #   python scripts/train.py --config configs/exp_lgbm_panel_v1_mil.yaml
 name: f3-lgbm-panel-v1-mil
@@ -27,7 +27,7 @@ splits:
   test_split: ${DATA_DIR}/processed/test_split.json
 
 model:
-  name: lgbm                 # defaults del builder: docs/f3-modelos-candidatos.md §1.3
+  name: lgbm                 # defaults del builder: CLAUDE.md
   params:
     random_state: 42
 
@@ -41,7 +41,7 @@ eval:
   vehicle_topk: 3           # `topk` = media de los 3 cortes mayores del vehículo
   # Barrido del ratio C_FN/C_FP: el control también lo reporta, porque un punto de
   # quiebre sin línea de base no se interpreta. Es reporte, no selección
-  # (docs/memoria/f3-ordinal-horizonte.md).
+  # (docs/reproducibilidad.md).
   cost_ratios: [2, 3, 5, 7, 10, 20, 50]
   cost_fp: 1.0
 

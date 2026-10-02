@@ -10,7 +10,7 @@ los mismos folds, el mismo pipeline— y lo repite cambiando **solo**
 inicialización de los pesos y el orden de los minibatches, no otro experimento.
 
 Por qué hace falta acá: la CNN-LSTM movió ±0,01 de PR-AUC entre semillas
-(docs/memoria/f3-cnn-lstm-tutora.md) y la distancia entre los modelos que estamos
+(docs/reproducibilidad.md) y la distancia entre los modelos que estamos
 comparando es de ese orden. Reportar la mejor semilla de un modelo contra una semilla
 sola de otro es elegir ruido. El número que va a la memoria es la media, con el rango
 al lado.

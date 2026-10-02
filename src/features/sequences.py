@@ -74,7 +74,7 @@ class ChannelSpec:
         if self.column in FORBIDDEN_COLUMNS:
             raise ValueError(
                 f"Canal `{self.name}`: `{self.column}` se corta el 25-05-2026 y mide el calendario, "
-                "no el vehículo (CLAUDE.md, docs/memoria/f2-eda-revision-y-features.md §2.1)."
+                "no el vehículo (CLAUDE.md, docs/reproducibilidad.md)."
             )
         if self.column == ALL_ROWS and self.agg not in ("count", "any"):
             raise ValueError(f"Canal `{self.name}`: `column: \"*\"` solo admite agg count/any")

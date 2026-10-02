@@ -32,7 +32,7 @@ registro.
   D · A y C otra vez, con la exposición igualada
 
 Deja los CSV por vehículo en `experiments/gamma/dev/` y el resumen en `resumen.csv`.
-El resultado y su lectura están en docs/memoria/f3-proceso-gamma.md.
+El resultado y su lectura están en docs/reproducibilidad.md
 """
 
 from __future__ import annotations

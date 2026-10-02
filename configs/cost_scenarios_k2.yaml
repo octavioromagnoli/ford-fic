@@ -3,7 +3,7 @@
 #
 #   python scripts/cost_scenarios.py --config configs/cost_scenarios_k2.yaml
 #
-# Lectura: docs/memoria/f8-costos-k2.md.
+# Lectura: docs/reproducibilidad.md
 #
 # Cuenta, por vehículo y desde el punto de vista de Ford (USD):
 #   falsa alarma (FP)  = C_insp                          (diagnóstico que no hacía falta)

@@ -4,7 +4,7 @@
     python scripts/smooth_scores.py --config configs/exp_ss_cummean_r3.yaml            # arma y mide
     python scripts/smooth_scores.py --config configs/exp_ss_cummean_r3.yaml --audit    # + (a0) y (b)
 
-Es K1 y K3 de `docs/memoria/f6-preregistro-deteccion-vehiculo.md`, escrito para aplicarlo tal
+Es K1 y K3 de `docs/reproducibilidad.md`, escrito para aplicarlo tal
 cual:
 
 * **Score.** Para cada repetición `r` y cada vehículo, las filas de dev ordenadas por

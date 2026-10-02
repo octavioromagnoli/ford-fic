@@ -2,7 +2,7 @@ run: f3-cnn-lstm-r3-bag10
 logged_on: '2026-09-22'
 note: 'COMPONENTE de E2 (no candidato, preregistro 9b7bfb4): CNN-LSTM r3 envuelto
   en vehicle_bagging (10 bootstraps de vehículos, target grouped_label, hiperparámetros
-  sin cambios). Detección 15,7% ± 3,6 (7/11/7), lift veh. 1,321: pierde en lift. docs/memoria/f3-ensamble-e1-e2.md'
+  sin cambios). Detección 15,7% ± 3,6 (7/11/7), lift veh. 1,321: pierde en lift. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_cnn_lstm_r3_bag10.yaml
   config_versioned: true

@@ -51,7 +51,7 @@ model:
     # dio last 0,1645 > mean 0,1588 > attention 0,1515, y la auditoría de
     # `attention_weights()` mostró por qué —la atención aprende a mirar el final de la
     # ventana, difuso—. El barrido tiene que usar la variante elegida, o mide la
-    # ventana y el pooling a la vez (docs/memoria/f3-gru-secuencial.md).
+    # ventana y el pooling a la vez (docs/reproducibilidad.md).
     pooling: last
     hidden: 24
     num_layers: 1

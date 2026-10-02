@@ -3,11 +3,11 @@
 
     python scripts/audit_model.py --config configs/exp_survival_stacking.yaml
 
-`docs/f3-modelos-candidatos.md` §0.4 pide auditar todo modelo antes de creerle un
+`CLAUDE.md` pide auditar todo modelo antes de creerle un
 número. Lo que sigue son las formas conocidas de sacar PR-AUC sin haber aprendido nada,
 **con una corrección**: de las tres originales, la (a) resultó no ser un null en este
 panel, así que los criterios de aprobación son **(a0)** y **(a')**, y (a) quedó como
-informativa (ver `docs/memoria/decisiones.md`).
+informativa (ver `docs/reproducibilidad.md`).
 
 Antes que todo, el número contra el que se leen los demás:
 
@@ -55,7 +55,7 @@ que pasó la primera vez que se escribió esto: la permutación daba *más* PR-A
 
 **(b) Las `aux_` de calendario como `feat_`.** `aux_air_temp_avg`,
 `aux_regen_marker_per_1000km` y `aux_static_ProductionDay` miden el calendario, y el
-calendario mide la etiqueta (`docs/memoria/f2-eda-revision-y-features.md` §2.1). Si el
+calendario mide la etiqueta (`docs/reproducibilidad.md`). Si el
 ROC salta al dárselas, el emparejado de sanos no alcanzó y el modelo encuentra el atajo.
 
 **(c) Importancias contra la hipótesis física.** Qué mira el modelo, en el orden en que

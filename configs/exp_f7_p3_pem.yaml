@@ -1,6 +1,6 @@
 # F7 · P3: el apilado de K2 con un hazard logístico de cinco covariables + mercado.
 #
-# Preregistro: docs/memoria/f7-preregistro-varianza-k2.md (P3). Mismas filas en riesgo, bins,
+# Preregistro: docs/reproducibilidad.md (P3). Mismas filas en riesgo, bins,
 # entrada tardía y score que K2; cambia el learner y las columnas. La referencia es K2.
 #
 #   FORD_DATA_DIR=$PWD/data/rebuild-0921 WANDB_MODE=disabled python scripts/train.py --config configs/exp_f7_p3_pem.yaml

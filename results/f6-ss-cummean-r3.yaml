@@ -4,7 +4,7 @@ note: 'F6 K1 (preregistro b12056c): media acumulada causal por vehículo del sco
   de f3-survival-stacking-r3-rebuild, sin reentrenar. V (decide): 14,8% ± 6,9 (5/11/4
   de 45) contra 11,9% ± 2,8: empata con más desvío (diff +0,030 contra 0,074; pareado
   +0,022/+0,089/-0,022); lift 1,660. Con D baja a 10,7% ± 7,9 (7/10/0). (a0) +0,012
-  pasa. No se adopta. docs/memoria/f6-deteccion-vehiculo.md'
+  pasa. No se adopta. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_ss_cummean_r3.yaml
   config_versioned: true

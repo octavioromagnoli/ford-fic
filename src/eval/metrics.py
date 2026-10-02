@@ -189,7 +189,7 @@ def when_contribution(
     Es la única de las auditorías que aísla el timing. La permutación intra-vehículo de
     `scripts/audit_model.py` no puede: deja en pie *qué* vehículos fallan, que es de
     donde sale casi todo el PR-AUC de este panel, así que no tiene nulo contra el cual
-    leerse (ver `docs/memoria/decisiones.md`).
+    leerse (ver `docs/reproducibilidad.md`).
 
     `delta` positivo = el orden dentro del vehículo suma; negativo = el modelo ordena
     los cortes al revés y colapsarlo lo mejoraría.
@@ -993,7 +993,7 @@ def bootstrap_by_vehicle(
 # Panel de hitos post-venta (cure model): D1 y D2 del preregistro
 # --------------------------------------------------------------------------- #
 #: Lo que lee `landmark_metrics`, con sus defaults. El bloque `eval.landmark` del YAML
-#: pisa cualquiera. Los valores son los del preregistro (`docs/memoria/f3-preregistro-cure.md`
+#: pisa cualquiera. Los valores son los del preregistro (`docs/reproducibilidad.md`
 #: §5); las columnas, las del panel de hitos y las del decoder de `cure_window`.
 LANDMARK_DEFAULTS: dict[str, Any] = {
     # `score_column` ordena (D1, D2, AUC); `probability_column` es la probabilidad que se

@@ -1,5 +1,5 @@
 # F3 · cure model, P1: incidencia por Firth + FLIC sobre las cuatro features, latencia
-# Weibull. Preregistro: docs/memoria/f3-preregistro-cure.md §4. Corre solo si P0 le ganó
+# Weibull. Preregistro: docs/reproducibilidad.md Corre solo si P0 le ganó
 # a su nulo estratificado (C1) en D1 (§8, paso 3).
 #
 #   python scripts/train.py --config configs/exp_cure_p1_firth.yaml

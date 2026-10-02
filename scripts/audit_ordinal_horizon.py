@@ -38,7 +38,7 @@ mes no alcanzó.
 **(c) Importancias contra la hipótesis física.** Ganancia media por fold del modelo del
 `Pipeline`, con los nombres que salen del preprocesador. La hipótesis es térmica y de
 uso, progresiva en los últimos ~4.000 km: idle, no llegar a régimen, más lento
-(docs/f3-modelos-candidatos.md §0).
+(CLAUDE.md).
 """
 
 from __future__ import annotations

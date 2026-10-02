@@ -1,7 +1,7 @@
 run: f11-seeds3-gru-ref-expl
 logged_on: '2026-09-28'
 note: 'F11 secundario: REFERENCIA en los folds de la exploración, semillas 101-103.
-  24,9 / 40,2 / 47,2 / 58,8% al 5/10/15/20%. docs/memoria/f11-gru-objetivo-suave.md'
+  24,9 / 40,2 / 47,2 / 58,8% al 5/10/15/20%. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_f11_seeds3_gru_ref_expl.yaml
   config_versioned: false

@@ -3,7 +3,7 @@
 
     python scripts/eval_window_label.py --config configs/exp_ss_post_venta_r3.yaml
 
-Es el §3–§4 del preregistro `docs/memoria/f5-preregistro-ss-post-venta.md`, escrito para
+Es el §3–§4 del preregistro `docs/reproducibilidad.md`, escrito para
 aplicarlo tal cual:
 
 * **D:** todas las filas de dev, como la tabla de `results/`.

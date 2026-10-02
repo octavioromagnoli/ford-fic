@@ -27,7 +27,7 @@ P. **Período de producción** (si el config declara `production_window_days`): 
    dos cohortes, su tasa con exposición y cuánto ordena la fecha de producción sola. Es la
    sección que dice cuánto pesa el universo sin la ventana (decisión del equipo, 26-09).
 
-Deja CSVs y `summary.json` en `output_dir`. La lectura está en `docs/memoria/f9-eda-v2.md`.
+Deja CSVs y `summary.json` en `output_dir`. La lectura está en `docs/reproducibilidad.md`.
 """
 
 from __future__ import annotations

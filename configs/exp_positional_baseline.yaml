@@ -5,7 +5,7 @@
 #   python scripts/train.py --config configs/exp_positional_baseline.yaml
 #
 # No es un candidato: es una referencia, como `exp_baserate.yaml` lo es del PR-AUC. No
-# gasta presupuesto de comparaciones (docs/f3-modelos-candidatos.md §0.2).
+# gasta presupuesto de comparaciones (CLAUDE.md).
 #
 # QUÉ CONTESTA. Dentro de un vehículo fallado la etiqueta es una función determinista de
 # la posición del corte —la fracción positiva por posición desde el final va 1,00 / 1,00

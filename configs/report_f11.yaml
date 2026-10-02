@@ -1,4 +1,4 @@
-# F11 (docs/memoria/f11-preregistro-objetivo-suave.md): confirmación de la GRU con etiqueta suave
+# F11 (docs/reproducibilidad.md): confirmación de la GRU con etiqueta suave
 # contra la GRU de hoy, con folds nuevos (semilla 2026) y semillas del modelo 101-103.
 #
 #   python scripts/report_v2_models.py --config configs/report_f11.yaml

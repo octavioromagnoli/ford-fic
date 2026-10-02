@@ -3,7 +3,7 @@
 #
 #   python scripts/decision_layer.py --config configs/exp_decision_k2.yaml
 #
-# Lectura: docs/memoria/f8-capa-decision-k2.md. No consume presupuesto de comparaciones: todo
+# Lectura: docs/reproducibilidad.md No consume presupuesto de comparaciones: todo
 # lo que mide es monótono en el score de K2.
 seed: 0
 

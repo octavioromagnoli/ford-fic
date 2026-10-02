@@ -1,10 +1,10 @@
 # Figuras y tablas del informe final (docs/informe/). No entrena ni mide nada: lee salidas que ya existen
-# en experiments/ y tablas de docs/memoria/ copiadas acá con su fuente, y escribe PDF y .tex.
+# en experiments/ y tablas auxiliares conservadas en este YAML; escribe PDF y .tex.
 #
 #   python scripts/make_report_figures.py --config configs/report_figures.yaml
 #
-# Cada bloque `from_memo` es una tabla tal como está en la ficha que dice `source`: si la ficha cambia, se
-# cambia acá y se regenera. Lo que sale de experiments/ se lee del CSV/JSON, nunca se tipea.
+# Las claves `from_memo` se mantienen por compatibilidad con el generador. Contienen tablas
+# auxiliares de la evaluación. Las salidas de experiments/ se leen del CSV/JSON.
 seed: 0
 output:
   figures_dir: docs/informe/figuras
@@ -40,17 +40,17 @@ test:
     lightgbm: {label: "LightGBM (53 features)", short: "LightGBM", role: muted}
     logistica_l2: {label: "Logística L2 (53 features)", short: "logística", role: muted}
     ss_efecto_aleatorio: {label: "SS + efecto aleatorio (GPBoost)", short: "GPBoost", role: muted}
-  # AUC por auto: no está en report.json; tabla de f11-test-resultado.md §3.
+  # AUC por auto: no está en report.json; tabla auxiliar de evaluación §3.
   auc_from_memo:
-    source: docs/memoria/f11-test-resultado.md §3
+    source: Tabla de evaluación conservada en este YAML (modelos, AUC y detección en desarrollo)
     gru_f10: 0.794
     survival_stacking: 0.710
     lightgbm: 0.725
     logistica_l2: 0.679
     ss_efecto_aleatorio: 0.363
-  # Detección en dev (CV, 5 · 10 · 20%) de los mismos modelos: f11-test-resultado.md §3.
+  # Detección en dev (CV, 5 · 10 · 20%) de los mismos modelos: tabla auxiliar de evaluación.
   dev_from_memo:
-    source: docs/memoria/f11-test-resultado.md §3
+    source: Tabla de evaluación conservada en este YAML (modelos, AUC y detección en desarrollo)
     gru_f10: "27 · 42 · 61"
     survival_stacking: "14 · 24 · 42"
     lightgbm: "18 · 28 · 42"
@@ -89,10 +89,10 @@ features:
   spec: configs/data/features_v1.yaml
   sequence: configs/data/panel_seq_trips_v2_estaticas.yaml
 
-# --- tablas de docs/memoria/ ------------------------------------------------------------------------------
+# --- tablas auxiliares de evaluación ------------------------------------------------------------------------------
 from_memo:
   profile:
-    source: docs/memoria/f9-eda-v2.md §E (dev, referencia = fecha registrada, contra sanos del mismo mercado y tramo de odómetro)
+    source: Tabla de perfil de uso conservada en este YAML (dev, referencia = fecha registrada, contra sanos del mismo mercado y tramo de odómetro)
     bins: ["4–8k km antes", "2–4k", "0–2k"]
     series:
       "Ralentí": {values: [0.60, 0.64, 0.76], role: focus, label_dy: 4}
@@ -100,6 +100,6 @@ from_memo:
       "Refrigerante": {values: [0.47, 0.39, 0.29], role: third}
       "Velocidad": {values: [0.51, 0.47, 0.49], role: muted}
   score_toward_event:
-    source: docs/memoria/f11-test-resultado.md §4 (test, rango percentil medio, promedio de las 3 semillas)
+    source: Tabla de trayectoria de score conservada en este YAML (test, rango percentil medio, promedio de las 3 semillas)
     bins: ["Sanos", "> 10.000 km", "3.500–10.000 km", "< 3.500 km"]
     values: [0.44, 0.58, 0.61, 0.72]

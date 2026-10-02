@@ -7,7 +7,7 @@
 #   historia previa = (c − max_context_km, c − W]     ventana = (c − W, c]
 #
 # Origen: `feat_tfm_regen_delta` (pronóstico de TimesFM − ventana reciente) daba ROC
-# 0,614 en dev, y la versión sin modelo 0,602 (docs/memoria/f3-timesfm-zeroshot.md,
+# 0,614 en dev, y la versión sin modelo 0,602 (docs/reproducibilidad.md,
 # "Lo que sí dejó"). Es reversión a la media: si en la ventana el vehículo regeneró
 # menos que en su historia, sube el riesgo. Lo que ya está en el panel v1 no lo ve:
 # `regenerations_trend_per_1000km` compara mitades DENTRO de W (ρ −0,002 con esta idea).

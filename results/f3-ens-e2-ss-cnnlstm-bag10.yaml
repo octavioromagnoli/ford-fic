@@ -4,7 +4,7 @@ note: 'E2 del preregistro 9b7bfb4: el ensamble de E1 sobre los dos finalistas em
   por vehículo (10 bolsas). Detección 13,8% ± 5,0 (5/11/6 de 53), lift veh. mean 1,480
   ± 0,048: PIERDE contra la referencia en lift (−0,136 vs desvío combinado 0,078).
   Contra E1: desvío de detección 5,0 vs 3,2 (sube), de anticipación 4.121 vs 4.748
-  km (baja). Brier de oof = rango; Platt OOF 0,108. (a0) PASS, (b) +0,046 marca. docs/memoria/f3-ensamble-e1-e2.md'
+  km (baja). Brier de oof = rango; Platt OOF 0,108. (a0) PASS, (b) +0,046 marca. docs/reproducibilidad.md'
 source:
   config_path: configs\exp_ens_e2.yaml
   config_versioned: true
