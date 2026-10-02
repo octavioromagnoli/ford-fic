@@ -1,159 +1,123 @@
 % ============================================================================ Anexos
-\section{Reproducibilidad}
-\label{anx:repro}
-
-Todo corre desde la raíz del repositorio (\repo{requirements.txt} y \repo{requirements-dl.txt}); la entrega v2 va en
-\repo{data/\allowbreak{}v2/\allowbreak{}raw/\allowbreak{}}. La GRU no es reproducible bit a bit entre plataformas: una reproducción da números cercanos, no
-idénticos. Cada comando lee su YAML de \repo{configs/\allowbreak{}}.
-
-\begin{lstlisting}
-export FORD_DATA_DIR=$PWD/data/v2 WANDB_MODE=disabled OMP_NUM_THREADS=1
-# universo, holdout, EDA y paneles
-python scripts/make_test_split.py --config configs/data/test_split.yaml --force
-python scripts/eda_v2.py --config configs/eda_v2.yaml
-python scripts/build_dataset.py --config configs/data/panel_v2_estaticas.yaml
-python scripts/make_splits.py --config configs/data/splits_panel_v2_r3.yaml
-python scripts/build_seq_panel.py --config configs/data/panel_seq_trips_v2_estaticas.yaml
-# el finalista en dev: una corrida por semilla (y _s1_r3, _s2_r3), ensamble, auditorías, reporte, explicabilidad
-python scripts/train.py --config configs/exp_v2all_gru_trips_estaticas_r3.yaml
-python scripts/ensemble_rank.py --config configs/exp_v2all_seeds3_gru_trips_estaticas.yaml
-python scripts/audit_model.py --config configs/exp_v2all_gru_trips_estaticas_r3.yaml
-python scripts/report_v2_models.py --config configs/report_v2_models.yaml
-python scripts/explain_perm_seq.py --config configs/explain_gru_final.yaml
-# la medición en test (ya hecha: el test no se vuelve a usar para elegir)
-python scripts/eval_test.py --config configs/eval_test_f10_s42.yaml --report
-python scripts/eval_test.py --config configs/eval_test_modelos_v2.yaml --report
-# este informe
-python scripts/make_report_figures.py --config configs/report_figures.yaml
-cd docs/informe && tectonic informe.tex
-\end{lstlisting}
-
-% ----------------------------------------------------------------------------------------------
-\section{Auditorías de leakage y el techo de cohorte}
+% fuente: f9-remedicion-v2.md, f9-remedicion-completa-v2.md (auditorías, PR-AUC, dev), f11-test-resultado.md §3,
+% experiments/test-modelos-v2/{curve,operating}.csv (tablas generadas), configs/data/features_v1.yaml,
+% configs/data/panel_seq_trips_v2_estaticas.yaml.
+\section{Auditorías de fuga de información y techo de cohorte}
 \label{anx:auditorias}
 
-Además de las defensas de construcción (gap de 500 km sobre la referencia corrida, split por vehículo con los clones
-colapsados, features hacia atrás y corte en el fin de extracción de los sanos), toda corrida candidata pasa por
-\repo{scripts/\allowbreak{}audit\_model.py}:
-\textbf{(a0)}, que permuta las features entre todas las filas, reentrena y exige que el PR-AUC caiga a la tasa base (si no
-cae, hay leakage); \textbf{\aprime{}}, que colapsa el puntaje de cada auto a su promedio sin reentrenar (lo que cae es lo que el
-modelo sabía del \emph{cuándo}); y \textbf{(b)}, que le da al modelo las columnas de calendario y marca un atajo si el ROC sube
-más de 0,02. La permutación dentro del vehículo no es un nulo: conserva qué autos fallan y sube en vez de bajar.
+Además de las defensas de construcción (gap de 500\,km sobre la referencia corrida, partición por vehículo con los
+duplicados unificados, variables solo hacia atrás y corte en el fin de extracción común), todo candidato se somete a tres
+auditorías~\cite{kaufman2012}. Sea $s_{i,c}$ el puntaje fuera de pliegue y $\mathrm{AP}(\cdot)$ el PR-AUC por fila.
+\begin{itemize}
+  \item \textbf{(a0) Nulo global.} Se permutan las variables entre todas las filas, se reentrena y se exige
+    $\mathrm{AP} \approx \bar y = 0{,}058$. Si no cae a la tasa base, hay información que no proviene de las variables.
+  \item \textbf{\aprime{} Contribución del instante.} Sin reentrenar, se reemplaza cada puntaje por el promedio de su
+    vehículo, $\bar s_i = \frac{1}{n_i}\sum_c s_{i,c}$, y se reporta $\mathrm{AP}(s) - \mathrm{AP}(\bar s)$: lo que el modelo
+    sabía sobre \emph{cuándo}, más allá de \emph{qué vehículo}.
+  \item \textbf{(b) Atajo de calendario.} Se agregan como variables las columnas de calendario (fechas de producción y de
+    venta, temperatura ambiente) y se marca un atajo si el ROC sube más de $0{,}02$.
+\end{itemize}
+La permutación dentro de cada vehículo no es un nulo válido: conserva qué vehículos tienen evento y, en este panel, el PR-AUC
+sube en lugar de bajar.
 
 \begin{table}[!htbp]
 \centering
-\caption{Auditorías de la entrega v2 \tagdev{} (semilla 42 de cada secuencial; tasa base 0,058).}
+\caption{Auditorías en desarrollo \tagdev{} (semilla 42 de cada modelo secuencial; tasa base $0{,}058$).}
 \label{tab:auditorias}
-\small
 \begin{tabular}{@{}lrrrl@{}}
 \toprule
-Modelo & (a0) PR-AUC & \aprime{} & (b) calendario & Veredicto \\
+Modelo & (a0) PR-AUC & \aprime{} & (b) $\Delta$ROC & Resultado \\
 \midrule
-\textbf{GRU + viajes + estática (finalista)} & 0,061 & +0,001 & +0,004 & aprueba \\
-GRU + viajes & 0,061 & +0,003 & \textbf{+0,025: marca} & aprueba \\
-CNN-LSTM + viajes + estática & 0,057 & +0,009 & +0,018 & aprueba \\
-CNN-LSTM de la tutora (señales + país) & 0,056 & +0,026 & \textbf{+0,028: marca} & aprueba \\
-Survival stacking + motor y serie & 0,056 & +0,025 & +0,009 & aprueba \\
+GRU + viajes + estática (finalista) & 0,061 & $+0{,}001$ & $+0{,}004$ & aprueba \\
+GRU + viajes, sin estática & 0,061 & $+0{,}003$ & $+0{,}025$ & marca atajo \\
+CNN-LSTM + viajes + estática & 0,057 & $+0{,}009$ & $+0{,}018$ & aprueba \\
+Survival stacking + motor y serie & 0,056 & $+0{,}025$ & $+0{,}009$ & aprueba \\
 \bottomrule
 \end{tabular}
-\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-remedicion-completa-v2.md}.}
 \end{table}
 
 \begin{table}[!htbp]
 \centering
-\caption{PR-AUC por fila en el dev v2 \tagdev{}, al lado del techo de cohorte.}
+\caption{PR-AUC por fila en desarrollo \tagdev{}, junto al techo de cohorte de la ec.~\eqref{eq:techo}.}
 \label{tab:prauc}
-\small
 \begin{tabular}{@{}lrr@{}}
 \toprule
  & PR-AUC (lift) & \aprime{} \\
 \midrule
-Tasa base & 0,057 (0,97×) & −0,002 \\
-LightGBM (control) & 0,112 (1,92×) & −0,019 \\
-Survival stacking & 0,125 (2,14×) & +0,016 \\
-GRU + viajes + estática ×3 & 0,160 & +0,006 \\
-\textbf{Techo de cohorte} (“¿este auto falla?”, sin nada del cuándo) & \textbf{0,177 (3,03×)} & — \\
+Tasa base & 0,057 (0,97) & $-0{,}002$ \\
+LightGBM & 0,112 (1,92) & $-0{,}019$ \\
+Survival stacking & 0,125 (2,14) & $+0{,}016$ \\
+GRU + viajes + estática, ensamble de 3 & 0,160 (2,74) & $+0{,}006$ \\
+Techo de cohorte (sin información del instante) & 0,177 (3,03) & -- \\
 \bottomrule
 \end{tabular}
-\fuente{\repo{f9-remedicion-v2.md}; \repo{f9-remedicion-completa-v2.md} (la \aprime{} del ensamble es +0,006; la de la semilla
-42, +0,001).}
 \end{table}
 
-Ningún modelo filtra: con las features permutadas, todos caen a la tasa base. Ninguno supera el techo de cohorte, y la
-\aprime{} es positiva pero chica en todos: lo que separa es sobre todo \emph{qué auto}. El finalista no marca el atajo de
-calendario, mientras que la misma GRU sin estática sí lo marcaba. Con la primera entrega, además, el tamaño de la bolsa solo
-(18 cortes por fallado contra 9 por sano) daba lift 1,79×: desde entonces toda detección se compara contra un nulo que conserva
-el largo del historial.
+Ningún modelo presenta fuga: con las variables permutadas, todos caen a la tasa base. Ninguno supera el techo de cohorte, y la
+contribución \aprime{} es positiva pero pequeña en todos: lo que separa es principalmente \emph{qué vehículo}. El finalista no
+muestra el atajo de calendario, que sí aparecía en la misma GRU sin variables estáticas.
 
-% ----------------------------------------------------------------------------------------------
-\section{Todos los modelos en test y en desarrollo}
+\section{Resultados de todos los modelos}
 \label{anx:modelos}
 
-Cada modelo se entrenó con todo el desarrollo (semilla 42, salvo los ×3) y se midió con la misma cuenta en los 103 autos de
-test. Se midieron después del tiro preregistrado: describen, no eligen.
+Cada modelo se entrenó con todo el conjunto de desarrollo (semilla 42, salvo los ensambles de 3) y se evaluó con la misma
+métrica en los 103 vehículos de prueba. Estas evaluaciones se hicieron después de la evaluación del finalista y son
+descriptivas: no se usaron para elegir.
 
 \begin{table}[!htbp]
 \centering
-\caption{Detección (\%) en test por presupuesto de falsas alarmas \tagtest{}. “Prim.” es la media al 5–20\,\%.}
+\caption{Detección $D(\alpha)$ (\%) en el conjunto de prueba según el presupuesto de falsas alarmas \tagtest{}. ``Prim.''
+es $\bar D$, ec.~\eqref{eq:primario}.}
 \label{tab:modelos-test}
 \resizebox{\textwidth}{!}{\input{tablas/test_modelos}}
-\fuente{Detección y azar: \repo{experiments/\allowbreak{}test-modelos-v2/\allowbreak{}curve.csv} (tabla generada); AUC y dev:
-\repo{docs/\allowbreak{}memoria/\allowbreak{}f11-test-resultado.md} §3.}
 \end{table}
 
 \begin{table}[!htbp]
 \centering
-\caption{Con el umbral fijado en dev \tagtest{}: detección y falsas alarmas reales en test (15 modelos de fold).}
+\caption{Con el umbral fijado en desarrollo \tagtest{}: detección y tasa de falsas alarmas realizada en prueba.}
 \label{tab:operacion}
-\small
 \input{tablas/test_operacion}
-\fuente{\repo{experiments/\allowbreak{}test-modelos-v2/\allowbreak{}operating.csv} (tabla generada).}
 \end{table}
 
-\textbf{Comparaciones pareadas en test} (bootstrap por vehículo, diferencia de primario): survival stacking − GRU, −24,2 [−43,0; −0,8]; GRU 42/1/2 − GRU 101–103, +6,2 [−7,8; +18,0]; GRU suave − GRU dura (tiro
-preregistrado de F11), −13,3 [−25,0; +3,9].
+\textbf{Comparaciones pareadas en prueba} (bootstrap por vehículo, diferencia de $\bar D$ en puntos, IC 95\,\%): survival
+stacking $-$ GRU, $-24{,}2$ $[-43{,}0;\,-0{,}8]$; GRU con semillas 42, 1, 2 $-$ GRU con semillas 101--103, $+6{,}2$
+$[-7{,}8;\,+18{,}0]$; GRU con etiqueta suave $-$ GRU con etiqueta dura, $-13{,}3$ $[-25{,}0;\,+3{,}9]$.
 
 \begin{table}[!htbp]
 \centering
-\caption{Los modelos principales en el dev v2 \tagdev{}: detección (\%) con umbral exacto, promedio de 3 repeticiones.}
+\caption{Modelos principales en desarrollo \tagdev{}: $D(\alpha)$ (\%), promedio de 3 repeticiones de la validación cruzada.}
 \label{tab:dev}
-\small
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
-Modelo & AUC auto & 5\,\% & 10\,\% & 20\,\% \\
+Modelo & AUC por vehículo & $\alpha=5\,\%$ & $10\,\%$ & $20\,\%$ \\
 \midrule
-\textbf{GRU + viajes + estática ×3 (finalista)} & 0,82 & 27 & 42 & 61 \\
-CNN-LSTM + viajes + estática ×3 & 0,81 & 22 & 41 & 62 \\
-CNN-LSTM de la tutora + estática ×3 & 0,82 & 27 & 40 & 68 \\
-Survival stacking (F3) & 0,72 & 14 & 24 & 42 \\
-LightGBM (control, 53 features) & 0,72 & 18 & 28 & 42 \\
+GRU + viajes + estática, ensamble de 3 (finalista) & 0,82 & 27 & 42 & 61 \\
+CNN-LSTM + viajes + estática, ensamble de 3 & 0,81 & 22 & 41 & 62 \\
+Survival stacking & 0,72 & 14 & 24 & 42 \\
+LightGBM (53 variables) & 0,72 & 18 & 28 & 42 \\
 Logística L2 & 0,71 & 15 & 23 & 37 \\
-Azar (historial conservado) & — & 5 & 11 & 21 \\
+Nulo (historial conservado) & -- & 5 & 11 & 21 \\
 \bottomrule
 \end{tabular}
-\fuente{\repo{docs/\allowbreak{}memoria/\allowbreak{}f9-remedicion-completa-v2.md} (42 modelos).}
 \end{table}
 
-% ----------------------------------------------------------------------------------------------
-\section{Diccionario de features}
+\section{Diccionario de variables}
 \label{anx:features}
 
-Las 53 features agregadas se calculan sobre la ventana (corte − 1.000 km, corte], solo con datos anteriores al corte, como
-\texttt{agregador(columna derivada)}. Las \texttt{aux\_} quedan para auditar y no entran a ningún modelo. Agregadores:
-\texttt{per\_1000km}, conteo por 1.000 km; \texttt{per\_day}, por día; \texttt{half\_*}, segunda mitad de la ventana menos la
-primera (tendencia); \texttt{gap\_*}, distancia entre eventos; \texttt{any}, si ocurrió alguna vez.
+Las 53 variables agregadas se calculan sobre la ventana $(c - W, c]$ según la ec.~\eqref{eq:agregado}, como
+\texttt{agregador(variable derivada)}. Las variables con prefijo \texttt{aux\_} se conservan para auditoría y no entran en
+ningún modelo. Agregadores: \texttt{per\_1000km}, conteo por 1.000\,km; \texttt{per\_day}, por día; \texttt{half\_*},
+segunda mitad de la ventana menos la primera; \texttt{gap\_*}, distancia entre eventos; \texttt{any}, ocurrencia.
 
 {\scriptsize
 \input{tablas/features}
 }
-\fuente{\repo{configs/\allowbreak{}data/\allowbreak{}features\_v1.yaml} (lista generada); derivadas en \repo{src/\allowbreak{}features/\allowbreak{}trips.py} y
-\repo{src/\allowbreak{}features/\allowbreak{}signals.py}.}
 
-\textbf{Los 15 canales de la GRU.} La ventana se divide en 20 tramos de 50 km; “zero” rellena con cero un tramo sin datos y
-“carry” arrastra el último valor dentro de la misma ventana. Más país, motor y serie en one-hot.
+\textbf{Canales de la representación secuencial}~\eqref{eq:secuencia}. La ventana se divide en 20 tramos de 50\,km;
+``zero'' rellena con cero un tramo sin datos y ``carry'' arrastra el último valor dentro de la ventana. Se agregan país, motor
+y serie en codificación \emph{one-hot}.
 
 \begin{center}
-\scriptsize
+\footnotesize
 \input{tablas/canales}
 \end{center}
-\fuente{\repo{configs/\allowbreak{}data/\allowbreak{}panel\_seq\_trips\_v2\_estaticas.yaml} (tabla generada).}

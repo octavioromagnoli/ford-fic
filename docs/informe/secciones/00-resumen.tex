@@ -1,47 +1,28 @@
-% ============================================================================ 0 · Cómo leer + criterios
-\section*{Cómo leer este informe}
-\addcontentsline{toc}{section}{Cómo leer este informe}
+% ============================================================================ Resumen
+% fuente de los números: docs/memoria/f11-test-resultado.md (test), f9-remedicion-completa-v2.md (dev),
+% docs/pitch/presentacion-contenido.md bloques 5-6 (costo).
+\section*{Resumen}
+\addcontentsline{toc}{section}{Resumen}
 
-El informe sigue las siete secciones del documento de Ford. En cada una contamos qué entendimos, qué
-encontramos en los datos y qué hicimos.
+En este trabajo se desarrolló y se validó un método para anticipar la saturación del filtro de partículas diésel (DPF) a
+partir de la telemetría que los vehículos conectados de Ford ya transmiten: resúmenes de viaje y mensajes del sistema de
+postratamiento. El problema se formuló como un panel de cortes cada $\Delta = 500$\,km, donde en cada corte un modelo
+observa los últimos $W = 1.000$\,km y estima la probabilidad de que el evento ocurra entre $G = 500$ y $G + H = 3.500$\,km
+más adelante, sin acceso a los $500$\,km inmediatamente previos. Antes de modelar se identificaron y corrigieron sesgos de
+muestreo y de formato que inflaban cualquier métrica: dos cohortes muestreadas en períodos de producción distintos, una fecha
+de evento posterior a la intervención en taller y un contador de regeneraciones que deja de reportar. Se mostró además que
+el PR-AUC por fila de este panel tiene un piso de $0{,}177$ que se alcanza sin información temporal (\emph{techo de
+cohorte}), por lo que la selección de modelos se hizo con la detección por vehículo a un presupuesto fijo de falsas alarmas,
+contrastada con un nulo de permutación que conserva el largo de cada historial. Sobre más de 40 configuraciones (modelos
+lineales, \emph{gradient boosting}, supervivencia en tiempo discreto y redes recurrentes), el modelo finalista es una red
+GRU con atención de $\sim 3.900$ parámetros sobre una secuencia de 20 tramos de 50\,km $\times$ 15 canales, más país, motor
+y serie, combinada en un ensamble por rango de tres semillas. En un conjunto de prueba de 111 vehículos separado antes de
+cualquier análisis (103 con datos, 32 con evento), detecta $\sim 30\,\%$ de los eventos con $5\,\%$ de vehículos sanos con
+falsa alarma (el nulo da $7\,\%$), $\sim 40$--$50\,\%$ con $10\,\%$ y $\sim 50$--$60\,\%$ con $20\,\%$, con una mediana de
+$\sim 4.600$\,km (unos tres meses) entre la primera alerta y el evento. Con el umbral fijado en desarrollo, las falsas
+alarmas realizadas en prueba fueron $5{,}8$, $8{,}9$ y $18{,}2\,\%$. El costo de operación estimado es de
+USD~$0{,}07$--$0{,}10$ por vehículo y por año, sin sensores adicionales.
 
-\begin{itemize}
-  \item \tagtest{}: medido sobre los 111 autos del holdout, sorteados antes de mirar ninguna feature contra la
-    etiqueta (103 con datos: 32 fallados y 71 sanos). Cada modelo se entrenó con todo el conjunto de desarrollo.
-    \tagdev{}: validación cruzada agrupada por vehículo sobre los 446 autos de desarrollo. La demo, la explicabilidad
-    y las auditorías son de dev.
-  \item \textbf{Detección al X\,\%}: de los autos que fallan, cuántos reciben una alerta antes de la falla con un umbral
-    fijado para que solo el X\,\% de los sanos tenga una falsa alarma. Una alerta son dos cortes seguidos sobre el umbral.
-  \item \textbf{Azar}: el mismo puntaje permutado entre filas, conservando el largo del historial de cada auto.
-  \item \textbf{Nada de accuracy}: con \textasciitilde6\,\% de filas positivas, “nadie falla” da 94\,\%. El PR-AUC por fila
-    va al Anexo~\ref{anx:auditorias}, al lado del techo de cohorte.
-\end{itemize}
-
-\begin{table}[!htbp]
-\centering
-\caption{Los criterios de Ford (§5.1 y §5.2 del desafío) y dónde se responden.}
-\label{tab:criterios}
-\small
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{1.9cm}@{}}
-\toprule
-Criterio & Qué mostramos & Dónde \\
-\midrule
-Objetivo 5.1: anticipar con el mayor margen & \textasciitilde4.600 km (\textasciitilde100 días) de mediana en test, con
-  500 km ciegos antes del evento; el puntaje sube hacia el evento & §\ref{sec:panel}, §\ref{sec:anticipacion} \\
-Viabilidad técnica & Medido en un holdout congelado; GRU de \textasciitilde3.900 parámetros en CPU; demo funcionando;
-  plan por etapas con piloto en sombra & §\ref{sec:viabilidad} \\
-Costo & \textasciitilde USD 0,07–0,10 por auto y por año, sin sensores nuevos & §\ref{sec:costo} \\
-Carácter innovador & Una métrica que separa \emph{qué auto} de \emph{cuándo}; red recurrente sobre la ventana; IA
-  generativa con verificador en código; la perilla de falsas alarmas & §\ref{sec:innovacion} \\
-Calidad del tratamiento de datos & Trampas de formato y de muestreo corregidas; atípicos con topes físicos; faltantes
-  estructurales tratados como información; correcciones declaradas, holdout congelado y auditorías de leakage &
-  §\ref{sec:datos}, Anexo~\ref{anx:auditorias} \\
-Claridad para mostrar los datos & Curva de detección contra falsas alarmas con el azar dibujado; figuras con fuente;
-  demo con tres pantallas y perilla & §\ref{sec:claridad} \\
-Explicabilidad & En qué se apoya la GRU (permutación) y qué se le dice al conductor (comparación con la flota sana,
-  filtrada por la física del DPF) & §\ref{sec:explicabilidad} \\
-Pitch & La misma historia y los mismos números, en siete bloques y 29 minutos (\repo{docs/\allowbreak{}pitch/\allowbreak{}}) &
-  §\ref{sec:claridad} \\
-\bottomrule
-\end{tabularx}
-\end{table}
+\vspace{6pt}
+\tableofcontents
+\clearpage

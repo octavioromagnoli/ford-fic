@@ -1,43 +1,49 @@
 % ============================================================================ 2 · Contexto del proceso
+% fuente: docs/memoria/f9-entrega-v2.md (fecha v2 vs v1, mediana 14 d), f9-eda-v2.md (aceite, ralentí 1,5–1,8×, 72 %),
+% docs/pitch/presentacion-contenido.md bloque 4 (circuito).
 \section{Contexto del proceso}
 \label{sec:proceso}
 
-\textbf{Qué entendimos.} La telemetría llega a la nube de forma continua, pero la degradación se identifica una vez
-manifestada, en un service o cuando el cliente la reporta. El desafío se ubica en la posventa.
+La telemetría llega a la nube de forma continua, pero la degradación se identifica una vez manifestada: en un servicio
+programado o cuando el cliente la reporta~\cite{ford}. El desafío se ubica, por lo tanto, en la posventa, y el valor de una
+predicción depende de cuánto antes de esa identificación llega.
 
-\textbf{Qué encontramos en los datos: el proceso reactivo está escrito en la telemetría.} La fecha registrada del evento
-llega después del taller. En la primera entrega coincidía con la intervención (el cambio de aceite se concentraba en
-±3 días). En la entrega v2, la fecha de los mismos autos cae una mediana de 14 días después, y en las dos semanas previas
-ya aparecen el cambio de aceite y el ralentí largo de la regeneración forzada (1,5–1,8 veces la base). Después del evento,
-además, el uso cambia: la fracción de viajes bajo régimen térmico baja en el 72\,\% de los autos.
+\textbf{El proceso reactivo queda registrado en la telemetría.} La fecha registrada del evento es posterior a la intervención
+en el taller. En la primera entrega de datos coincidía con ella: los cambios de aceite se concentraban en $\pm 3$ días. En la
+segunda entrega, la fecha de los mismos vehículos cae una mediana de 14 días más tarde, y en las dos semanas previas ya
+aparecen el cambio de aceite y el ralentí prolongado característico de una regeneración forzada en servicio ($1{,}5$ a
+$1{,}8$ veces la tasa de base). Después del evento, además, el uso cambia: la fracción de viajes por debajo de la temperatura
+de régimen baja en el $72\,\%$ de los vehículos.
 
-\textbf{Qué hicimos.} Si el modelo viera el taller, haría la detección reactiva que Ford ya tiene. Por eso la referencia
-del evento es la \textbf{fecha registrada menos 21 días}, el modelo nunca ve los \textbf{500 km previos} a esa referencia
-(§\ref{sec:panel}) y nada posterior al evento entra a ninguna ventana. En la posventa, la alerta entra a un circuito que
-termina en una acción (figura~\ref{fig:circuito}): con un hábito para nombrar, un consejo al conductor en la app; sin
-hábito, un llamado del concesionario; si el riesgo sigue alto dos revisiones después, un escalamiento. El gerente de
-posventa recibe cada lunes una bandeja priorizada y redactada, lista para aprobar.
+Ambos hechos tienen consecuencias directas sobre la formulación. Si el modelo observara los días del taller, haría la
+detección reactiva que Ford ya tiene. Por eso: (i) la referencia del evento es la fecha registrada menos 21 días; (ii) el
+modelo nunca observa los 500\,km previos a esa referencia (\S\ref{sec:panel}); y (iii) ningún dato posterior al evento entra
+en ninguna ventana.
+
+\textbf{Dónde entra la predicción.} En la posventa, la alerta alimenta un circuito que termina en una acción
+(Figura~\ref{fig:circuito}). Si en la ventana del vehículo hay un hábito modificable que lo distingue de los sanos de su
+mercado, se envía un consejo al conductor; si no lo hay, se agenda un contacto del concesionario; si el riesgo se mantiene
+alto dos revisiones después, el caso escala. La decisión es determinista y la define Ford; la redacción la hacen agentes de
+lenguaje cuyo texto valida un verificador programado (\S\ref{sec:viabilidad}).
 
 \begin{figure}[!htbp]
 \centering
 \begin{tikzpicture}[
-  node distance=4mm and 3.5mm,
-  box/.style={draw=fordblue!70,fill=softbg,rounded corners=2pt,align=center,font=\sffamily\scriptsize,
-    minimum height=10mm,text width=21mm,inner sep=2pt},
-  pol/.style={box,draw=accent2!80,fill=warnbg},
-  arr/.style={-{Stealth[length=2mm]},draw=inksec,thick}]
-\node[box] (t) {\textbf{1 · Telemetría}\\viajes y señales del filtro};
-\node[box,right=of t] (s) {\textbf{2 · Puntaje GRU}\\cada 500 km};
-\node[box,right=of s] (a) {\textbf{3 · Alerta}\\2 cortes sobre el umbral de Ford};
-\node[box,right=of a] (w) {\textbf{4 · Por qué}\\hábitos contra los sanos del mercado};
-\node[pol,right=of w] (p) {\textbf{5 · Política}\\determinista, la define Ford};
-\node[box,below=5mm of p] (g) {\textbf{6 · Agentes}\\redactan; un verificador controla};
-\node[box,left=of g,text width=30mm] (u) {\textbf{Destinatarios}\\conductor · concesionario · posventa};
-\node[box,left=of u,text width=30mm] (r) {\textbf{7 · Retorno del taller}\\monitoreo y reentrenamiento};
+  node distance=4mm and 3.2mm,
+  box/.style={draw,rounded corners=1.5pt,align=center,font=\footnotesize,minimum height=11mm,text width=21mm,inner sep=2pt},
+  arr/.style={-{Stealth[length=2mm]},thick}]
+\node[box] (t) {Telemetría\\viajes y señales};
+\node[box,right=of t] (s) {Puntaje GRU\\cada 500 km};
+\node[box,right=of s] (a) {Alerta\\2 cortes sobre $\tau_\alpha$};
+\node[box,right=of a] (w) {Explicación\\hábitos vs.\ sanos};
+\node[box,right=of w,dashed] (p) {Política\\determinista};
+\node[box,below=6mm of p] (g) {Agentes LLM\\+ verificador};
+\node[box,left=of g,text width=33mm] (u) {Conductor · concesionario\\· posventa};
+\node[box,left=of u,text width=30mm] (r) {Retorno del taller\\monitoreo y reentrenamiento};
 \draw[arr] (t) -- (s); \draw[arr] (s) -- (a); \draw[arr] (a) -- (w); \draw[arr] (w) -- (p);
 \draw[arr] (p) -- (g); \draw[arr] (g) -- (u); \draw[arr] (u) -- (r); \draw[arr] (r) -| (t);
 \end{tikzpicture}
-\caption{El circuito de posventa: el modelo decide, el agente comunica y el código cuida lo que se dice.}
+\caption{Circuito de posventa propuesto. El modelo decide si hay alerta, la política (recuadro punteado) decide la acción y
+los agentes solo redactan.}
 \label{fig:circuito}
-\fuente{\repo{docs/\allowbreak{}pitch/\allowbreak{}presentacion-contenido.md} bloque 4; \repo{feat/\allowbreak{}demo-gru:PRODUCT.md}.}
 \end{figure}
