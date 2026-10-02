@@ -1,5 +1,9 @@
 # Demo de producto con la GRU con etiqueta suave (F11) y una perilla de falsas alarmas
 
+> **Reemplazada el 01-10** por [f9-demo-gru-final.md](f9-demo-gru-final.md): la GRU con etiqueta suave no se
+> sostuvo en test ([f11-test-resultado.md](f11-test-resultado.md)), y la demo usa el modelo final, la GRU de F10. Lo de
+> la perilla (formato del bundle, carga por punto, precalentado) sigue valiendo; los números de acá son de la suave.
+
 **Fecha:** 2026-09-28 · **Fase:** F9 (producto, para el pitch del 02-10) · **Rama:** `feat/demo-gru` (con `main`
 mergeado)
 **Alcance:** entrega v2, solo dev (426 autos: 135 fallan, 291 sanos), ensamble por rango de la GRU con etiqueta

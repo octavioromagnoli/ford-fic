@@ -6,11 +6,10 @@
 #   python scripts/build_demo_bundle.py --config configs/demo.yaml --publish-only
 #   streamlit run scripts/demo_app/app.py
 #
-# Necesita la entrega v2 (FORD_DATA_DIR con los paneles v2), los folds de confirmación de F11 y las tres semillas de la
-# GRU con etiqueta suave con su ensamble (docs/memoria/f11-gru-objetivo-suave.md):
-#   python scripts/make_splits.py --config configs/data/splits_panel_v2_confirm_r3.yaml
-#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_f11_gru_suave_conf_s{101,102,103}.yaml
-#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_f11_seeds3_gru_suave_conf.yaml
+# Necesita la entrega v2 (FORD_DATA_DIR con los paneles v2 y `splits_r3.json`) y las tres semillas del modelo final
+# con su ensamble (docs/memoria/f11-test-resultado.md):
+#   WANDB_MODE=disabled python scripts/train.py --config configs/exp_v2all_gru_trips_estaticas{,_s1,_s2}_r3.yaml
+#   WANDB_MODE=disabled python scripts/ensemble_rank.py --config configs/exp_v2all_seeds3_gru_trips_estaticas.yaml
 # **No cambia ninguna métrica**: el score, el umbral y la alerta son los del ensamble en una repetición, tal cual.
 # Solo dev: el builder falla si aparece un vehículo de test.
 
@@ -23,15 +22,13 @@ brand:
   team: SOG
   page_title: SOG · Ford Innovation Challenge III
 
-# El modelo que puntúa la flota: el mejor sobre dev v2 desde el 28-09 (F11, docs/memoria/f11-gru-objetivo-suave.md).
-# Es la misma GRU + TripSummary + estática completa, entrenada con etiqueta suave lejos del evento, en ensamble por
-# rango de las semillas 101, 102 y 103 sobre los folds de confirmación. Hasta el 28-09 la demo usó la GRU con
-# `label` a secas (semillas 42, 1 y 2, docs/memoria/f10-sweep-gru.md). Nombre y familia viajan en la meta del bundle:
-# la app no los escribe a mano.
+# El modelo que puntúa la flota: el finalista, medido en test el 01-10 (docs/memoria/f11-test-resultado.md). Es la
+# GRU + TripSummary + estática completa entrenada con `label`, en ensamble por rango de las semillas 42, 1 y 2 sobre
+# los folds `splits_r3`. Nombre y familia viajan en la meta del bundle: la app no los escribe a mano.
 model:
   name: GRU
-  family: red recurrente con etiqueta suave, ensamble de 3 semillas
-  run_config: configs/exp_f11_seeds3_gru_suave_conf.yaml
+  family: red recurrente, ensamble de 3 semillas
+  run_config: configs/exp_v2all_seeds3_gru_trips_estaticas.yaml
   # La GRU lee la ventana en bins (panel_seq_trips_v2_estaticas). El perfil de uso y las señales del filtro salen
   # del panel de agregados del que se armó, con las mismas filas (load_run verifica el merge 1:1).
   profile_panel: ${DATA_DIR}/processed/panel_v2_estaticas.parquet
@@ -83,10 +80,10 @@ replay:
   # (24-09-2026): la telemetría se corta el 14-09 para todos, pero hay eventos registrados hasta el 21-09.
   start: "2025-03-03"
   end: "2026-09-24"
-  # La semana en que abre la demo: la primera con al menos 3 alertas nuevas en el punto que abre (5%). Son 4 avisos al
-  # conductor: tres de autos que fallaron después (VEH_0072, VEH_0451, VEH_0452) y uno de un auto sano (VEH_0427). Es
-  # una sola para toda la perilla: al cambiar el punto de operación, la semana elegida se queda.
-  first_week: "2025-08-25"
+  # La semana en que abre la demo: la primera con al menos 3 alertas nuevas en el punto que abre (5%). Son 4, las 4 de
+  # autos que fallaron después (VEH_0451, VEH_0563, VEH_0566, VEH_0583); dos tienen hábitos que nombrar y dos van al
+  # concesionario. Es una sola para toda la perilla: al cambiar el punto de operación, la semana elegida se queda.
+  first_week: "2025-09-29"
   description: "de la primera revisión de la flota de desarrollo al fin de la extracción de datos de Ford"
 
 # Perfil de uso que se grafica en la ficha del vehículo. Los hábitos que el "por qué" puede nombrar salen de acá
@@ -123,13 +120,12 @@ event_dates:
   anchor_meta: ${DATA_DIR}/processed/panel_meta.json
 
 bundle:
-  dir: experiments/demo-bundle-gru-suave
+  dir: experiments/demo-bundle-gru-final
   # wandb Artifact que baja la app desplegada. La versión se fija acá (`v0`, `v1`…) para que la demo no cambie
-  # sola: publicar y cambiar el pin es una decisión. Los bundles anteriores no se tocan: `demo-bundle` (K2) y
-  # `demo-bundle-gru` (la GRU con `label` a secas, un solo punto de operación; su v1 es la del 28-09).
-  # v0 (28-09): la GRU con etiqueta suave de F11, los cuatro puntos de la perilla, triage de 211 semanas y 1.870
-  # respuestas en la caché (docs/memoria/f9-demo-gru-suave.md).
-  artifact: demo-bundle-gru-suave
+  # sola: publicar y cambiar el pin es una decisión. Los bundles anteriores no se tocan.
+  # v0 (01-10): el modelo final (GRU con `label`, semillas 42/1/2), los cuatro puntos de la perilla y su triage
+  # (docs/memoria/f9-demo-gru-final.md).
+  artifact: demo-bundle-gru-final
   version: v0
   entity: oromagnoli-
   project: ford-fic

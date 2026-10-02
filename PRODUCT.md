@@ -28,7 +28,7 @@ en el lugar de esa persona.
 
 ## Product Purpose
 
-Ford DPF convierte una alerta temprana de la GRU (la de etiqueta suave de F11, el mejor modelo sobre la entrega v2) sobre la
+Ford DPF convierte una alerta temprana de la GRU (el modelo final sobre la entrega v2, medido en test) sobre la
 degradación del filtro de partículas diésel en una acción de posventa: quién se entera, con qué texto
 y qué revisa el taller.
 
@@ -102,7 +102,7 @@ evento (el gap de blanking). Con más tolerancia el margen crece: 21 semanas (~8
 - **Deploy:**
   - Dockerfile y `railway.json`.
   - La imagen lleva solo `src/`, `scripts/demo_app/` y dos configs.
-  - La app baja el bundle `demo-bundle-gru-suave` en la versión fijada en `configs/demo.yaml` y no importa
+  - La app baja el bundle `demo-bundle-gru-final` en la versión fijada en `configs/demo.yaml` y no importa
     torch, LightGBM ni sklearn.
 - **Dispositivos:** tiene que funcionar bien **en celular** y en notebook o desktop (1366–1920 px).
 - **Datos:** solo dev de la entrega v2. Son 426 autos: 135 con falla registrada y 291 sanos. El test no se muestra
@@ -113,16 +113,18 @@ evento (el gap de blanking). Con más tolerancia el margen crece: 21 semanas (~8
 
     | punto | alertas / escalamientos | fallas anticipadas | sanos con alerta de más |
     |---|---|---|---|
-    | 5% | 58 / 9 | 44 | 14 |
-    | 10% | 90 / 13 | 61 | 29 |
-    | 15% | 121 / 30 | 78 | 43 |
-    | 20% | 153 / 43 | 95 | 58 |
-  - **Oficiales (promedio de 3 repeticiones):** 34,8 · 48,6 · 60,5 · 70,4% de detección al
-    5 · 10 · 15 · 20% de falsas alarmas (34,6 · 49,4 · 59,3 · 69,6% fuera de muestra). La tabla del
-    equipo da 34,6 · 48,6 · 60,2 · 70,1% (la GRU no es bit a bit entre plataformas). La celda
-    mercado × motor sola, sin mirar un viaje, detecta 14,6 · 30,4 · 48,1 · 62,0%.
+    | 5% | 53 / 7 | 39 | 14 |
+    | 10% | 85 / 10 | 56 | 29 |
+    | 15% | 112 / 22 | 69 | 43 |
+    | 20% | 140 / 36 | 82 | 58 |
+  - **Oficiales en dev (promedio de 3 repeticiones):** 28,1 · 42,5 · 53,1 · 61,0% de detección al
+    5 · 10 · 15 · 20% de falsas alarmas (27,9 · 42,5 · 52,3 · 60,7% fuera de muestra). Son los que
+    muestra la app, rotulados «medido en desarrollo». La celda mercado × motor sola, sin mirar un
+    viaje, detecta 18,0 · 32,6 · 48,1 · 62,2%.
+  - **En test** (no está en la app; el pitch cita estos): ~30 · 40–50 · 50–60% al 5 · 10 · 20%, y con el
+    umbral fijado en dev 20 · 34 · 57% con 5,8 · 8,9 · 18,2% de falsas alarmas reales.
 
-  Las fuentes son `docs/memoria/f9-demo-gru-suave.md` y `docs/memoria/f11-gru-objetivo-suave.md`.
+  Las fuentes son `docs/memoria/f9-demo-gru-final.md` y `docs/memoria/f11-test-resultado.md`.
 - **Terminología:**
   - **alerta:** confirmada en el `k`-ésimo corte seguido sobre el umbral;
   - **escalamiento:** el paso al concesionario;
@@ -176,16 +178,16 @@ evento (el gap de blanking). Con más tolerancia el margen crece: 21 semanas (~8
 
 ## Evidence on Hand
 
-- **Bundle:** `oromagnoli-/ford-fic/demo-bundle-gru-suave` en wandb (la versión fijada en `configs/demo.yaml`),
-  con la copia local en `experiments/demo-bundle-gru-suave/`. Trae los cortes, los números oficiales y,
+- **Bundle:** `oromagnoli-/ford-fic/demo-bundle-gru-final` en wandb (la versión fijada en `configs/demo.yaml`),
+  con la copia local en `experiments/demo-bundle-gru-final/`. Trae los cortes, los números oficiales y,
   por cada punto de la perilla, las alertas, los hábitos que se apartan de la flota sana, los mensajes,
   las señales del filtro y el triage de las semanas con eventos; la caché del LLM es una sola. Las demos
-  anteriores siguen en wandb: la GRU con `label` a secas en `demo-bundle-gru:v1` y K2 en `demo-bundle:v0`.
-- **Textos reales:** en los cuatro puntos, los agentes redactaron 515 de los 517 textos y los 211 resúmenes,
-  todos aprobados por el verificador (106 intentos rechazados en el camino). Los dos que quedaron en plantilla
-  son del mismo auto (VEH_0001, 04-08-2025, al 15 y al 20%): el verificador rechazó los tres intentos. Lo que se
-  corrigió después de revisar a mano la primera semana está en `docs/memoria/f9-demo-gru.md`, y el precalentado
-  por punto, en `docs/memoria/f9-demo-gru-suave.md`.
+  anteriores siguen en wandb: la misma GRU con un solo punto de operación en `demo-bundle-gru:v1` y K2 en
+  `demo-bundle:v0`.
+- **Textos reales:** en los cuatro puntos, los agentes redactaron los 465 textos y los 196 resúmenes, todos
+  aprobados por el verificador (40 intentos rechazados en el camino), sin ninguna plantilla. Lo que se corrigió
+  después de revisar a mano la primera semana está en `docs/memoria/f9-demo-gru.md`, y el precalentado por punto,
+  en `docs/memoria/f9-demo-gru-final.md`.
 - **El porqué:** una comparación con los autos sanos de dev del mismo mercado (`src/eval/fleet_profile.py`).
   No es atribución: la GRU no la tiene.
 - **Revisión visual previa:** capturas a 1440×900 y 1920×1080 en `experiments/demo-ui-review/`

@@ -3,7 +3,7 @@
 #   docker build -t radar-dpf .
 #   docker run -p 8501:8501 -e WANDB_API_KEY=... -e OPENAI_API_KEY=... -e DEMO_PASSWORD=... radar-dpf
 #
-# Al arrancar baja el bundle (el wandb Artifact de `bundle.artifact` en configs/demo.yaml, hoy `demo-bundle-gru-suave`,
+# Al arrancar baja el bundle (el wandb Artifact de `bundle.artifact` en configs/demo.yaml, hoy `demo-bundle-gru-final`,
 # en la versión fijada ahí) y levanta Streamlit en $PORT (Railway lo define; 8501 en local).
 FROM python:3.12-slim
 

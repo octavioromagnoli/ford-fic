@@ -1,8 +1,9 @@
 # Demo de producto con la GRU final (v2): el porqué pasa a ser una comparación con la flota
 
-> **Reemplazada el 28-09** por [f9-demo-gru-suave.md](f9-demo-gru-suave.md): la demo usa la GRU con etiqueta suave
-> de F11 y tiene una perilla de falsas alarmas. Lo de acá (el porqué descriptivo, los agentes, la revisión visual)
-> sigue valiendo; los números y la semana de apertura son de la GRU anterior.
+> **01-10: la demo volvió a este modelo**, ahora con la perilla de falsas alarmas:
+> [f9-demo-gru-final.md](f9-demo-gru-final.md). Entre el 28-09 y el 01-10 usó la GRU con etiqueta suave
+> ([f9-demo-gru-suave.md](f9-demo-gru-suave.md)), que no se sostuvo en test. Lo de acá (el porqué descriptivo, los
+> agentes, la revisión visual) sigue valiendo, y el replay al 5% es el mismo (39 de 135).
 
 **Fecha:** 2026-09-27 (revisión visual y bundle v1: 28-09) · **Fase:** F9 (producto, para el pitch del 02-10) ·
 **Rama:** `feat/demo-gru`

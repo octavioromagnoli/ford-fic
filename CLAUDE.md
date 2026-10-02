@@ -128,9 +128,9 @@ siguen en `docs/f3-modelos-candidatos.md` y en "Qué queda abierto" de la ficha 
 repeticiones), y al cliente solo llegan hábitos cuyo efecto coincide con la física del DPF; síntomas y contexto
 nunca se nombran (`docs/memoria/f4-explicabilidad-k2.md`).
 
-**F9 (26-09) es la demo de producto para el pitch (Ford DPF, no es candidato).** Desde el 28-09 usa el mejor modelo
-sobre v2, la GRU con etiqueta suave de F11 (ensamble por rango de las semillas 101, 102 y 103, folds de confirmación);
-antes usó la GRU con `label` a secas (27-09) y K2. Reproduce la flota de dev v2 en el calendario (etiqueta dura,
+**F9 (26-09) es la demo de producto para el pitch (Ford DPF, no es candidato).** Desde el 01-10 usa el modelo
+final, la GRU de F10 medida en test (GRU + TripSummary + estática con `label`, ensamble por rango de las semillas 42,
+1 y 2, folds `splits_r3`); antes usó K2. Reproduce la flota de dev v2 en el calendario (etiqueta dura,
 umbral exacto), con una **perilla de falsas alarmas** (5, 10, 15 o 20%: cada punto trae su umbral, sus alertas, sus
 mensajes y su triage), y agrega una bandeja semanal de posventa con dos agentes de OpenAI:
 - **el redactor**, con un verificador en código: todo número sale de los hechos, nada de causas, y los síntomas
@@ -139,8 +139,8 @@ mensajes y su triage), y agrega una bandeja semanal de posventa con dos agentes 
 
 **El porqué de la demo es una comparación con la flota, no lo que usó el modelo:** en qué hábitos se aparta el
 auto de los sanos de su mercado (`src/eval/fleet_profile.py`). La app lee solo un bundle precalculado
-(`demo-bundle-gru-suave` en wandb) y se despliega en Railway. Cómo se reproduce, las decisiones y los límites están
-en `docs/memoria/f9-demo-gru-suave.md` (la GRU anterior, en `f9-demo-gru.md`; la versión con K2, en
+(`demo-bundle-gru-final` en wandb) y se despliega en Railway. Cómo se reproduce, las decisiones y los límites están
+en `docs/memoria/f9-demo-gru-final.md` (el diseño, los agentes y el verificador, en `f9-demo-gru.md`; la versión con K2, en
 `f9-demo-producto.md`).
 
 **El presupuesto de comparaciones está agotado** (§0, punto 2 de ese doc): con ~12
@@ -498,11 +498,11 @@ scripts/dashboard_k2/    dashboard de F4 con K2, solo dev: `streamlit run script
                          con el waterfall y el mensaje al cliente, perfil de uso contra los sanos), Costos (punto de
                          operación y ahorro según costos y prevalencia real, con escenarios precargados) y Modelo
                          (contra la referencia y los pisos, límites); configs/dashboard_k2.yaml
-scripts/build_demo_bundle.py  bundle de la demo (F9, solo dev): la corrida de `model` (hoy el ensamble de la GRU con
-                         etiqueta suave de F11), números oficiales con la cuenta del reporte v2 y cortes; por cada punto
+scripts/build_demo_bundle.py  bundle de la demo (F9, solo dev): la corrida de `model` (hoy el ensamble del modelo
+                         final, la GRU de F10), números oficiales con la cuenta del reporte v2 y cortes; por cada punto
                          de operación de la perilla (`operating_points`), umbral exacto, alerta de la repetición,
                          hábitos que se apartan de los sanos del mercado, mensaje y señales del filtro →
-                         experiments/demo-bundle-gru-suave/; `--publish-only` lo sube como wandb Artifact (configs/demo.yaml)
+                         experiments/demo-bundle-gru-final/; `--publish-only` lo sube como wandb Artifact (configs/demo.yaml)
 scripts/join_window_columns.py  pega a un panel las aux_ de otro con las mismas filas y lo verifica (clave,
                          cabecera, dev, huella de los folds, entrada del modelo intacta)
 scripts/warm_demo_cache.py  corre el triage en todas las semanas con eventos de cada punto de operación y guarda
